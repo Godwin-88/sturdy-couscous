@@ -1,0 +1,190 @@
+version: "3.9"
+
+# ── Local development: all services ───────────────────────────────────────────
+# Usage: make up
+# For production (Vultr): docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+
+  # ── Knowledge Graph ──────────────────────────────────────────────────────────
+  memgraph:
+    image: memgraph/memgraph-platform:latest
+    container_name: graphalpha-memgraph
+    ports:
+      - "7687:7687"   # Bolt protocol (agents connect here)
+      - "7444:7444"   # Memgraph Lab UI (dev only)
+      - "3000:3000"   # Memgraph Lab web UI
+    volumes:
+      - memgraph_data:/var/lib/memgraph
+      - memgraph_log:/var/log/memgraph
+      - ./graph/schema:/graph                # master.cypher accessible in container
+    environment:
+      MEMGRAPH_TELEMETRY_ENABLED: "false"
+    healthcheck:
+      test: ["CMD", "mgconsole", "--host", "localhost", "--port", "7687",
+             "--execute", "RETURN 1;"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  # ── Graph loader (runs once, then exits) ─────────────────────────────────────
+  graph-loader:
+    image: memgraph/mgconsole:latest
+    container_name: graphalpha-loader
+    depends_on:
+      memgraph:
+        condition: service_healthy
+    volumes:
+      - ./graph/schema:/graph
+    entrypoint: >
+      sh -c "cat /graph/master.cypher | mgconsole
+             --host memgraph --port 7687 &&
+             echo 'Graph loaded successfully'"
+    restart: "no"
+
+  # ── Audit & portfolio state DB ───────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: graphalpha-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-graphalpha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-graphalpha}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-graphalpha}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Inter-agent message queue ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: graphalpha-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI backend + all 5 agents ────────────────────────────────────────────
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: graphalpha-api
+    depends_on:
+      memgraph:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api:/app                  # hot-reload in dev
+      - ./agent:/app/agent          # agents importable from api
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Agent worker (long-running loop) ─────────────────────────────────────────
+  agent-worker:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: graphalpha-agent
+    depends_on:
+      api:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - ./agent:/app
+    command: python orchestrator.py
+    restart: unless-stopped
+
+  # ── Backtesting (on-demand, not always running) ───────────────────────────────
+  backtest:
+    build:
+      context: ./backtest
+      dockerfile: Dockerfile
+    container_name: graphalpha-backtest
+    depends_on:
+      memgraph:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - ./backtest:/app
+      - backtest_results:/app/results
+    profiles: ["backtest"]          # only starts with: docker compose --profile backtest up
+
+  # ── Monitoring ────────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: graphalpha-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    profiles: ["monitoring"]
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: graphalpha-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    depends_on:
+      - prometheus
+    profiles: ["monitoring"]
+
+  # ── React frontend (LOCAL DEV — always on; production goes to Vercel) ─────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: graphalpha-frontend
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules           # prevents host node_modules from bleeding in
+    environment:
+      VITE_API_URL: http://localhost:8000
+
+volumes:
+  memgraph_data:
+  memgraph_log:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  backtest_results:

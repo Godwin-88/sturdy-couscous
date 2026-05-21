@@ -1,0 +1,17 @@
+gqlalchemy==1.4.1          # Memgraph Python driver
+pgmpy==0.1.26              # Bayesian network inference
+lingam==1.8.3              # VARLiNGAM / DYNOTEARS
+yfinance==0.2.40           # market data
+pandas==2.2.2
+numpy==1.26.4
+scipy==1.13.0
+scikit-learn==1.5.0
+httpx==0.27.0              # async HTTP for Featherless API
+redis==5.0.4               # inter-agent messaging
+psycopg2-binary==2.9.9     # PostgreSQL
+python-dotenv==1.0.1
+loguru==0.7.2              # structured logging
+prometheus-client==0.20.0  # metrics
+arch==6.4.0                # GARCH models
+statsmodels==0.14.2        # VAR, statistical tests
+tqdm==4.66.4

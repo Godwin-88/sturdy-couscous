@@ -1,0 +1,62 @@
+version: "3.9"
+
+# ── Vultr production overrides ────────────────────────────────────────────────
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# This file REMOVES the frontend service (handled by Vercel)
+# and hardens all services for production.
+
+services:
+
+  memgraph:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 6G             # more headroom on Vultr 16GB VM
+    environment:
+      MEMGRAPH_TELEMETRY_ENABLED: "false"
+    ports:
+      - "127.0.0.1:7687:7687"   # bind to localhost only — not public
+      - "127.0.0.1:7444:7444"
+
+  postgres:
+    restart: always
+    ports:
+      - "127.0.0.1:5432:5432"   # localhost only
+
+  redis:
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"   # localhost only
+
+  api:
+    restart: always
+    command: >
+      uvicorn main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 2
+      --no-access-log
+    volumes: []                  # no hot-reload in prod
+    ports:
+      - "0.0.0.0:8000:8000"     # public — put Nginx/Traefik in front for HTTPS
+
+  agent-worker:
+    restart: always
+
+  # Disable dev-only services in prod
+  frontend:
+    deploy:
+      replicas: 0
+
+  prometheus:
+    profiles: ["monitoring"]
+    restart: always
+    ports:
+      - "127.0.0.1:9090:9090"
+
+  grafana:
+    profiles: ["monitoring"]
+    restart: always
+    ports:
+      - "127.0.0.1:3001:3000"

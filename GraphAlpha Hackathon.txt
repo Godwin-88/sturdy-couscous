@@ -1,0 +1,603 @@
+● GraphAlpha Hackathon — Critical Path to Win
+
+  Let me be direct. Here are the ranked actions by impact on judging criteria.
+
+  ---
+  1. Where You Stand Right Now
+
+  ┌─────────────────────────────┬──────────────────────────────────────────────────────┐
+  │          Component          │                        Status                        │
+  ├─────────────────────────────┼──────────────────────────────────────────────────────┤
+  │ Knowledge Graph             │ ✅ Done — 324 concepts, 26 strategies, 99 formulas,  │
+  │ (master.cypher)             │ 51 Q&A nodes                                         │
+  ├─────────────────────────────┼──────────────────────────────────────────────────────┤
+  │ Memgraph running            │ ❌ Not started — graph is a flat file, not a live DB │
+  ├─────────────────────────────┼──────────────────────────────────────────────────────┤
+  │ Signal engine               │ ❌ Not started                                       │
+  ├─────────────────────────────┼──────────────────────────────────────────────────────┤
+  │ Kraken CLI wrapper          │ ❌ Not started                                       │
+  ├─────────────────────────────┼──────────────────────────────────────────────────────┤
+  │ FastAPI backend             │ ❌ Not started                                       │
+  ├─────────────────────────────┼──────────────────────────────────────────────────────┤
+  │ React frontend              │ ❌ Not started                                       │
+  ├─────────────────────────────┼──────────────────────────────────────────────────────┤
+  │ Featherless LLM             │ ❌ Not started                                       │
+  └─────────────────────────────┴──────────────────────────────────────────────────────┘
+
+  The graph is the brain. It is useless until Memgraph is running and the agent loop 
+  queries it.
+
+  ---
+  2. The Winning Architecture (build in this order)
+
+  ┌─────────────────────────────────────────────────────────┐
+  │  SIGNAL SOURCES                                          │
+  │  yfinance prices → regime detector                       │
+  │  Featherless LLM → sentiment score (news/earnings)       │
+  │  Kraken market data → live price feed                    │
+  └────────────────────┬────────────────────────────────────┘
+                       ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │  MEMGRAPH KNOWLEDGE GRAPH                                │
+  │  MATCH regime → ACTIVATED_BY → strategies               │
+  │  MATCH strategy → DERIVED_FROM → signals                 │
+  │  MATCH concept → HAS_FORMULA → sizing formula           │
+  │  QuizQuestion -TESTS-> Concept (LLM grounding)          │
+  └────────────────────┬────────────────────────────────────┘
+                       ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │  FASTAPI AGENT LOOP (Vultr VM) — runs every 5 min       │
+  │  POST /agent/run  → full cycle                           │
+  │  GET  /signals    → current active signals               │
+  │  GET  /positions  → live portfolio state                 │
+  │  GET  /graph/regime → current regime + active nodes      │
+  │  WS   /stream     → WebSocket for React live feed        │
+  └────────────────────┬────────────────────────────────────┘
+                       ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │  KRAKEN CLI EXECUTION                                    │
+  │  kraken order --pair XXBTZUSD --side buy --qty ...      │
+  └────────────────────┬────────────────────────────────────┘
+                       ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │  REACT FRONTEND (Vultr)                                  │
+  │  Live graph (Sigma.js/D3) + PnL dashboard                │
+  │  Agent log stream + position table                       │
+  └─────────────────────────────────────────────────────────┘
+
+  ---
+  3. Prioritized Build Order (hackathon sprint)
+  
+  PHASE 1 — Infrastructure (2 hours, do this first)
+
+  Step 1: Launch Memgraph on Vultr VM
+  # On your Vultr VM
+  docker run -d -p 7687:7687 -p 7444:7444 \
+    --name memgraph \
+    memgraph/memgraph-platform
+    
+  # Load the graph
+  cat master.cypher | mgconsole --host localhost --port 7687
+
+  # Verify
+  echo "MATCH (n) RETURN labels(n), count(n) ORDER BY count(n) DESC LIMIT 20;" \
+    | mgconsole --host localhost --port 7687
+
+  Step 2: FastAPI skeleton on Vultr
+  # api/main.py — the agent loop is the heart
+  from fastapi import FastAPI
+  from gqlalchemy import Memgraph
+
+  app = FastAPI()
+  db = Memgraph("localhost", 7687)
+
+  @app.post("/agent/run")
+  async def run_agent():
+      regime = detect_regime()          # Step 3 below
+      strategies = query_graph(regime)  # Cypher → active strategies
+      signals = generate_signals(strategies)
+      sized = kelly_size(signals)
+      executed = execute_kraken(sized)  # Step 4 below
+      return {"regime": regime, "signals": signals, "orders": executed}
+      
+  ---
+  PHASE 2 — The PnL Engine (4 hours, this WINS the Kraken track)
+  
+  Step 3: Regime Detector — query the graph for what is active
+
+  # agent/regime.py
+  def detect_regime(prices_df):
+      """Returns one of: BullMarket, BearMarket, HighVolatility,
+         LowVolatility, SystemicStress, CrisisRegime, RecoveryRegime"""
+      # Simple but robust: VIX proxy + 200-day MA + realized vol
+      ret = prices_df.pct_change()
+      vol_21 = ret.rolling(21).std().iloc[-1] * 252**0.5
+      trend  = prices_df.iloc[-1] / prices_df.rolling(200).mean().iloc[-1]
+
+      if vol_21 > 0.30:  return "HighVolatility"
+      if trend < 0.95:   return "BearMarket"
+      if trend > 1.05:   return "BullMarket"
+      return "LowVolatility"
+
+  def query_active_strategies(regime: str):
+      """Use the graph — ACTIVATED_BY edges already encode this"""
+      query = f"""
+      MATCH (r:Regime {{name: '{regime}'}})<-[:ACTIVATED_BY]-(s:Strategy)
+      RETURN s.name, s.param_sell_threshold, s.param_exposure_cut,
+             s.strategy_type, s.status
+      WHERE s.status = 'active'
+      """
+      return db.execute_and_fetch(query)
+
+  Step 4: Signal Engine — the 26 strategies in your graph produce these signals
+
+  Your graph has these strategy → signal mappings to implement. Prioritize by expected PnL:
+
+  ┌──────────┬────────────────────┬──────────────────────────────────┬────────────────┐
+  │ Priority │   Strategy (in     │           Signal Logic           │  xStocks to    │
+  │          │       graph)       │                                  │     trade      │
+  ├──────────┼────────────────────┼──────────────────────────────────┼────────────────┤
+  │ 🔴 1     │ Bayesian Macro     │ P(SP=low|IR=high) > 0.35 →       │ SPY, QQQ       │
+  │          │ Risk Signal        │ reduce equity                    │ xStocks        │
+  ├──────────┼────────────────────┼──────────────────────────────────┼────────────────┤
+  │ 🔴 2     │ DYNOTEARS          │ AIG-style node centrality spike  │ XLF xStock     │
+  │          │ Contagion Signal   │ → cut financials                 │                │
+  ├──────────┼────────────────────┼──────────────────────────────────┼────────────────┤
+  │ 🔴 3     │ Climate Credit     │ Physical Risk BN score →         │ VNQ xStock     │
+  │          │ Risk Overlay       │ underweight RE/insurance         │                │
+  ├──────────┼────────────────────┼──────────────────────────────────┼────────────────┤
+  │ 🟡 4     │ Asymmetric Vol     │ GJR-GARCH leverage effect → sell │ VIX-correlated │
+  │          │ Regime Signal      │  vol-exposed names               │                │
+  ├──────────┼────────────────────┼──────────────────────────────────┼────────────────┤
+  │ 🟡 5     │ BN Physical Risk   │ Flood/drought probability spike  │ XLE xStock     │
+  │          │ Signal             │ → hedge energy                   │                │
+  ├──────────┼────────────────────┼──────────────────────────────────┼────────────────┤
+  │ 🟢 6     │ GARCH-EVT VaR      │ GPD tail estimate breach →       │ Portfolio-wide │
+  │          │ Overlay            │ reduce position 20%              │                │
+  └──────────┴────────────────────┴──────────────────────────────────┴────────────────┘
+
+  Step 5: Kelly Sizing — already in your graph formulas
+
+  # agent/sizing.py
+  def kelly_size(signal_strength: float, win_rate: float, 
+                 avg_win: float, avg_loss: float) -> float:
+      """f* = (p·b - q) / b  where b = avg_win/avg_loss"""
+      b = avg_win / avg_loss
+      q = 1 - win_rate
+      kelly = (win_rate * b - q) / b
+      # Use half-Kelly for safety in hackathon
+      return min(kelly * 0.5, 0.20)  # cap at 20% per position
+
+  Step 6: Kraken CLI Execution
+
+  # agent/execution.py
+  import subprocess
+
+  def execute_kraken(order: dict):
+      cmd = [
+          "kraken", "order",
+          "--pair",  order["pair"],    # e.g. XXBTZUSD or xStock ticker
+          "--side",  order["side"],    # buy or sell
+          "--type",  "market",
+          "--volume", str(order["qty"])
+      ]
+      result = subprocess.run(cmd, capture_output=True, text=True)
+      return {"status": "ok", "raw": result.stdout}
+
+  ---
+  PHASE 3 — Featherless LLM Integration (2 hours, wins the Featherless track)
+
+  # agent/sentiment.py
+  import httpx
+
+  FEATHERLESS_URL = "https://api.featherless.ai/v1/chat/completions"
+
+  async def score_sentiment(headline: str) -> float:
+      """Returns -1 (bearish) to +1 (bullish) sentiment score"""
+      payload = {
+          "model": "your-finance-finetuned-model",
+          "messages": [
+              {"role": "system", "content":
+               "You are a financial risk analyst. Score the market sentiment "
+               "of this headline from -1.0 (strongly bearish) to +1.0 "
+               "(strongly bullish). Reply with a single float only."},
+              {"role": "user", "content": headline}
+          ],
+          "max_tokens": 5
+      }
+      r = await httpx.AsyncClient().post(
+          FEATHERLESS_URL, json=payload,
+          headers={"Authorization": f"Bearer {FEATHERLESS_KEY}"}
+      )
+      return float(r.json()["choices"][0]["message"]["content"].strip())
+
+  The graph's Bayesian Macro Risk Signal strategy already has a param_sell_threshold = 0.35
+   — wire sentiment score as evidence into the BN:
+
+  # Sentiment < -0.3 → update P(IR=high) upward → BN inference → revised P(SP=low)
+  # If P(SP=low) > 0.35 → sell signal fires
+
+  ---
+  PHASE 4 — React Frontend (3 hours, wins the UX/demo judging)
+
+  The two panels that impress judges most:
+
+  Panel 1 — Live Knowledge Graph (Sigma.js)
+  // Show the KG with regime nodes highlighted in red
+  // Pulse animation on active strategy nodes
+  // Click a node → show its definition + connected signals
+  // This is your demo WOW moment
+
+  Panel 2 — Agent Operations Dashboard
+  ┌─────────────┬──────────────┬─────────────────┐
+  │ REGIME      │ ACTIVE       │ OPEN POSITIONS  │
+  │ BearMarket  │ Strategies   │ BTC  -0.3 lots  │
+  │ [🔴 live]  │ • BN Macro   │ ETH  +0.1 lots  │
+  │             │ • GARCH-EVT  │                 │
+  ├─────────────┴──────────────┴─────────────────┤
+  │ PnL: +$847  Sharpe: 1.34  Max DD: -2.1%      │
+  ├───────────────────────────────────────────────┤
+  │ AGENT LOG (live stream via WebSocket)         │
+  │ 14:32:01 Regime → BearMarket detected         │
+  │ 14:32:02 BN query → 3 strategies active       │
+  │ 14:32:03 Featherless → sentiment -0.62        │
+  │ 14:32:04 Kelly size → BTC sell 0.12           │
+  │ 14:32:05 Kraken ✅ order filled @ 43,210      │
+  └───────────────────────────────────────────────┘
+
+  ---
+  4. The Three Things That Win Each Track
+  
+  ┌──────────────┬────────────────────┬────────────────────────────────────────────────┐
+  │    Track     │    What judges     │               Your winning move                │
+  │              │      measure       │                                                │
+  ├──────────────┼────────────────────┼────────────────────────────────────────────────┤
+  │              │ Realized P&L on    │ Regime-aware Kelly sizing + GARCH-EVT downside │
+  │ Kraken PnL   │ xStocks            │  protection. Never lose more than 2% per       │
+  │              │                    │ trade. Compounding wins.                       │
+  4. The Three Things That Win Each Track
+
+  ┌──────────────┬───────────────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │    Track     │        What judges measure        │                                                 Your winning move                                                  │
+  └───────────────────────────────────────────────┘
+
+  ---
+  4. The Three Things That Win Each Track
+
+  ┌──────────────┬───────────────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │    Track     │        What judges measure        │                                                 Your winning move                                                  │
+  ├──────────────┼───────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Kraken PnL   │ Realized P&L on xStocks           │ Regime-aware Kelly sizing + GARCH-EVT downside protection. Never lose more than 2% per trade. Compounding wins.    │
+  ├──────────────┼───────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Vultr Agent  │ Full autonomous agent on Vultr VM │ FastAPI agent loop running continuously, logging every decision, demonstrating multi-step reasoning through the KG │
+  ├──────────────┼───────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Featherless  │ Open-source LLM doing real work   │ LLM sentiment → BN prior update → trade signal. Show the chain in the UI.                                          │
+  ├──────────────┼───────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Speechmatics │ Earnings call → graph ingestion   │ Transcribe one real earnings call → extract concepts → MERGE new nodes live during demo                            │
+  └──────────────┴───────────────────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  5. The 6-Hour Hackathon Sprint Plan
+
+  Hour 1:  Vultr VM up + Docker Memgraph + load master.cypher + verify
+  Hour 2:  FastAPI skeleton + /agent/run + Kraken CLI wrapper + first test order
+  Hour 3:  Regime detector + graph query (ACTIVATED_BY) + signal engine (top 3 strategies)
+  Hour 4:  Featherless sentiment → BN prior update → Kelly sizing wired end-to-end
+  Hour 5:  React frontend: graph viz + PnL dashboard + WebSocket agent log stream
+  Hour 6:  Demo polish: one live Speechmatics ingestion, rehearse the user journey
+
+  ---
+  6. The Highest-PnL Strategy Right Now
+
+  Given current macro (high rates, elevated vol): Bayesian Macro Risk Signal + GARCH-EVT VaR Overlay running together.
+
+  - BN says: P(SP=low | IR=high) = 0.626 (your own graph data from the Shenoy model)
+  - EVT tail overlay says: cut exposure when 1-day VaR breach probability > GPD threshold
+  - Kelly says: size down to 10-15% per position in this regime
+  - Result: protect the downside, let winners run, win on Sharpe not just raw P&L
+
+  Judges care about Sharpe ratio and max drawdown as much as absolute PnL. Your graph already has the risk management formulas — use them.
+
+  Go build. The graph is ready. Everything else is plumbing.
+
+✻ Brewed for 1m 28s
+
+※ recap: GraphAlpha is an agentic xStocks trading system for a hackathon, with the knowledge graph complete. Next action: SSH into the Vultr VM, run Memgraph in Docker, and load 
+  master.cypher.
+
+❯ IT IS NOT JUST FOR A HACKATHON THOUGH, I AM IN MY FINAL MODULE IN MscFE from WQU , i want to make it my capstone so it'll be production grade but efficient. do we need several sub   
+  agents?                                                                                                                                                                               
+  
+● This changes the framing significantly. A hackathon optimizes for demo impact in 48 hours. A capstone optimizes for academic rigor, reproducibility, and production robustness over
+  months. Let me give you the honest architectural answer.
+
+  ---
+  The Honest Assessment First
+
+  Your knowledge graph is a genuinely novel academic contribution. No MScFE capstone I am aware of uses a causal knowledge graph as the grounding layer for an agentic trading system.
+  That is your thesis claim:
+
+  ▎ "A financial knowledge graph encoding causal relationships between risk concepts, market regimes, and trading strategies can ground LLM-driven autonomous trading agents, producing 
+  ▎ superior risk-adjusted returns compared to ungrounded LLM agents and traditional factor models."
+
+  That claim requires:
+  1. A formal backtesting framework with statistical significance testing
+  2. A comparison baseline (ungrounded LLM, pure factor model)
+  3. Production-grade risk controls
+  4. A reproducible, documented system
+  
+  The hackathon is the demo vehicle. The capstone is the research vehicle. They share the same codebase.
+
+  ---
+  Do You Need Sub-Agents?
+
+  Yes, but fewer than you think. The failure mode of multi-agent systems is premature decomposition — agents that are too fine-grained spend more tokens coordinating than doing useful
+  work.
+
+  The right question is: what boundaries justify agent separation?
+
+  An agent boundary is justified when:
+  - The task requires a different tool set
+  - The task can run in parallel with others
+  - The task has a different failure mode that should be isolated
+  - The task needs independent memory/context
+  
+  Applying this to your system:
+
+  ---
+  The Right Agent Architecture
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │                    ORCHESTRATOR AGENT                        │
+  │  - Runs the main loop (every 5 min live, every day backtest) │
+  │  - Routes tasks to sub-agents                                │
+  │  - Maintains portfolio state                                 │
+  │  - Enforces risk limits (hard stops)                         │
+  │  - Writes to audit log                                       │
+  └──┬──────────┬──────────┬──────────┬──────────┬─────────────┘
+     │          │          │          │          │
+     ▼          ▼          ▼          ▼          ▼
+  REGIME     SIGNAL     RISK       EXECUTION  RESEARCH
+  AGENT      AGENT      AGENT      AGENT      AGENT
+
+  Agent 1 — Regime Agent
+
+  Responsibility: Classify the current market regime and query the graph for active strategies.
+
+  Justified because: Regime classification is a standalone inference task with its own data sources (VIX, yield curve, realized vol, credit spreads). It runs once per cycle and feeds
+  everything downstream.
+
+  class RegimeAgent:
+      """
+      Queries: MATCH (r:Regime)<-[:ACTIVATED_BY]-(s:Strategy {status:'active'})
+      Returns: {regime: str, active_strategies: list, confidence: float}
+      
+      Methods:
+      - classify_regime()    → HMM or threshold-based
+      - query_graph()        → Cypher ACTIVATED_BY traversal  
+      - compute_confidence() → posterior probability of regime
+      """
+      tools = ["memgraph", "yfinance", "FRED_API"]
+
+  Agent 2 — Signal Agent
+
+  Responsibility: Generate trading signals from active strategies using the Featherless LLM for sentiment and quantitative formulas from the graph.
+
+  Justified because: Signal generation is computationally intensive, strategy-specific, and benefits from parallelism (each strategy runs independently).
+
+  class SignalAgent:
+      """
+      For each active strategy:
+        1. Pull formula node via HAS_FORMULA edge
+        2. Compute quantitative signal (GARCH, BN inference, EVT)
+        3. Score sentiment via Featherless LLM
+        4. Fuse: signal_score = 0.7 * quant + 0.3 * sentiment
+      
+      Returns: {ticker: str, direction: str, strength: float, 
+                reasoning: str, graph_path: list}
+      """
+      tools = ["memgraph", "featherless_llm", "yfinance", "pgmpy"]
+
+  Agent 3 — Risk Agent
+
+  Responsibility: Validate every signal against portfolio-level risk constraints before it reaches execution. This agent can only reject or resize — it never generates signals.
+
+  Justified because: Risk management must be isolated from signal generation. An agent that generates AND validates its own signals has a conflict of interest. This separation is also
+  academically defensible and regulatorily sound.
+
+  class RiskAgent:
+      """
+      Pre-trade checks:
+        - Kelly sizing (f_kelly formula from graph)
+        - Portfolio VaR < limit (f_vasicek_var from graph)
+        - Max drawdown circuit breaker
+        - CONTRADICTED_BY edge check (does this signal contradict an active hedge?)
+        - Concentration limit per sector
+      
+      Returns: {approved: bool, sized_qty: float, 
+                reject_reason: str | None, var_contribution: float}
+      """
+      tools = ["memgraph", "numpy", "portfolio_state"]
+
+  Agent 4 — Execution Agent
+
+  Responsibility: Interface with Kraken CLI. Nothing else.
+
+  Justified because: Execution is the only agent with side effects in the real world. Isolation means bugs in other agents cannot accidentally fire orders. It also maintains the full
+  order audit trail.
+
+  class ExecutionAgent:
+      """
+      - Receives ONLY risk-approved, sized orders
+      - Implements order type selection (market vs limit)
+      - Handles partial fills and retries
+      - Writes immutable audit log entry for every action
+      - Paper trading mode: logs orders without executing
+      
+      State machine: PENDING → SUBMITTED → FILLED | REJECTED | TIMEOUT
+      """
+      tools = ["kraken_cli", "audit_log"]
+      modes = ["paper", "live"]  # always start in paper
+
+  Agent 5 — Research Agent (your academic differentiator)
+
+  Responsibility: Continuously enrich the knowledge graph with new information. This is what makes your system genuinely novel for a capstone.
+
+  Justified because: Knowledge graph maintenance is asynchronous — it does not need to block the trading loop. It runs on a slower cycle (hourly / on earnings events).
+
+  class ResearchAgent:
+      """
+      Triggers:
+        - Earnings call detected → Speechmatics transcription → 
+          extract concepts → MERGE new nodes into graph
+        - News headline → Featherless entity extraction → 
+          update CPDs on relevant BN nodes
+        - Weekly: re-run VARLiNGAM on fresh return data → 
+          update DYNOTEARS causal edges
+      
+      Academic contribution: the graph is LIVE, not static.
+      It learns from the market as conditions change.
+      """
+      tools = ["speechmatics", "featherless_llm", "memgraph",
+               "yfinance", "lingam"]
+
+  ---
+  What You Are NOT Building (avoid scope creep)
+  
+  ┌───────────────────────────────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │              Temptation               │                                                        Why to skip it                                                         │
+  ├───────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Separate portfolio optimization agent │ Risk Agent handles this — adding one more layer adds latency and coordination overhead                                        │
+  ├───────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Real-time tick data agent             │ 5-minute bars are sufficient for the strategies in your graph; tick data is a different regulatory and infrastructure problem │
+  ├───────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Separate backtesting agent            │ Backtesting is offline — run it as a script, not a live agent                                                                 │
+  ├───────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ News scraping agent                   │ Use a single API call inside Research Agent; don't build a crawler                                                            │
+  ├───────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ Separate logging agent                │ Use structured logging (loguru) and write to PostgreSQL; not worth an agent                                                   │
+  └───────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ---
+  The Production-Grade Layer (capstone requires this)
+  
+  This is what separates your capstone from a hackathon project:
+
+  1. Backtesting Framework (before any live trading)
+
+  # backtest/engine.py
+  class BacktestEngine:
+      """
+      Walk-forward backtest:
+      - Train window: 252 days
+      - Test window: 63 days (1 quarter)
+      - No lookahead bias: regime uses only lagged data
+      - Transaction costs: Kraken fee schedule baked in
+      
+      Output metrics (your capstone evaluation):
+      - Annualized Sharpe Ratio (target > 1.5)
+      - Max Drawdown (target < 15%)
+      - Calmar Ratio
+      - Hit Rate per strategy
+      - Information Coefficient per signal
+      """
+
+  2. Statistical Validation (your academic claim needs this)
+
+  # validation/significance.py
+
+  # Test 1: Is Sharpe > 0 with p < 0.05?
+  # Use Jobson-Korkie test or bootstrap
+  from scipy import stats
+
+  # Test 2: Does the KG-grounded agent beat the baseline?
+  # Baseline 1: Random strategy selection (same universe, no graph)
+  # Baseline 2: Buy-and-hold the benchmark
+  # Baseline 3: Ungrounded LLM (same Featherless model, no KG)
+
+  # Test 3: Do CONTRADICTED_BY edges actually prevent losing trades?
+  # Ablation: run with and without contradiction checking
+
+  3. Paper Trading Gate
+
+  Development → Unit tests → Backtesting → Paper trading (30 days) → Live trading
+  Never skip paper trading. Your capstone committee will ask about this.
+
+  4. Monitoring (production-grade requirement)
+
+  # Every agent writes structured metrics to:
+  # - Prometheus (latency, error rate, order count)
+  # - PostgreSQL (all signals, all orders, all regime changes)
+  # - Grafana dashboard on Vultr (your committee can watch live)
+
+  # Alert conditions:
+  # - Max drawdown > 10% → halt live trading, notify
+  # - Agent loop > 30s → investigate
+  # - Featherless API error rate > 5% → fall back to quant-only signals
+
+  ---
+  The Capstone Document Structure
+
+  Your thesis maps directly to your system:
+
+  Chapter 1: Introduction
+    - The grounding problem in LLM-driven trading
+    - Knowledge graphs as causal memory for agents
+
+  Chapter 2: Literature Review
+    (everything in your graph: Vasicek, DYNOTEARS, EVT, BN, CERM...)
+
+  Chapter 3: Knowledge Graph Construction
+    - Methodology (WQU Risk Management curriculum as primary source)
+    - Graph statistics (324 concepts, 17 relationship types, 26 strategies)
+    - Validation (the 51 Q&A nodes as evaluation harness)
+
+  Chapter 4: Agent Architecture
+    - The 5-agent design with separation of concerns
+    - Orchestration protocol
+    - Failure modes and circuit breakers
+
+  Chapter 5: Signal Generation
+    - Regime classification methodology
+    - Strategy activation via ACTIVATED_BY traversal
+    - Featherless LLM sentiment fusion
+    - Kelly sizing derivation
+
+  Chapter 6: Backtesting & Statistical Validation
+    - Walk-forward methodology
+    - Results vs 3 baselines
+    - Ablation study (with/without KG grounding)
+
+  Chapter 7: Production Deployment
+    - Vultr infrastructure
+    - Paper trading results (30 days)
+    - Live trading results (if approved)
+
+  Chapter 8: Conclusion
+    - The KG as a living research artifact
+    - Limitations and future work
+
+  ---
+  The Immediate Next Steps (in order)
+
+  Week 1:  Vultr VM + Memgraph + all 5 agent skeletons + paper trading mode
+  Week 2:  Backtesting engine + walk-forward results on 3 years of data
+  Week 3:  Featherless integration + Research Agent (Speechmatics earnings ingestion)
+  Week 4:  Statistical validation + baseline comparisons
+  Week 5:  React frontend (graph viz + live dashboard + agent log)
+  Week 6:  Paper trading (run live in paper mode, monitor, tune)
+  Week 7:  Write Chapter 3-6 of capstone while paper trading runs
+  Week 8:  Live trading (small capital) + write remaining chapters
+
+  ---
+  The Single Most Important Thing
+  
+  Your knowledge graph has CONTRADICTED_BY edges. No other trading system has this. An agent that checks whether a buy signal on asset X is contradicted by a simultaneously active
+  hedge on X — and refuses to act on contradictory signals — is genuinely novel risk management.
+
+  That is your thesis differentiator. Build the ablation study around it.
+
+  Run the system with contradiction checking ON vs OFF across 3 years of data. If contradiction checking reduces drawdown by even 2-3% with no cost to returns, you have a publishable
+  result that your capstone committee will remember.
+
+
