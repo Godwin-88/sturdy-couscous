@@ -1,4 +1,4 @@
-gqlalchemy==1.4.1          # Memgraph Python driver
+gqlalchemy==1.6.0          # Memgraph Python driver
 pgmpy==0.1.26              # Bayesian network inference
 lingam==1.8.3              # VARLiNGAM / DYNOTEARS
 yfinance==0.2.40           # market data
@@ -12,6 +12,8 @@ psycopg2-binary==2.9.9     # PostgreSQL
 python-dotenv==1.0.1
 loguru==0.7.2              # structured logging
 prometheus-client==0.20.0  # metrics
-arch==6.4.0                # GARCH models
+arch==6.3.0                # GARCH models
 statsmodels==0.14.2        # VAR, statistical tests
 tqdm==4.66.4
+feedparser==6.0.11         # RSS feed parsing for NewsAgent
+websockets>=13.0           # required by yfinance live module

@@ -20,6 +20,8 @@ from routes.signals   import router as signals_router
 from routes.positions import router as positions_router
 from routes.graph     import router as graph_router
 from routes.backtest  import router as backtest_router
+from routes.market        import router as market_router
+from routes.intelligence  import router as intelligence_router
 
 load_dotenv()
 
@@ -60,6 +62,8 @@ app.include_router(signals_router)
 app.include_router(positions_router)
 app.include_router(graph_router)
 app.include_router(backtest_router)
+app.include_router(market_router)
+app.include_router(intelligence_router)
 
 
 @app.get("/health")

@@ -1,9 +1,20 @@
 import { useState } from "react";
-import { TrendingDown, TrendingUp, DollarSign, AlertTriangle } from "lucide-react";
+import { TrendingDown, TrendingUp, DollarSign, AlertTriangle, ArrowUp, ArrowDown } from "lucide-react";
+
+const ASSET_CLASS_ORDER = ["equity", "vol", "rates", "commodity", "crypto", "fx", "other"];
+const ASSET_CLASS_COLOR: Record<string, string> = {
+  equity:    "text-blue-500",
+  vol:       "text-red-500",
+  rates:     "text-yellow-500",
+  commodity: "text-orange-500",
+  crypto:    "text-purple-500",
+  fx:        "text-cyan-500",
+  other:     "text-slate-500",
+};
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { agentApi, Portfolio, Position, Signal } from "@/lib/api";
+import { agentApi, Portfolio, Position, Signal, MarketQuote } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
 import { fmt$, fmtPct } from "@/lib/utils";
 import clsx from "clsx";
@@ -12,15 +23,32 @@ export default function PnLDashboard() {
   const { data: portfolio } = usePolling<Portfolio>(agentApi.portfolio, 10_000);
   const { data: positions } = usePolling<Position[]>(agentApi.positions, 10_000);
   const { data: signals }   = usePolling<Signal[]>(() => agentApi.signals(30), 30_000);
+  const { data: quotes }    = usePolling<MarketQuote[]>(agentApi.marketQuotes, 60_000);
   const [tab, setTab] = useState<"positions" | "chart">("positions");
 
   const totalPnl = positions?.reduce((s, p) => s + p.unrealised_pnl, 0) ?? 0;
-
-  // Build nav history from signals for sparkline
   const navHistory = buildNavHistory(signals ?? [], portfolio?.nav ?? 10000);
 
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
+      {/* Market data strip */}
+      {quotes && quotes.length > 0 && (
+        <div className="flex items-center border-b border-slate-700 bg-slate-950 overflow-x-auto">
+          {ASSET_CLASS_ORDER.map(cls => {
+            const group = quotes.filter(q => q.asset_class === cls && !q.error);
+            if (group.length === 0) return null;
+            return (
+              <div key={cls} className="flex items-center border-r border-slate-800 shrink-0">
+                <span className={`px-1.5 text-[9px] font-mono uppercase tracking-widest shrink-0 ${ASSET_CLASS_COLOR[cls] ?? "text-slate-600"}`}>
+                  {cls}
+                </span>
+                {group.map(q => <QuoteTile key={q.ticker} q={q} />)}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-700 border-b border-slate-700">
         <StatCell
@@ -75,6 +103,30 @@ export default function PnLDashboard() {
           <NavChart data={navHistory} />
         )}
       </div>
+    </div>
+  );
+}
+
+function QuoteTile({ q }: { q: MarketQuote }) {
+  if (q.error) return null;
+  const up = q.daily_chg >= 0;
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 shrink-0 border-r border-slate-800/50 last:border-r-0">
+      <span className="text-xs font-mono font-bold text-slate-300">{q.display ?? q.ticker}</span>
+      <span className="text-xs font-mono text-slate-200">{q.last.toFixed(2)}</span>
+      <span className={clsx("flex items-center gap-0.5 text-[10px] font-mono",
+        up ? "text-emerald-400" : "text-red-400")}>
+        {up ? <ArrowUp size={8} /> : <ArrowDown size={8} />}
+        {Math.abs(q.daily_chg * 100).toFixed(2)}%
+      </span>
+      <span className="text-[10px] font-mono text-slate-500" title="Realized Vol">
+        σ {(q.realized_vol * 100).toFixed(1)}%
+      </span>
+      {q.iv_rank != null && (
+        <span className="text-[10px] font-mono text-purple-400" title="IV Rank">
+          IVR {(q.iv_rank * 100).toFixed(0)}
+        </span>
+      )}
     </div>
   );
 }

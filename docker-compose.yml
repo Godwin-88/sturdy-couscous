@@ -17,12 +17,11 @@ services:
     volumes:
       - memgraph_data:/var/lib/memgraph
       - memgraph_log:/var/log/memgraph
-      - ./graph/schema:/graph                # master.cypher accessible in container
+      - ./master.cypher:/graph/master.cypher:ro
     environment:
       MEMGRAPH_TELEMETRY_ENABLED: "false"
     healthcheck:
-      test: ["CMD", "mgconsole", "--host", "localhost", "--port", "7687",
-             "--execute", "RETURN 1;"]
+      test: ["CMD-SHELL", "echo 'RETURN 1;' | mgconsole --host localhost --port 7687"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -39,7 +38,7 @@ services:
       memgraph:
         condition: service_healthy
     volumes:
-      - ./graph/schema:/graph
+      - ./master.cypher:/graph/master.cypher:ro
     entrypoint: >
       sh -c "cat /graph/master.cypher | mgconsole
              --host memgraph --port 7687 &&
@@ -99,9 +98,10 @@ services:
     volumes:
       - ./api:/app                  # hot-reload in dev
       - ./agent:/app/agent          # agents importable from api
+      - ./backtest:/app/backtest    # backtest engine accessible from api
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "cat /dev/null > /dev/tcp/localhost/8000"]
       interval: 15s
       timeout: 5s
       retries: 5

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import clsx from "clsx";
-import { Activity, GitBranch, BarChart2, Table2, Radio } from "lucide-react";
+import { Activity, GitBranch, BarChart2, Table2, Radio, ShieldAlert, Brain } from "lucide-react";
 
 import RegimePanel         from "@/components/RegimePanel";
 import PnLDashboard        from "@/components/PnLDashboard";
@@ -9,14 +9,18 @@ import GraphCanvas         from "@/components/GraphCanvas";
 import SignalsTable        from "@/components/SignalsTable";
 import BacktestPanel       from "@/components/BacktestPanel";
 import ContradictionsPanel from "@/components/ContradictionsPanel";
+import RiskPanel           from "@/components/RiskPanel";
+import IntelligencePanel   from "@/components/IntelligencePanel";
 
-type Tab = "dashboard" | "graph" | "signals" | "backtest";
+type Tab = "dashboard" | "graph" | "signals" | "backtest" | "risk" | "intelligence";
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: "dashboard", label: "Dashboard",  icon: <Activity  size={14} /> },
-  { id: "graph",     label: "KG Explorer",icon: <GitBranch size={14} /> },
-  { id: "signals",   label: "Signals",    icon: <Table2    size={14} /> },
-  { id: "backtest",  label: "Backtest",   icon: <BarChart2 size={14} /> },
+  { id: "dashboard", label: "Dashboard",  icon: <Activity    size={14} /> },
+  { id: "graph",     label: "KG Explorer",icon: <GitBranch   size={14} /> },
+  { id: "signals",   label: "Signals",    icon: <Table2      size={14} /> },
+  { id: "risk",      label: "Risk",       icon: <ShieldAlert size={14} /> },
+  { id: "backtest",      label: "Backtest",     icon: <BarChart2   size={14} /> },
+  { id: "intelligence",  label: "Intelligence", icon: <Brain       size={14} /> },
 ];
 
 export default function App() {
@@ -65,7 +69,9 @@ export default function App() {
         {tab === "dashboard" && <DashboardTab />}
         {tab === "graph"     && <GraphTab />}
         {tab === "signals"   && <SignalsTab />}
-        {tab === "backtest"  && <BacktestTab />}
+        {tab === "risk"         && <RiskTab />}
+        {tab === "backtest"     && <BacktestTab />}
+        {tab === "intelligence" && <IntelligenceTab />}
       </main>
     </div>
   );
@@ -88,7 +94,6 @@ function DashboardTab() {
       <div className="flex flex-col gap-3 overflow-hidden min-h-0">
         <PnLDashboard />
         <div className="flex-1 min-h-0">
-          {/* Mini graph — Strategy nodes only on dashboard */}
           <DashboardGraph />
         </div>
       </div>
@@ -175,11 +180,31 @@ function SignalsTab() {
   );
 }
 
+// ── Risk tab ───────────────────────────────────────────────────────────────────
+function RiskTab() {
+  return (
+    <div className="h-full overflow-y-auto p-3">
+      <div className="max-w-2xl mx-auto">
+        <RiskPanel />
+      </div>
+    </div>
+  );
+}
+
 // ── Backtest tab ───────────────────────────────────────────────────────────────
 function BacktestTab() {
   return (
     <div className="h-full overflow-y-auto p-3">
       <BacktestPanel />
+    </div>
+  );
+}
+
+// ── Intelligence tab ──────────────────────────────────────────────────────────
+function IntelligenceTab() {
+  return (
+    <div className="h-full overflow-y-auto">
+      <IntelligencePanel />
     </div>
   );
 }

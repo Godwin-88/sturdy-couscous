@@ -22,13 +22,14 @@ export function useWebSocket<T = unknown>(url: string, maxMessages = 300) {
     };
 
     ws.onclose = () => {
-      setStatus("closed");
-      retryRef.current = setTimeout(connect, 3000);
+      if (wsRef.current === ws) {
+        setStatus("closed");
+        retryRef.current = setTimeout(connect, 3000);
+      }
     };
 
     ws.onerror = () => {
-      setStatus("error");
-      ws.close();
+      if (wsRef.current === ws) ws.close();
     };
 
     ws.onmessage = (evt: MessageEvent<string>) => {
@@ -43,8 +44,20 @@ export function useWebSocket<T = unknown>(url: string, maxMessages = 300) {
   useEffect(() => {
     connect();
     return () => {
-      if (retryRef.current) clearTimeout(retryRef.current);
-      wsRef.current?.close();
+      if (retryRef.current) { clearTimeout(retryRef.current); retryRef.current = null; }
+      const ws = wsRef.current;
+      wsRef.current = null;
+      if (!ws) return;
+      // Null handlers so callbacks don't fire after unmount
+      ws.onclose   = null;
+      ws.onerror   = null;
+      ws.onmessage = null;
+      if (ws.readyState === WebSocket.CONNECTING) {
+        // Closing a CONNECTING socket logs a browser error; defer until open instead
+        ws.onopen = () => ws.close();
+      } else {
+        ws.close();
+      }
     };
   }, [connect]);
 

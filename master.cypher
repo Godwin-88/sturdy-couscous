@@ -346,7 +346,7 @@ MATCH (a:Concept {name:'Monte Carlo Pricing'}),       (b:Concept {name:'Lookback
 MATCH (a:Concept {name:'Risk-Neutral Pricing'}),      (b:Concept {name:'Binary Option'})        MERGE (a)-[:PREREQ_OF]->(b);
 
 // Time Decay / Vega prerequisites
-MATCH (a:Concept {name:'Greeks'}),                    (b:Concept {name:'Time Decay (Theta)'}),  MERGE (a)-[:PREREQ_OF]->(b);
+MATCH (a:Concept {name:'Greeks'}),                    (b:Concept {name:'Time Decay (Theta)'})  MERGE (a)-[:PREREQ_OF]->(b);
 MATCH (a:Concept {name:'Greeks'}),                    (b:Concept {name:'Vega Risk'})             MERGE (a)-[:PREREQ_OF]->(b);
 MATCH (a:Concept {name:'Implied Volatility'}),        (b:Concept {name:'Vega Risk'})             MERGE (a)-[:PREREQ_OF]->(b);
 
