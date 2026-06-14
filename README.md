@@ -8,51 +8,124 @@ GraphAlpha is a production-grade agentic trading system built for the WQU MScFE 
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        React Frontend                           │
-│  Dashboard · KG Explorer · Signals · Backtest  (port 5173)     │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │ REST + WebSocket
-┌───────────────────────────▼─────────────────────────────────────┐
-│                     FastAPI Gateway                             │
-│  /agent/status · /signals · /positions · /graph · /backtest    │
-│                       (port 8000)                               │
-└──────┬──────────────────────────────────────────────┬──────────┘
-       │ Redis pub/sub                                 │ Postgres
-┌──────▼──────────────────────────────────────────────▼──────────┐
-│                    Agent Worker (Orchestrator)                  │
-│                                                                 │
-│   RegimeAgent → SignalAgent → RiskAgent → ExecutionAgent       │
-│                    ↑ ResearchAgent (async)                      │
-└──────┬──────────────────────────────────────────────┬──────────┘
-       │ Bolt (gqlalchemy)                            │ yfinance / Kraken
-┌──────▼───────────────┐                             │
-│   Memgraph (KG)      │◄── graph/schema/master.cypher
-│   324 concepts        │
-│   99 formulas         │
-│   26 strategies       │
-│   7 regimes           │
-└──────────────────────┘
+```mermaid
+graph TB
+    subgraph Frontend["React Frontend (port 5173)"]
+        F1[Dashboard]
+        F2[KG Explorer]
+        F3[Signals]
+        F4[Backtest]
+        F5[Intelligence]
+        F6[Market]
+    end
+
+    subgraph API["FastAPI Gateway (port 8000)"]
+        A1[REST Routes]
+        A2[WebSocket /ws/events]
+        A3[WebSocket /ws/signals]
+        A4[Prometheus /metrics]
+    end
+
+    subgraph Agent["Agent Worker"]
+        O[Orchestrator]
+        O --> R[RegimeAgent]
+        O --> S[SignalAgent]
+        O --> N[NewsAgent]
+        O --> M[MacroCalendarAgent]
+        O --> K[KGSignalGenerator]
+        O --> RI[RiskAgent]
+        O --> E[ExecutionAgent]
+        O --> RS[ResearchAgent]
+    end
+
+    subgraph Data["Data Layer"]
+        MG[(Memgraph<br/>324 Concepts)]
+        PG[(PostgreSQL)]
+        RD[(Redis)]
+    end
+
+    subgraph External["External"]
+        YF[yfinance]
+        KL[Kraken xStocks]
+        FL[Featherless LLM]
+        SM[Speechmatics]
+        FR[FRED]
+    end
+
+    F1 & F2 & F3 & F4 & F5 & F6 -->|REST + WS| A1 & A2 & A3
+    A1 & A2 & A3 -->|Redis pub/sub| O
+    R -->|ACTIVATED_BY query| MG
+    S -->|CONTRADICTED_BY query| MG
+    K -->|Formula nodes| MG
+    R & S & RI & E & RS & N & M & K --> YF
+    E -->|Paper / Live| KL
+    S -->|Sentiment fusion| FL
+    RS -->|Earnings transcription| SM
+    RS -->|Macro data| FR
+    E -->|Audit log + positions| PG
+    O -->|Status + signals cache| RD
+    A4 -->|Metrics| O
 ```
 
-### Five-agent pipeline
+---
 
-| Agent | Responsibility | Key tech |
-|---|---|---|
-| **RegimeAgent** | Classify market regime from SPY/VIX/HYG; query graph for active strategies | 7-regime rule engine + Cypher `ACTIVATED_BY` query |
-| **SignalAgent** | Generate per-strategy signals; block contradicted pairs | GARCH(1,1), BN proxy, DYNOTEARS proxy, momentum + Featherless LLM sentiment (70/30 fusion) |
-| **RiskAgent** | Size positions, check VaR, enforce concentration limits | Half-Kelly criterion, parametric VaR, sector caps |
-| **ExecutionAgent** | Submit orders to Kraken; write immutable audit log | Kraken REST API, paper fill simulation, PostgreSQL |
-| **ResearchAgent** | Enrich graph weekly; transcribe earnings calls | VARLiNGAM refit → `TRANSMITS_TO` weights, Speechmatics, FRED macro |
+## Agent Pipeline
+
+Each cycle (default 5 minutes) the orchestrator runs all sub-agents in sequence:
+
+```mermaid
+flowchart TB
+    Start([Cycle Start]) --> Regime[RegimeAgent<br/>SPY / VIX / HYG classification]
+    Regime --> GraphQuery{Query Memgraph<br/>ACTIVATED_BY}
+    GraphQuery --> ActiveStrats[Active Strategies for Regime]
+
+    ActiveStrats --> News{NewsAgent<br/>RSS sentiment}
+    News --> Macro{MacroCalendarAgent<br/>Pre-event sizing}
+    Macro --> KG{KGSignalGenerator<br/>Formula evaluation}
+    KG --> Signal[SignalAgent<br/>Quant + LLM fusion]
+
+    Signal --> Merge[Merge KG signals<br/>Apply news overlay<br/>Apply macro overlay]
+    Merge --> Check[Check CONTRADICTED_BY]
+    Check -->|Not contradicted| Risk[RiskAgent<br/>Kelly + VaR + sector caps]
+    Check -->|Contradicted| Blocked[Blocked]
+
+    Risk -->|Approved| Exec[ExecutionAgent<br/>Kraken order submit]
+    Risk -->|Rejected| Rejected[Rejected]
+
+    Exec --> Cache[Cache to Redis<br/>Write audit to Postgres]
+    Cache --> CB{Circuit Breaker<br/>drawdown > 10%?}
+    CB -->|Yes| Halt[Set HALTED]
+    CB -->|No| Sleep[Sleep LOOP_INTERVAL]
+    Halt --> Sleep
+    Rejected --> Sleep
+    Blocked --> Sleep
+    Sleep -->|Next tick| Start
+
+    style Blocked fill:#ffcccc
+    style Rejected fill:#ffcccc
+    style Halt fill:#ff9999
+```
+
+### Sub-Agent Responsibilities
+
+| Agent | File | Cycle | Responsibility |
+|---|---|---|---|
+| **RegimeAgent** | `regime_agent.py` | Every tick | Classifies market regime (7 regimes) from SPY, VIX, TNX, HYG via yfinance; queries Memgraph for `ACTIVATED_BY` strategies |
+| **SignalAgent** | `signal_agent.py` | Every tick | Generates per-strategy quant signals (GARCH, BN, DYNOTEARS, momentum); fuses 70/30 with Featherless LLM sentiment; checks `CONTRADICTED_BY` edges |
+| **NewsAgent** | `news_agent.py` | Every tick | RSS sentiment aggregation; produces per-ticker and per-concept sentiment scores |
+| **MacroCalendarAgent** | `macro_calendar.py` | Every hour | Upcoming macro events; produces pre-event size modifiers that reduce signal scores |
+| **KGSignalGenerator** | `kg_signal_generator.py` | Every tick | Evaluates KG Formula nodes against ticker prices; merges results into main signal list |
+| **RiskAgent** | `risk_agent.py` | Every tick | Half-Kelly position sizing, parametric VaR (99% confidence), sector concentration caps (40%), max position caps (15-20%) |
+| **ExecutionAgent** | `execution_agent.py` | Every tick | Submits orders to Kraken (paper or live); writes immutable audit log to PostgreSQL |
+| **ResearchAgent** | `research_agent.py` | Every hour | VARLiNGAM weekly refit; updates `TRANSMITS_TO` causal edge weights; Speechmatics earnings transcription; FRED macro ingestion |
 
 ---
 
 ## Knowledge Graph
 
-The full breakdown is in [`KG_BREAKDOWN.md`](./KG_BREAKDOWN.md).
+Loaded from `master.cypher` (7,200+ lines) into Memgraph via a one-shot graph-loader container.
 
-**Cumulative stats (v0.10.1)**
+### Stats
 
 | Type | Count |
 |---|---|
@@ -65,106 +138,232 @@ The full breakdown is in [`KG_BREAKDOWN.md`](./KG_BREAKDOWN.md).
 | Relationship types | 18 |
 | QuizQuestion nodes | 51 |
 
-**18 relationship types** cover the full causal and structural ontology:
+### 18 Relationship Types
 
 `PREREQ_OF` · `BELONGS_TO` · `HAS_FORMULA` · `DERIVED_FROM` · `ACTIVATED_BY` · `CONTRADICTED_BY` · `TRANSMITS_TO` · `MONITORS` · `REPLICATES_WITH` · `HEDGES` · `GENERALIZES_TO` · `MOTIVATES` · `TRAINED_BY` · `EVALUATED_BY` · `FITTED_TO` · `CORRELATED_WITH` · `HAS_SIGNAL` · `TESTS`
 
-The `CONTRADICTED_BY` edges are operationally hot: `SignalAgent` traverses them every cycle and blocks signals from strategies whose concepts are mutually contradicting. This is the core academic differentiator.
+### Operational Flow
 
-**Domain coverage**
-
-- Bayesian Network structure learning (K2, HillClimb, BIC, BDeu, BDs)
-- BN parameter estimation (MLE, Bayesian)
-- Dynamic BNs, HMMs, DBNs
-- D-Separation, Markov Blanket
-- Credit risk (PD, LGD, EAD, EL, Vasicek, Merton, Three-Factor)
-- Climate risk (Physical, Transition, CERM, Wouters)
-- Sustainable Finance (Green Bonds, ESG)
-- Dynamic Causal Networks (DYNOTEARS, VARLiNGAM)
-- Causal Inference & Econophysics (Reichenbach, MPD, De-toning)
-- BN Applications (Oil Price, Credit Scoring, Rating Migration)
-- Coherent Portfolio Optimization (Rebonato-Denev)
-- Contagion and systemic risk
-- Momentum, GARCH volatility, regime classification
+```mermaid
+graph LR
+    R[RegimeAgent] -->|Cypher query| MG[(Memgraph)]
+    MG -->|ACTIVATED_BY| R
+    R -->|regime + strategies| S[SignalAgent]
+    S -->|DERIVED_FROM + HAS_FORMULA| MG
+    S -->|CONTRADICTED_BY check| MG
+    MG -->|contradiction block| S
+    RS[ResearchAgent] -->|VARLiNGAM refit| MG
+    MG -->|TRANSMITS_TO weights| RS
+```
 
 ---
 
-## Repository Structure
+## API Reference
 
+All endpoints documented at http://localhost:8000/docs.
+
+### REST Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Health check |
+| `GET` | `/agent/status` | Latest cycle: regime, confidence, strategies, signals, halted |
+| `GET` | `/signals` | Order history (paginated, up to 200 rows) |
+| `GET` | `/signals/live` | Latest signals cached in Redis |
+| `GET` | `/positions` | Open positions |
+| `GET` | `/positions/portfolio` | NAV, cash, drawdown, halt status |
+| `GET` | `/graph/nodes` | KG nodes (filter by label, limit) |
+| `GET` | `/graph/edges` | KG edges (limit) |
+| `GET` | `/graph/regime?regime=X` | Strategies + concepts activated by regime X |
+| `GET` | `/graph/contradictions` | All active CONTRADICTED_BY pairs |
+| `GET` | `/market/quotes` | Cross-asset quotes (watchlist or custom tickers) with realised vol and IV rank |
+| `GET` | `/market/watchlist` | Default 6-class watchlist |
+| `GET` | `/intelligence/news` | Latest news sentiment snapshot |
+| `GET` | `/intelligence/macro` | Upcoming macro events and pre-event signals |
+| `POST` | `/backtest/run` | Trigger walk-forward backtest (async background task) |
+| `GET` | `/backtest/status` | Poll backtest completion + results |
+
+### WebSocket Endpoints
+
+| Path | Description |
+|---|---|
+| `WS /ws/events` | Live agent event stream (Redis pub/sub relay) |
+| `WS /ws/signals` | Latest signals pushed every 5 seconds |
+
+---
+
+## Frontend
+
+React + TypeScript + Vite + Tailwind CSS + Sigma.js
+
+```mermaid
+graph TB
+    subgraph App["App.tsx"]
+        T1[Dashboard Tab]
+        T2[KG Explorer Tab]
+        T3[Signals Tab]
+        T4[Backtest Tab]
+        T5[Intelligence Tab]
+        T6[Market Tab]
+    end
+
+    subgraph Components["Components"]
+        C1[RegimePanel]
+        C2[PnLDashboard]
+        C3[GraphCanvas]
+        C4[AgentLog]
+        C5[SignalsTable]
+        C6[BacktestPanel]
+        C7[ContradictionsPanel]
+        C8[RiskPanel]
+        C9[IntelligencePanel]
+    end
+
+    subgraph Hooks["Custom Hooks"]
+        H1[useWebSocket]
+        H2[usePolling]
+    end
+
+    subgraph Lib["lib/"]
+        L1[api.ts]
+        L2[utils.ts]
+    end
+
+    T1 --> C1 & C2 & C4 & C7 & C8
+    T2 --> C3
+    T3 --> C5
+    T4 --> C6
+    T5 --> C9
+    T6 --> C9
+
+    C1 & C2 & C3 & C4 & C5 & C6 & C7 & C8 & C9 --> H1 & H2
+    C1 & C2 & C3 & C4 & C5 & C6 & C7 & C8 & C9 --> L1 & L2
 ```
-graphalpha/
-├── master.cypher                   # Single source of truth for the KG (7,220 lines)
-├── graph/schema/master.cypher      # Symlink — used by Docker graph-loader service
-├── KG_BREAKDOWN.md                 # Full KG domain breakdown, quiz bank, version history
-│
-├── agent/                          # Five sub-agents + orchestrator
-│   ├── orchestrator.py             # Main async loop; circuit breaker; Prometheus metrics
-│   ├── regime_agent.py             # Market regime classification + graph query
-│   ├── signal_agent.py             # Quant signal + LLM sentiment fusion
-│   ├── risk_agent.py               # Kelly sizing, VaR, concentration limits
-│   ├── execution_agent.py          # Kraken REST; paper/live mode; audit log
-│   ├── research_agent.py           # VARLiNGAM refit; Speechmatics; FRED
-│   ├── requirements.txt
-│   └── Dockerfile
-│
-├── api/                            # FastAPI gateway
-│   ├── main.py                     # App factory; WebSocket /ws/events and /ws/signals
-│   ├── routes/
-│   │   ├── agent.py                # GET /agent/status
-│   │   ├── signals.py              # GET /signals, GET /signals/live
-│   │   ├── positions.py            # GET /positions, GET /positions/portfolio
-│   │   ├── graph.py                # GET /graph/nodes|edges|regime|contradictions
-│   │   └── backtest.py             # POST /backtest/run, GET /backtest/status
-│   ├── models/
-│   │   ├── signal.py               # Signal, Order Pydantic models
-│   │   └── position.py             # Position, PortfolioState Pydantic models
-│   ├── requirements.txt
-│   └── Dockerfile
-│
-├── backtest/                       # Walk-forward backtest engine
-│   ├── engine.py                   # Walk-forward simulator; KG vs ungrounded ablation
-│   ├── metrics.py                  # Sharpe, Calmar, max drawdown, Jobson-Korkie test
-│   └── Dockerfile
-│
-├── frontend/                       # React + TypeScript + Vite + Tailwind + Sigma.js
-│   ├── src/
-│   │   ├── App.tsx                 # Tabbed layout: Dashboard | KG Explorer | Signals | Backtest
-│   │   ├── components/
-│   │   │   ├── RegimePanel.tsx     # Live regime + confidence bar + active strategies
-│   │   │   ├── PnLDashboard.tsx    # NAV/P&L stats + positions table + NAV sparkline
-│   │   │   ├── GraphCanvas.tsx     # Sigma.js interactive KG with ForceAtlas2 layout
-│   │   │   ├── AgentLog.tsx        # WebSocket live event stream
-│   │   │   ├── SignalsTable.tsx    # Paginated order history table
-│   │   │   ├── BacktestPanel.tsx   # Run ablation backtest; Jobson-Korkie display
-│   │   │   └── ContradictionsPanel.tsx  # Live CONTRADICTED_BY edge viewer
-│   │   ├── hooks/
-│   │   │   ├── useWebSocket.ts     # Auto-reconnecting WebSocket hook
-│   │   │   └── usePolling.ts       # Generic polling hook with configurable interval
-│   │   ├── lib/
-│   │   │   ├── api.ts              # Typed API client; all fetch calls in one place
-│   │   │   └── utils.ts            # Formatters, regime colour map, label colours
-│   │   └── index.css               # Tailwind base + custom scrollbar
-│   ├── Dockerfile.dev              # Hot-reload dev container
-│   ├── Dockerfile                  # Multi-stage prod build (Nginx)
-│   ├── nginx.conf                  # SPA fallback + API proxy
-│   └── vercel.json                 # Vercel deployment config
-│
-├── infra/
-│   ├── postgres/init.sql           # Schema: positions, order_audit, portfolio_state,
-│   │                               #         backtest_runs, agent_cycle_log
-│   ├── prometheus.yml              # Scrape agent:8001 and api:8000
-│   └── grafana/dashboards/         # (add JSON dashboards here)
-│
-├── scripts/
-│   ├── load_graph.sh               # Load master.cypher into running Memgraph
-│   ├── verify_graph.py             # Print node/edge counts; spot-check Strategy→Regime links
-│   └── deploy_vultr.sh             # rsync + docker compose prod up on Vultr VM
-│
-├── docker-compose.yml              # Local dev: all services, hot-reload
-├── docker-compose.prod.yml         # Vultr overrides: 6G Memgraph, localhost binding, no frontend
-├── .env.example                    # All environment variables with safe defaults
-├── Makefile                        # One-command ops
-└── README.md                       # This file
+
+### Components
+
+| Component | Purpose |
+|---|---|
+| `RegimePanel` | Live regime display with confidence bar and active strategies list |
+| `PnLDashboard` | NAV / P&L stats, positions table, NAV sparkline |
+| `GraphCanvas` | Interactive Sigma.js KG with ForceAtlas2 layout, node type filter, detail sidebar |
+| `AgentLog` | WebSocket live event stream with status indicator |
+| `SignalsTable` | Paginated order history with paper/live mode badge and direction colours |
+| `BacktestPanel` | Run ablation backtest, display metrics table and Jobson-Korkie result |
+| `ContradictionsPanel` | Live `CONTRADICTED_BY` edge viewer |
+| `RiskPanel` | Risk metrics display |
+| `IntelligencePanel` | News sentiment and macro calendar display |
+
+### Hooks
+
+| Hook | Purpose |
+|---|---|
+| `useWebSocket` | Auto-reconnecting WebSocket hook for live events and signals |
+| `usePolling` | Generic polling hook with configurable interval |
+
+---
+
+## Backtest Engine
+
+Walk-forward simulation engine with full academic validation.
+
+```mermaid
+flowchart TB
+    Load[Load prices<br/>SPY, QQQ, XLF, XLE + ^VIX] --> Classify{Per-step regime<br/>classification}
+    Classify --> KG{Grounded?}
+    KG -->|Yes| Active[Query Memgraph<br/>ACTIVATED_BY strategies]
+    KG -->|No| Default[Use MomentumOverlay only]
+    Active --> Signals[Compute per-strategy signals<br/>GARCH / Momentum / Value / Crisis]
+    Default --> Signals
+    Signals --> Rebal{Rebalance?<br/>every 5 days}
+    Rebal -->|Yes| Trade[Execute trades<br/>fees + slippage]
+    Rebal -->|No| Next[Next step]
+    Trade --> Next
+    Next -->|More steps?| Classify
+    Next -->|Done| Metrics[Compute metrics<br/>Sharpe, Calmar, Max DD, Profit Factor]
+    Metrics --> JK[Jobson-Korkie test<br/>H0: SharpeGrounded = SharpeUngrounded]
+    JK --> Output[JSON results<br/>equity curve, trade log, suggestions]
+```
+
+### Metrics Produced
+
+| Metric | Purpose |
+|---|---|
+| Total Return | Raw P&L over the period |
+| Sharpe Ratio | Risk-adjusted return (annualised, rf=5%) |
+| Calmar Ratio | Return / Max Drawdown |
+| Max Drawdown | Worst peak-to-trough loss |
+| Annualised Volatility | Daily std x sqrt(252) |
+| Profit Factor | Gross profit / Gross loss |
+| Win Rate | Fraction of profitable trades |
+| Avg Hold Days | Average position holding period |
+| **Jobson-Korkie z-stat** | Tests H0: Sharpe(grounded) = Sharpe(ungrounded) |
+| **JK p-value** | p < 0.05 indicates statistically significant outperformance |
+
+### Modes
+
+- **KG-grounded**: regime triggers graph query → only graph-sanctioned strategies produce signals
+- **Ungrounded baseline**: always runs MomentumOverlay regardless of regime or graph state
+- **Ablation**: run both, compare via Jobson-Korkie
+
+---
+
+## Environment Variables
+
+```env
+# ── Memgraph ────────────────────────────────────────────────────
+MEMGRAPH_HOST=memgraph
+MEMGRAPH_PORT=7687
+
+# ── PostgreSQL ──────────────────────────────────────────────────
+POSTGRES_HOST=postgres
+POSTGRES_DB=graphalpha
+POSTGRES_USER=graphalpha
+POSTGRES_PASSWORD=changeme
+
+# ── Redis ───────────────────────────────────────────────────────
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# ── Featherless (LLM sentiment) ─────────────────────────────────
+FEATHERLESS_BASE_URL=https://api.featherless.ai/v1
+FEATHERLESS_API_KEY=
+FEATHERLESS_MODEL=
+
+# ── Kraken (trading) ────────────────────────────────────────────
+KRAKEN_API_KEY=
+KRAKEN_API_SECRET=
+KRAKEN_TRADING_MODE=paper          # paper | live — NEVER set live manually
+
+# ── Speechmatics (earnings transcription) ───────────────────────
+SPEECHMATICS_API_KEY=
+
+# ── FRED (macro data) ───────────────────────────────────────────
+FRED_API_KEY=
+
+# ── Agent behaviour ─────────────────────────────────────────────
+AGENT_LOOP_INTERVAL_SECONDS=300    # 5-minute cycle
+NEWS_CYCLE_TICKS=1                 # every tick (~5 min)
+MACRO_CYCLE_TICKS=12               # every ~1 hour
+RESEARCH_CYCLE_TICKS=12            # every ~1 hour
+AGENT_MAX_DRAWDOWN_HALT=0.10       # halt at 10% drawdown from peak
+KG_SIGNAL_TICKERS=SPY,QQQ,TLT,GLD,BTC-USD
+
+# ── Risk limits ─────────────────────────────────────────────────
+AGENT_KELLY_FRACTION=0.5           # half-Kelly multiplier
+AGENT_MAX_POSITION_PCT=0.20        # max 20% NAV per position
+RISK_MAX_SECTOR_PCT=0.40           # max 40% NAV per sector
+RISK_VAR_CONFIDENCE=0.99
+RISK_MAX_VAR_PCT=0.05              # reject order if VaR contribution > 5% NAV
+
+# ── API ─────────────────────────────────────────────────────────
+API_HOST=0.0.0.0
+API_PORT=8000
+API_SECRET_KEY=change_this_in_production
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000,https://your-app.vercel.app
+
+# ── Environment ─────────────────────────────────────────────────
+ENVIRONMENT=development            # development | production
 ```
 
 ---
@@ -207,7 +406,7 @@ This command:
 1. Builds all Docker images (agent, api, frontend)
 2. Starts Memgraph, PostgreSQL, Redis
 3. Waits for health checks to pass
-4. Runs the graph-loader one-shot container (loads all 7,220 lines of `master.cypher`)
+4. Runs the graph-loader one-shot container (loads all 7,200+ lines of `master.cypher`)
 5. Starts the API, agent worker, and frontend dev server
 
 **Access points after `make up`:**
@@ -217,6 +416,8 @@ This command:
 | Frontend dashboard | http://localhost:5173 |
 | API + Swagger docs | http://localhost:8000/docs |
 | Memgraph Lab (KG browser) | http://localhost:3000 |
+| Prometheus (monitoring profile) | http://localhost:9090 |
+| Grafana (monitoring profile) | http://localhost:3001 |
 
 ### 3. Verify the graph loaded
 
@@ -224,7 +425,7 @@ This command:
 make verify-graph
 ```
 
-Expected output shows ~324 Concept nodes, ~26 Strategy nodes, ~7 Regime nodes.
+Expected output: Concept ~324, Strategy ~26, Regime 7, Formula ~99.
 
 ### 4. Watch the agent run
 
@@ -232,7 +433,7 @@ Expected output shows ~324 Concept nodes, ~26 Strategy nodes, ~7 Regime nodes.
 make logs-agent
 ```
 
-The orchestrator runs every 300 seconds by default (`AGENT_LOOP_INTERVAL_SECONDS` in `.env`). The frontend dashboard updates live via WebSocket.
+The orchestrator runs every 300 seconds by default. The frontend dashboard updates live via WebSocket.
 
 ---
 
@@ -248,234 +449,60 @@ make verify-graph        # Print node/edge counts from Memgraph
 make shell-memgraph      # Open mgconsole Cypher shell
 make shell-api           # Bash into running API container
 make shell-agent         # Bash into running agent container
+make test                # Run API tests
+make test-agents         # Run agent tests
 make backtest            # Run walk-forward backtest (KG-grounded)
 make backtest-ablation   # Run both KG-grounded and ungrounded, print comparison
-make up-monitoring       # Start Prometheus (port 9090) + Grafana (port 3001)
-make enable-live-trading # Prompts for CONFIRM; switches paper → live in .env
-make deploy              # Deploy to Vultr VM (run from your local machine)
-```
-
----
-
-## API Reference
-
-All endpoints are documented interactively at http://localhost:8000/docs.
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/health` | Health check |
-| `GET` | `/agent/status` | Latest cycle: regime, confidence, strategies, signals, halted |
-| `GET` | `/signals` | Order history (paginated, up to 200 rows) |
-| `GET` | `/signals/live` | Latest signals cached in Redis |
-| `GET` | `/positions` | Open positions |
-| `GET` | `/positions/portfolio` | NAV, cash, drawdown, halt status |
-| `GET` | `/graph/nodes` | KG nodes (filter by label, limit) |
-| `GET` | `/graph/edges` | KG edges (limit) |
-| `GET` | `/graph/regime?regime=X` | Strategies + concepts activated by regime X |
-| `GET` | `/graph/contradictions` | All active CONTRADICTED_BY pairs |
-| `POST` | `/backtest/run` | Trigger walk-forward backtest (async background task) |
-| `GET` | `/backtest/status` | Poll backtest completion + results |
-| `WS` | `/ws/events` | Live agent event stream (Redis pub/sub relay) |
-| `WS` | `/ws/signals` | Latest signals pushed every 5 seconds |
-
----
-
-## Environment Variables
-
-```env
-# ── Memgraph ────────────────────────────────────────────────────
-MEMGRAPH_HOST=memgraph
-MEMGRAPH_PORT=7687
-
-# ── PostgreSQL ──────────────────────────────────────────────────
-POSTGRES_HOST=postgres
-POSTGRES_DB=graphalpha
-POSTGRES_USER=graphalpha
-POSTGRES_PASSWORD=changeme
-
-# ── Redis ───────────────────────────────────────────────────────
-REDIS_HOST=redis
-REDIS_PORT=6379
-
-# ── Featherless (LLM sentiment) ─────────────────────────────────
-FEATHERLESS_BASE_URL=https://api.featherless.ai/v1
-FEATHERLESS_API_KEY=
-FEATHERLESS_MODEL=
-
-# ── Kraken (trading) ────────────────────────────────────────────
-KRAKEN_API_KEY=
-KRAKEN_API_SECRET=
-KRAKEN_TRADING_MODE=paper          # paper | live — NEVER set live manually
-
-# ── Speechmatics (earnings transcription) ───────────────────────
-SPEECHMATICS_API_KEY=
-
-# ── FRED (macro data) ───────────────────────────────────────────
-FRED_API_KEY=
-
-# ── Agent behaviour ─────────────────────────────────────────────
-AGENT_LOOP_INTERVAL_SECONDS=300    # 5-minute cycle
-AGENT_MAX_DRAWDOWN_HALT=0.10       # halt at 10% drawdown from peak
-INITIAL_CAPITAL_USD=10000
-
-# ── Risk limits ─────────────────────────────────────────────────
-RISK_MAX_POSITION_PCT=0.15         # max 15% NAV per position
-RISK_MAX_SECTOR_PCT=0.40           # max 40% NAV per sector
-RISK_VAR_CONFIDENCE=0.99
-RISK_MAX_VAR_PCT=0.05              # reject order if VaR contribution > 5% NAV
-
-# ── API ─────────────────────────────────────────────────────────
-CORS_ORIGINS=http://localhost:5173,http://localhost:3000,https://your-app.vercel.app
-API_SECRET_KEY=change_this_in_production
-```
-
----
-
-## Signal Pipeline Deep-Dive
-
-Each agent cycle follows this exact sequence:
-
-```
-RegimeAgent.run()
-  └── yfinance: SPY, ^VIX, ^TNX, HYG (1 year)
-  └── classify_regime() → one of 7 regimes
-  └── Memgraph: MATCH (r:Regime)<-[:ACTIVATED_BY]-(s:Strategy {status:'active'})
-  └── returns {regime, confidence, active_strategies}
-
-SignalAgent.run(regime, active_strategies)
-  └── for each strategy:
-      ├── _get_strategy_formula()   → Cypher: s-[:DERIVED_FROM]->c-[:HAS_FORMULA]->f
-      ├── _check_contradictions()   → Cypher: CONTRADICTED_BY traversal — BLOCKS if hit
-      ├── _compute_quant_signal()
-      │     GARCH(1,1)     → annualised vol → negative score when vol > 15%
-      │     BN proxy       → VIX → P(IR=high) → P(SP=low|macro) vs threshold
-      │     Contagion      → mean JPM/BAC/GS/MS/C correlation spike
-      │     Climate        → XLE vs SPY 3m relative performance
-      │     Momentum       → 12-month minus 1-month SPY momentum
-      ├── _get_sentiment()          → Featherless LLM: float -1.0 to 1.0
-      └── fused_score = 0.70 * quant + 0.30 * sentiment
-          direction: sell if < -0.2, buy if > 0.2, hold otherwise
-
-RiskAgent.run(signals)
-  └── half-Kelly sizing: f* = (p*b - q) / b, halved
-  └── sector concentration check (40% cap per sector)
-  └── parametric VaR contribution check (99% confidence, 5% NAV cap)
-  └── position quantity = (NAV * kelly * max_position_pct) / price
-
-ExecutionAgent.run(approved_orders)
-  └── paper mode: simulated fill = price * (1 + 0.05% slippage) + 0.26% fee
-  └── live mode:  Kraken REST /0/private/AddOrder (market order)
-  └── immutable write to order_audit (PostgreSQL)
-  └── update positions table
-```
-
----
-
-## Backtesting & Academic Validation
-
-The backtest engine (`backtest/engine.py`) runs a walk-forward simulation and produces metrics comparable across two conditions:
-
-- **KG-grounded**: regime classification triggers graph `ACTIVATED_BY` query → only graph-sanctioned strategies produce signals
-- **Ungrounded baseline**: always runs momentum regardless of regime or graph state
-
-### Metrics produced
-
-| Metric | Purpose |
-|---|---|
-| Total Return | Raw P&L over the period |
-| Sharpe Ratio | Risk-adjusted return (annualised, rf=5%) |
-| Calmar Ratio | Return / Max Drawdown |
-| Max Drawdown | Worst peak-to-trough loss |
-| Annualised Volatility | Daily std × √252 |
-| **Jobson-Korkie z-stat** | Tests H₀: Sharpe(grounded) = Sharpe(ungrounded) |
-| **JK p-value** | p < 0.05 → statistically significant outperformance |
-
-The Jobson-Korkie test is the capstone's primary academic contribution: it provides statistical evidence that KG-grounded signal selection outperforms ungrounded selection, not just by chance.
-
-### Running the ablation
-
-```bash
-# From the backtest UI (http://localhost:5173 → Backtest tab)
-# Select "Both (ablation)" mode → Run Backtest
-
-# Or from the command line:
-make backtest-ablation
+make up-monitoring       # Start Prometheus + Grafana
+make enable-live-trading # Prompts for CONFIRM; switches paper -> live in .env
+make deploy              # Deploy to Vultr VM
 ```
 
 ---
 
 ## Testing Checklist
 
-Work through these in order before deploying to Vultr.
-
 ### Layer 1 — Infrastructure
 
 ```bash
-# All containers healthy
-docker compose ps
-# Expected: all 5 core services show "healthy" or "running"
-
-# Graph loaded correctly
-make verify-graph
-# Expected: Concept ~324, Strategy ~26, Regime 7, Formula ~99
-
-# API reachable
-curl http://localhost:8000/health
-# Expected: {"status":"ok","version":"1.0.0"}
-
-# Postgres schema created
+docker compose ps                        # all services healthy
+make verify-graph                        # Concept ~324, Strategy ~26, Regime 7
+curl http://localhost:8000/health        # {"status":"ok","version":"1.0.0"}
 docker compose exec postgres psql -U graphalpha -c "\dt"
-# Expected: positions, order_audit, portfolio_state, backtest_runs, agent_cycle_log
-
-# Redis reachable
-docker compose exec redis redis-cli ping
-# Expected: PONG
+# positions, order_audit, portfolio_state, backtest_runs, agent_cycle_log
+docker compose exec redis redis-cli ping # PONG
 ```
 
-### Layer 2 — Knowledge Graph correctness
+### Layer 2 — Knowledge Graph
 
-```bash
-# Open Memgraph Lab at http://localhost:3000, run these queries:
+In Memgraph Lab (http://localhost:3000):
 
-# 1. Strategy → Regime links exist
+```cypher
 MATCH (s:Strategy)-[:ACTIVATED_BY]->(r:Regime) RETURN s.name, r.name LIMIT 20;
-
-# 2. CONTRADICTED_BY edges present
 MATCH (c1:Concept)-[:CONTRADICTED_BY]->(c2:Concept) RETURN c1.name, c2.name;
-
-# 3. Formulas linked to concepts
 MATCH (c:Concept)-[:HAS_FORMULA]->(f:Formula) RETURN c.name, f.expression LIMIT 10;
-
-# 4. No orphan strategies (every Strategy has DERIVED_FROM and ACTIVATED_BY)
-MATCH (s:Strategy)
-WHERE NOT (s)-[:DERIVED_FROM]->() OR NOT (s)-[:ACTIVATED_BY]->()
-RETURN s.name;
-# Expected: empty result
+MATCH (s:Strategy) WHERE NOT (s)-[:DERIVED_FROM]->() OR NOT (s)-[:ACTIVATED_BY]->() RETURN s.name;
+-- Expected: empty
 ```
 
-### Layer 3 — Agent pipeline
+### Layer 3 — Agent Pipeline
 
 ```bash
-# Trigger one manual cycle and watch logs
 make logs-agent
-# Wait up to 30s for first cycle to complete.
-# Expected log lines:
+# Wait up to 30s for first cycle:
 #   Regime: <name> (confidence=0.XX)
-#   Generated N signals
+#   NewsAgent: N articles
+#   Total signals this cycle: N
 #   Risk: N/N signals approved
 #   Executed N orders [paper mode]
 
-# Check agent status endpoint
 curl http://localhost:8000/agent/status | python3 -m json.tool
-# Expected: regime, regime_confidence, active_strategies, signals_generated, orders_approved
-
-# Check signals cached in Redis
 docker compose exec redis redis-cli get graphalpha:latest_signals | python3 -m json.tool
+docker compose exec redis redis-cli get graphalpha:news_latest | python3 -m json.tool
+docker compose exec redis redis-cli get graphalpha:macro_calendar | python3 -m json.tool
 ```
 
-### Layer 4 — Risk controls
-
-Open a Python shell inside the agent container and test directly:
+### Layer 4 — Risk Controls
 
 ```bash
 docker compose exec agent-worker python3
@@ -486,79 +513,48 @@ import asyncio
 from risk_agent import RiskAgent
 
 agent = RiskAgent()
-
-# Mock a high-score signal
 mock_signal = {
     "strategy": "TestStrategy", "ticker": "SPY", "kraken_pair": "SPYXUSD",
     "direction": "buy", "score": 0.85, "quant_score": 0.9,
     "sentiment_score": 0.7, "reasoning": "test", "graph_path": [], "regime": "BullMarket"
 }
-
 approved = asyncio.run(agent.run([mock_signal]))
-print(approved)
-# Expected: one approved order with quantity > 0, kelly_fraction between 0 and 0.5,
-#           var_contribution calculated, notional_usd = NAV * kelly * 0.15
-
-# Test sector concentration block
-# Add 5 SPY-like signals and verify only enough to reach 40% cap are approved
+# Expected: one approved order with quantity > 0, kelly_fraction between 0 and 0.5
 ```
 
 ### Layer 5 — Execution (paper mode)
 
 ```bash
-# Verify KRAKEN_TRADING_MODE is paper
-grep KRAKEN_TRADING_MODE .env
-# Expected: KRAKEN_TRADING_MODE=paper
+grep KRAKEN_TRADING_MODE .env      # Expected: paper
 
-# After at least one agent cycle, check order_audit
+# After one agent cycle:
 docker compose exec postgres psql -U graphalpha -c \
   "SELECT order_id, ticker, direction, quantity, fill_price, mode FROM order_audit LIMIT 5;"
-# Expected: rows with mode='paper'
-
-# Check positions table
 docker compose exec postgres psql -U graphalpha -c \
   "SELECT ticker, direction, quantity, avg_entry_price FROM positions WHERE status='open';"
 ```
 
-### Layer 6 — Frontend
-
-Open http://localhost:5173 and verify each element manually:
-
-```
-Dashboard tab
-  [ ] RegimePanel shows a regime name (not "Loading...")
-  [ ] Confidence bar has a non-zero width
-  [ ] Active Strategies list is populated
-  [ ] ContradictionsPanel shows count (0 or more)
-  [ ] AgentLog shows "open" status dot (green)
-  [ ] AgentLog receives at least one event after one cycle completes
-  [ ] PnLDashboard shows NAV = $10,000.00 (or updated if trades ran)
-  [ ] Positions tab shows "No open positions" or actual positions
-
-KG Explorer tab
-  [ ] Graph renders within 5 seconds
-  [ ] Nodes appear with correct colours per type
-  [ ] Clicking a node shows the detail sidebar with properties
-  [ ] Switching node type filter reloads the graph
-  [ ] Zoom in / Zoom out / Reset buttons work
-
-Signals tab
-  [ ] Table renders (empty on first boot, populated after cycles)
-  [ ] Mode badge shows "paper" for all rows
-  [ ] Direction column coloured green (buy) / red (sell)
-
-Backtest tab
-  [ ] Date inputs pre-filled
-  [ ] "Run Backtest" triggers loading state
-  [ ] After completion, metrics table populates
-  [ ] If both modes run: Delta column shows coloured values
-  [ ] Jobson-Korkie result box appears
-```
-
-### Layer 7 — WebSocket
+### Layer 6 — Backtest
 
 ```bash
-# Test WebSocket directly
+make backtest-ablation
+# Expected JSON with sharpe_ratio, calmar_ratio, max_drawdown, jk_z_stat, jk_p_value
+```
+
+### Layer 7 — Frontend
+
+Open http://localhost:5173 and verify:
+
+- **Dashboard**: Regime name displayed, confidence bar non-zero, active strategies populated, contradictions count visible, agent log receiving events, NAV = $10,000
+- **KG Explorer**: Graph renders within 5s, nodes coloured per type, clicking a node opens detail sidebar, filter reloads graph, zoom/reset work
+- **Signals**: Table renders, mode badge shows "paper", direction column coloured
+- **Backtest**: Date inputs pre-filled, "Run Backtest" triggers loading, metrics populate after completion, Jobson-Korkie result appears
+- **Intelligence**: News sentiment and macro calendar populated after first cycle
+- **Market**: Watchlist displays with price, daily change, realised vol for each asset class
+
+### Layer 8 — WebSocket
+
+```bash
 curl --include \
   --no-buffer \
   --header "Connection: Upgrade" \
@@ -567,27 +563,25 @@ curl --include \
   --header "Sec-WebSocket-Version: 13" \
   http://localhost:8000/ws/events
 # Expected: HTTP 101 Switching Protocols
-
-# Or use websocat if installed:
-websocat ws://localhost:8000/ws/events
-# Wait for an agent cycle — you should receive a JSON event
 ```
 
-### Layer 8 — Backtest metrics validation
+---
+
+## Backtest Metrics Validation
 
 ```bash
 docker compose --profile backtest run --rm backtest python engine.py \
   --start 2022-01-01 --end 2022-12-31 --use-graph
 ```
 
-Expected output structure:
+Expected output:
 ```json
 {
   "total_return": <float>,
   "sharpe_ratio": <float>,
   "calmar_ratio": <float>,
   "max_drawdown": <negative float>,
-  "ann_volatility": <float between 0 and 0.5>,
+  "ann_volatility": <float between 0.05 and 0.50>,
   "n_days": <integer near 252>,
   "final_nav": <float near 10000>,
   "use_graph": true,
@@ -599,9 +593,9 @@ Expected output structure:
 
 Sanity checks:
 - `max_drawdown` must be negative
-- `ann_volatility` should be between 0.05 and 0.50 for a realistic period
-- `n_days` should be close to the number of trading days in the range
-- `jk_p_value` will rarely be < 0.05 on a single year — run 2021–2023 for meaningful results
+- `ann_volatility` between 0.05 and 0.50 for a realistic period
+- `n_days` close to trading days in the range
+- `jk_p_value` rarely < 0.05 on a single year — run 2021-2023 for meaningful results
 
 ---
 
@@ -610,17 +604,10 @@ Sanity checks:
 ### One-time Vultr VM setup
 
 ```bash
-# From your local machine (replace IP with your Vultr VM IP)
 ./scripts/deploy_vultr.sh 123.456.789.0
 ```
 
-This script:
-1. Installs Docker on the VM if missing
-2. Rsyncs the project (excluding node_modules, git history)
-3. Starts services with the prod overrides (Memgraph gets 6 GB, no hot-reload, localhost-only ports)
-4. Loads the knowledge graph
-
-Then edit `.env` on the VM to add your real API keys, and restart:
+Then edit `.env` on the VM to add production API keys, and restart:
 
 ```bash
 ssh root@your-vultr-ip
@@ -632,23 +619,13 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml restart
 ### Frontend on Vercel
 
 ```bash
-# In the Vercel dashboard:
-# 1. Import from GitHub
-# 2. Set root directory: frontend
-# 3. Framework: Vite
-# 4. Add environment variable:
-#    VITE_API_URL = http://your-vultr-ip:8000
-
-# Or via Vercel CLI:
 cd frontend
 vercel --prod
 ```
 
-Update `frontend/vercel.json` with your actual Vultr IP before deploying.
+Set root directory to `frontend`, framework to Vite, env var `VITE_API_URL = http://your-vultr-ip:8000`.
 
 ### Port exposure on Vultr
-
-Only expose these ports through the Vultr firewall:
 
 | Port | Service | Exposure |
 |---|---|---|
@@ -656,13 +633,11 @@ Only expose these ports through the Vultr firewall:
 | 7687 | Memgraph Bolt | Private only |
 | 5432 | PostgreSQL | Private only |
 | 6379 | Redis | Private only |
-| 3000 | Memgraph Lab | Private only (or VPN) |
+| 3000 | Memgraph Lab | Private only |
 
 ### Enable live trading (only after 30-day paper run)
 
 ```bash
-# On the Vultr VM:
-cd /opt/graphalpha
 make enable-live-trading
 # Type CONFIRM when prompted
 ```
@@ -671,15 +646,17 @@ make enable-live-trading
 
 ## Academic Differentiators (Capstone Thesis Points)
 
-1. **Knowledge graph-grounded signal selection** — No other WQU MScFE capstone uses a live financial KG to constrain agent decisions at runtime. The graph is not a lookup table; it is a causal model that gates which strategies are epistemically valid for the current market regime.
+1. **Knowledge graph-grounded signal selection** — No other WQU MScFE capstone uses a live financial KG to constrain agent decisions at runtime. The graph is a causal model that gates which strategies are epistemically valid for the current market regime.
 
-2. **CONTRADICTED_BY ablation** — The `CONTRADICTED_BY` edges can be toggled off in the signal agent to produce a clean ablation: how much does mutual-contradiction blocking reduce drawdown? This is a controlled experiment, not a post-hoc claim.
+2. **CONTRADICTED_BY check** — SignalAgent traverses `CONTRADICTED_BY` edges every cycle and blocks signals from strategies whose concepts are mutually contradicting. This can be toggled off for a clean ablation study.
 
-3. **Jobson-Korkie statistical significance** — The backtest engine implements the full Jobson-Korkie (1981) test. p < 0.05 over 3 years of walk-forward data would constitute publishable evidence of outperformance from KG grounding.
+3. **Jobson-Korkie statistical significance** — The backtest engine implements the full Jobson-Korkie (1981) test. p < 0.05 over 3 years of walk-forward data provides publishable evidence of outperformance from KG grounding.
 
-4. **51 QuizQuestion nodes as validation harness** — The M6–M8 Q&A bank is encoded in the graph as `QuizQuestion` nodes with `TESTS` edges to the concepts they examine. This enables automated checks that the KG covers the domain it claims to cover, and creates a DPO dataset for future fine-tuning of the Featherless model.
+4. **51 QuizQuestion nodes as validation harness** — The M6-M8 Q&A bank is encoded as `QuizQuestion` nodes with `TESTS` edges. This enables automated checks that the KG covers its claimed domain and creates a DPO dataset for future fine-tuning.
 
-5. **VARLiNGAM-derived TRANSMITS_TO weights** — Causal edge weights are not static; ResearchAgent refits the VARLiNGAM model weekly on fresh price data and updates the Memgraph `TRANSMITS_TO` edges. The graph evolves with the market.
+5. **VARLiNGAM-derived TRANSMITS_TO weights** — ResearchAgent refits the VARLiNGAM model weekly on fresh price data and updates Memgraph `TRANSMITS_TO` edges. The graph evolves with the market.
+
+6. **7-agent orchestration with signal overlays** — NewsAgent and MacroCalendarAgent produce per-ticker sentiment and pre-event size modifiers that the orchestrator merges into the signal list before risk evaluation, providing multi-layer signal enrichment beyond the core quant+LLM fusion.
 
 ---
 
@@ -687,28 +664,28 @@ make enable-live-trading
 
 **`make up` hangs at graph-loader**
 
-The loader waits for Memgraph's Bolt port. If Memgraph is slow to start (common on first boot with large RAM allocation), increase the sleep in the Makefile or run `make load-graph` separately after `docker compose ps` shows Memgraph as healthy.
+The loader waits for Memgraph's Bolt port. If Memgraph is slow to start, run `make load-graph` separately after `docker compose ps` shows Memgraph healthy.
 
 **Agent worker exits immediately**
 
-Check logs: `docker compose logs agent-worker`. The most common cause is a failed Memgraph connection. Ensure Memgraph is healthy before the agent starts (`depends_on: condition: service_healthy` handles this, but if you started services manually it may not apply).
+Check `docker compose logs agent-worker`. Most common cause is failed Memgraph connection. Ensure `depends_on` health checks pass before the agent starts.
 
 **`RegimePanel` shows "Agent unreachable"**
 
-The `/agent/status` endpoint reads from Redis. It returns safe defaults until the agent completes its first cycle. Wait for the cycle interval (default 5 minutes) or reduce `AGENT_LOOP_INTERVAL_SECONDS=30` in `.env` for testing.
+`/agent/status` reads from Redis. It returns safe defaults until the first cycle completes. Wait for the interval or reduce `AGENT_LOOP_INTERVAL_SECONDS` in `.env` for testing.
 
 **Sigma.js graph is empty**
 
-The graph API returns nodes from Memgraph. If the graph-loader failed silently, Memgraph has no data. Run `make verify-graph` to check node counts. If zero, run `make load-graph`.
+The graph API returns nodes from Memgraph. If the loader failed silently, Memgraph has no data. Run `make verify-graph` and `make load-graph` if counts are zero.
 
 **Featherless returns 0.0 sentiment every cycle**
 
-If `FEATHERLESS_API_KEY` is empty, the agent falls back to 0.0 sentiment score and logs a warning. This is expected and safe — the signal still runs on quant score alone (100% weight in practice, since 0.3 × 0 = 0).
+If `FEATHERLESS_API_KEY` is empty, the agent falls back to 0.0 sentiment. The signal still runs on quant score alone — safe and expected.
 
 **Paper orders not appearing in Postgres**
 
-The ExecutionAgent writes orders after the RiskAgent approves them. If no strategies are active for the current regime (empty `active_strategies` from the graph), no signals are generated and nothing executes. Use `make shell-memgraph` and run:
+If no strategies are active for the current regime, no signals are generated. Check:
 ```cypher
 MATCH (s:Strategy) WHERE s.status = 'active' RETURN s.name, s.strategy_type;
 ```
-If empty, the graph's strategies may not be marked `status: 'active'` — check `master.cypher` for the `SET s.status = 'active'` lines.
+If empty, verify `SET s.status = 'active'` lines in `master.cypher`.

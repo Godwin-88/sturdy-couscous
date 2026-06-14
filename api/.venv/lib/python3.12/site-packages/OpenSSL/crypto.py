@@ -16,11 +16,6 @@ from typing import (
 
 if sys.version_info >= (3, 13):
     from warnings import deprecated
-elif sys.version_info < (3, 8):
-    _T = typing.TypeVar("T")
-
-    def deprecated(msg: str, **kwargs: object) -> Callable[[_T], _T]:
-        return lambda f: f
 else:
     from typing_extensions import deprecated
 
@@ -63,19 +58,16 @@ __all__ = [
     "Error",
     "PKey",
     "X509Name",
-    "X509Req",
     "X509Store",
     "X509StoreContext",
     "X509StoreContextError",
     "X509StoreFlags",
     "dump_certificate",
-    "dump_certificate_request",
     "dump_privatekey",
     "dump_publickey",
     "get_elliptic_curve",
     "get_elliptic_curves",
     "load_certificate",
-    "load_certificate_request",
     "load_privatekey",
     "load_publickey",
 ]
@@ -275,7 +267,7 @@ class PKey:
             der = dump_publickey(FILETYPE_ASN1, self)
             return typing.cast(_Key, load_der_public_key(der))
         else:
-            der = dump_privatekey(FILETYPE_ASN1, self)
+            der = _dump_privatekey_internal(FILETYPE_ASN1, self)
             return typing.cast(_Key, load_der_private_key(der, password=None))
 
     @classmethod
@@ -336,6 +328,10 @@ class PKey:
             )
             return load_privatekey(FILETYPE_ASN1, der)
 
+    @deprecated(
+        "PKey.generate_key is deprecated. You should use the key "
+        "generation APIs in cryptography instead."
+    )
     def generate_key(self, type: int, bits: int) -> None:
         """
         Generate a key pair of the given type, with the given number of bits.
@@ -392,6 +388,10 @@ class PKey:
 
         self._initialized = True
 
+    @deprecated(
+        "PKey.check is deprecated. You should use the APIs in "
+        "cryptography instead."
+    )
     def check(self) -> bool:
         """
         Check the consistency of an RSA private key.
@@ -579,6 +579,10 @@ def get_elliptic_curve(name: str) -> _EllipticCurve:
     raise ValueError("unknown curve name", name)
 
 
+@deprecated(
+    "X509Name support in pyOpenSSL is deprecated. You should use the "
+    "APIs in cryptography."
+)
 @functools.total_ordering
 class X509Name:
     """
@@ -774,181 +778,6 @@ class X509Name:
         return result
 
 
-@deprecated(
-    "CSR support in pyOpenSSL is deprecated. You should use the APIs "
-    "in cryptography."
-)
-class X509Req:
-    """
-    An X.509 certificate signing requests.
-
-    .. deprecated:: 24.2.0
-       Use `cryptography.x509.CertificateSigningRequest` instead.
-    """
-
-    def __init__(self) -> None:
-        req = _lib.X509_REQ_new()
-        self._req = _ffi.gc(req, _lib.X509_REQ_free)
-        # Default to version 0.
-        self.set_version(0)
-
-    def to_cryptography(self) -> x509.CertificateSigningRequest:
-        """
-        Export as a ``cryptography`` certificate signing request.
-
-        :rtype: ``cryptography.x509.CertificateSigningRequest``
-
-        .. versionadded:: 17.1.0
-        """
-        from cryptography.x509 import load_der_x509_csr
-
-        der = _dump_certificate_request_internal(FILETYPE_ASN1, self)
-
-        return load_der_x509_csr(der)
-
-    @classmethod
-    def from_cryptography(
-        cls, crypto_req: x509.CertificateSigningRequest
-    ) -> X509Req:
-        """
-        Construct based on a ``cryptography`` *crypto_req*.
-
-        :param crypto_req: A ``cryptography`` X.509 certificate signing request
-        :type crypto_req: ``cryptography.x509.CertificateSigningRequest``
-
-        :rtype: X509Req
-
-        .. versionadded:: 17.1.0
-        """
-        if not isinstance(crypto_req, x509.CertificateSigningRequest):
-            raise TypeError("Must be a certificate signing request")
-
-        from cryptography.hazmat.primitives.serialization import Encoding
-
-        der = crypto_req.public_bytes(Encoding.DER)
-        return _load_certificate_request_internal(FILETYPE_ASN1, der)
-
-    def set_pubkey(self, pkey: PKey) -> None:
-        """
-        Set the public key of the certificate signing request.
-
-        :param pkey: The public key to use.
-        :type pkey: :py:class:`PKey`
-
-        :return: ``None``
-        """
-        set_result = _lib.X509_REQ_set_pubkey(self._req, pkey._pkey)
-        _openssl_assert(set_result == 1)
-
-    def get_pubkey(self) -> PKey:
-        """
-        Get the public key of the certificate signing request.
-
-        :return: The public key.
-        :rtype: :py:class:`PKey`
-        """
-        pkey = PKey.__new__(PKey)
-        pkey._pkey = _lib.X509_REQ_get_pubkey(self._req)
-        _openssl_assert(pkey._pkey != _ffi.NULL)
-        pkey._pkey = _ffi.gc(pkey._pkey, _lib.EVP_PKEY_free)
-        pkey._only_public = True
-        return pkey
-
-    def set_version(self, version: int) -> None:
-        """
-        Set the version subfield (RFC 2986, section 4.1) of the certificate
-        request.
-
-        :param int version: The version number.
-        :return: ``None``
-        """
-        if not isinstance(version, int):
-            raise TypeError("version must be an int")
-        if version != 0:
-            raise ValueError(
-                "Invalid version. The only valid version for X509Req is 0."
-            )
-        set_result = _lib.X509_REQ_set_version(self._req, version)
-        _openssl_assert(set_result == 1)
-
-    def get_version(self) -> int:
-        """
-        Get the version subfield (RFC 2459, section 4.1.2.1) of the certificate
-        request.
-
-        :return: The value of the version subfield.
-        :rtype: :py:class:`int`
-        """
-        return _lib.X509_REQ_get_version(self._req)
-
-    def get_subject(self) -> X509Name:
-        """
-        Return the subject of this certificate signing request.
-
-        This creates a new :class:`X509Name` that wraps the underlying subject
-        name field on the certificate signing request. Modifying it will modify
-        the underlying signing request, and will have the effect of modifying
-        any other :class:`X509Name` that refers to this subject.
-
-        :return: The subject of this certificate signing request.
-        :rtype: :class:`X509Name`
-        """
-        name = X509Name.__new__(X509Name)
-        name._name = _lib.X509_REQ_get_subject_name(self._req)
-        _openssl_assert(name._name != _ffi.NULL)
-
-        # The name is owned by the X509Req structure.  As long as the X509Name
-        # Python object is alive, keep the X509Req Python object alive.
-        name._owner = self
-
-        return name
-
-    def sign(self, pkey: PKey, digest: str) -> None:
-        """
-        Sign the certificate signing request with this key and digest type.
-
-        :param pkey: The key pair to sign with.
-        :type pkey: :py:class:`PKey`
-        :param digest: The name of the message digest to use for the signature,
-            e.g. :py:data:`"sha256"`.
-        :type digest: :py:class:`str`
-        :return: ``None``
-        """
-        if pkey._only_public:
-            raise ValueError("Key has only public part")
-
-        if not pkey._initialized:
-            raise ValueError("Key is uninitialized")
-
-        digest_obj = _lib.EVP_get_digestbyname(_byte_string(digest))
-        if digest_obj == _ffi.NULL:
-            raise ValueError("No such digest method")
-
-        sign_result = _lib.X509_REQ_sign(self._req, pkey._pkey, digest_obj)
-        _openssl_assert(sign_result > 0)
-
-    def verify(self, pkey: PKey) -> bool:
-        """
-        Verifies the signature on this certificate signing request.
-
-        :param PKey key: A public key.
-
-        :return: ``True`` if the signature is correct.
-        :rtype: bool
-
-        :raises OpenSSL.crypto.Error: If the signature is invalid or there is a
-            problem verifying the signature.
-        """
-        if not isinstance(pkey, PKey):
-            raise TypeError("pkey must be a PKey instance")
-
-        result = _lib.X509_REQ_verify(self._req, pkey._pkey)
-        if result <= 0:
-            _raise_current_error()
-
-        return result
-
-
 class X509:
     """
     An X.509 certificate.
@@ -1003,6 +832,10 @@ class X509:
         der = crypto_cert.public_bytes(Encoding.DER)
         return load_certificate(FILETYPE_ASN1, der)
 
+    @deprecated(
+        "X509.set_version is deprecated. You should use "
+        "cryptography's CertificateBuilder instead."
+    )
     def set_version(self, version: int) -> None:
         """
         Set the version number of the certificate. Note that the
@@ -1042,6 +875,10 @@ class X509:
         pkey._only_public = True
         return pkey
 
+    @deprecated(
+        "X509.set_pubkey is deprecated. You should use "
+        "cryptography's CertificateBuilder instead."
+    )
     def set_pubkey(self, pkey: PKey) -> None:
         """
         Set the public key of the certificate.
@@ -1057,6 +894,10 @@ class X509:
         set_result = _lib.X509_set_pubkey(self._x509, pkey._pkey)
         _openssl_assert(set_result == 1)
 
+    @deprecated(
+        "X509.sign is deprecated. You should use "
+        "cryptography's CertificateBuilder instead."
+    )
     def sign(self, pkey: PKey, digest: str) -> None:
         """
         Sign the certificate with this key and digest type.
@@ -1144,6 +985,10 @@ class X509:
         """
         return _lib.X509_subject_name_hash(self._x509)
 
+    @deprecated(
+        "X509.set_serial_number is deprecated. You should use "
+        "cryptography's CertificateBuilder instead."
+    )
     def set_serial_number(self, serial: int) -> None:
         """
         Set the serial number of the certificate.
@@ -1192,6 +1037,10 @@ class X509:
         finally:
             _lib.BN_free(bignum_serial)
 
+    @deprecated(
+        "X509.gmtime_adj_notAfter is deprecated. You should use "
+        "cryptography's CertificateBuilder instead."
+    )
     def gmtime_adj_notAfter(self, amount: int) -> None:
         """
         Adjust the time stamp on which the certificate stops being valid.
@@ -1206,6 +1055,10 @@ class X509:
         notAfter = _lib.X509_getm_notAfter(self._x509)
         _lib.X509_gmtime_adj(notAfter, amount)
 
+    @deprecated(
+        "X509.gmtime_adj_notBefore is deprecated. You should use "
+        "cryptography's CertificateBuilder instead."
+    )
     def gmtime_adj_notBefore(self, amount: int) -> None:
         """
         Adjust the timestamp on which the certificate starts being valid.
@@ -1257,6 +1110,10 @@ class X509:
     ) -> None:
         return _set_asn1_time(which(self._x509), when)
 
+    @deprecated(
+        "X509.set_notBefore is deprecated. You should use "
+        "cryptography's CertificateBuilder instead."
+    )
     def set_notBefore(self, when: bytes) -> None:
         """
         Set the timestamp at which the certificate starts being valid.
@@ -1283,6 +1140,10 @@ class X509:
         """
         return self._get_boundary_time(_lib.X509_getm_notAfter)
 
+    @deprecated(
+        "X509.set_notAfter is deprecated. You should use "
+        "cryptography's CertificateBuilder instead."
+    )
     def set_notAfter(self, when: bytes) -> None:
         """
         Set the timestamp at which the certificate stops being valid.
@@ -1297,7 +1158,9 @@ class X509:
         return self._set_boundary_time(_lib.X509_getm_notAfter, when)
 
     def _get_name(self, which: Any) -> X509Name:
-        name = X509Name.__new__(X509Name)
+        # Bypass X509Name.__new__, which warns that X509Name is deprecated;
+        # callers that should warn are decorated individually.
+        name = object.__new__(X509Name)
         name._name = which(self._x509)
         _openssl_assert(name._name != _ffi.NULL)
 
@@ -1313,6 +1176,10 @@ class X509:
         set_result = which(self._x509, name._name)
         _openssl_assert(set_result == 1)
 
+    @deprecated(
+        "X509.get_issuer is deprecated. You should use "
+        "cryptography's X.509 APIs instead."
+    )
     def get_issuer(self) -> X509Name:
         """
         Return the issuer of this certificate.
@@ -1329,6 +1196,10 @@ class X509:
         self._issuer_invalidator.add(name)
         return name
 
+    @deprecated(
+        "X509.set_issuer is deprecated. You should use "
+        "cryptography's CertificateBuilder instead."
+    )
     def set_issuer(self, issuer: X509Name) -> None:
         """
         Set the issuer of this certificate.
@@ -1341,6 +1212,10 @@ class X509:
         self._set_name(_lib.X509_set_issuer_name, issuer)
         self._issuer_invalidator.clear()
 
+    @deprecated(
+        "X509.get_subject is deprecated. You should use "
+        "cryptography's X.509 APIs instead."
+    )
     def get_subject(self) -> X509Name:
         """
         Return the subject of this certificate.
@@ -1357,6 +1232,10 @@ class X509:
         self._subject_invalidator.add(name)
         return name
 
+    @deprecated(
+        "X509.set_subject is deprecated. You should use "
+        "cryptography's CertificateBuilder instead."
+    )
     def set_subject(self, subject: X509Name) -> None:
         """
         Set the subject of this certificate.
@@ -1851,6 +1730,10 @@ def dump_privatekey(
 
     :return: The buffer with the dumped key in
     :rtype: bytes
+
+    .. deprecated:: 26.3.0
+       Use the serialization APIs on ``cryptography`` private key types
+       instead.
     """
     bio = _new_mem_buf()
 
@@ -1898,6 +1781,20 @@ def dump_privatekey(
     _openssl_assert(result_code != 0)
 
     return _bio_to_string(bio)
+
+
+_dump_privatekey_internal = dump_privatekey
+
+utils.deprecated(
+    dump_privatekey,
+    __name__,
+    (
+        "dump_privatekey is deprecated. You should use the APIs in "
+        "cryptography."
+    ),
+    DeprecationWarning,
+    name="dump_privatekey",
+)
 
 
 class _PassphraseHelper:
@@ -2051,95 +1948,3 @@ def load_privatekey(
     pkey = PKey.__new__(PKey)
     pkey._pkey = _ffi.gc(evp_pkey, _lib.EVP_PKEY_free)
     return pkey
-
-
-def dump_certificate_request(type: int, req: X509Req) -> bytes:
-    """
-    Dump the certificate request *req* into a buffer string encoded with the
-    type *type*.
-
-    :param type: The file type (one of FILETYPE_PEM, FILETYPE_ASN1)
-    :param req: The certificate request to dump
-    :return: The buffer with the dumped certificate request in
-
-
-    .. deprecated:: 24.2.0
-       Use `cryptography.x509.CertificateSigningRequest` instead.
-    """
-    bio = _new_mem_buf()
-
-    if type == FILETYPE_PEM:
-        result_code = _lib.PEM_write_bio_X509_REQ(bio, req._req)
-    elif type == FILETYPE_ASN1:
-        result_code = _lib.i2d_X509_REQ_bio(bio, req._req)
-    elif type == FILETYPE_TEXT:
-        result_code = _lib.X509_REQ_print_ex(bio, req._req, 0, 0)
-    else:
-        raise ValueError(
-            "type argument must be FILETYPE_PEM, FILETYPE_ASN1, or "
-            "FILETYPE_TEXT"
-        )
-
-    _openssl_assert(result_code != 0)
-
-    return _bio_to_string(bio)
-
-
-_dump_certificate_request_internal = dump_certificate_request
-
-utils.deprecated(
-    dump_certificate_request,
-    __name__,
-    (
-        "CSR support in pyOpenSSL is deprecated. You should use the APIs "
-        "in cryptography."
-    ),
-    DeprecationWarning,
-    name="dump_certificate_request",
-)
-
-
-def load_certificate_request(type: int, buffer: bytes) -> X509Req:
-    """
-    Load a certificate request (X509Req) from the string *buffer* encoded with
-    the type *type*.
-
-    :param type: The file type (one of FILETYPE_PEM, FILETYPE_ASN1)
-    :param buffer: The buffer the certificate request is stored in
-    :return: The X509Req object
-
-    .. deprecated:: 24.2.0
-       Use `cryptography.x509.load_der_x509_csr` or
-       `cryptography.x509.load_pem_x509_csr` instead.
-    """
-    if isinstance(buffer, str):
-        buffer = buffer.encode("ascii")
-
-    bio = _new_mem_buf(buffer)
-
-    if type == FILETYPE_PEM:
-        req = _lib.PEM_read_bio_X509_REQ(bio, _ffi.NULL, _ffi.NULL, _ffi.NULL)
-    elif type == FILETYPE_ASN1:
-        req = _lib.d2i_X509_REQ_bio(bio, _ffi.NULL)
-    else:
-        raise ValueError("type argument must be FILETYPE_PEM or FILETYPE_ASN1")
-
-    _openssl_assert(req != _ffi.NULL)
-
-    x509req = X509Req.__new__(X509Req)
-    x509req._req = _ffi.gc(req, _lib.X509_REQ_free)
-    return x509req
-
-
-_load_certificate_request_internal = load_certificate_request
-
-utils.deprecated(
-    load_certificate_request,
-    __name__,
-    (
-        "CSR support in pyOpenSSL is deprecated. You should use the APIs "
-        "in cryptography."
-    ),
-    DeprecationWarning,
-    name="load_certificate_request",
-)

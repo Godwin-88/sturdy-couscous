@@ -9,6 +9,7 @@
 
 __author__ = 'matthewtoia@google.com (Matt Toia)'
 
+from typing import Dict, Iterator, Optional
 import warnings
 
 
@@ -23,11 +24,15 @@ class DescriptorDatabaseConflictingDefinitionError(Error):
 class DescriptorDatabase(object):
   """A container accepting FileDescriptorProtos and maps DescriptorProtos."""
 
-  def __init__(self):
-    self._file_desc_protos_by_file = {}
-    self._file_desc_protos_by_symbol = {}
+  def __init__(self) -> None:
+    self._file_desc_protos_by_file: Dict[
+        str, 'descriptor_pb2.FileDescriptorProto'
+    ] = {}
+    self._file_desc_protos_by_symbol: Dict[
+        str, 'descriptor_pb2.FileDescriptorProto'
+    ] = {}
 
-  def Add(self, file_desc_proto):
+  def Add(self, file_desc_proto: 'descriptor_pb2.FileDescriptorProto') -> None:
     """Adds the FileDescriptorProto and its types to this database.
 
     Args:
@@ -52,16 +57,26 @@ class DescriptorDatabase(object):
       for name in _ExtractSymbols(message, package):
         self._AddSymbol(name, file_desc_proto)
     for enum in file_desc_proto.enum_type:
-      self._AddSymbol(('.'.join((package, enum.name))), file_desc_proto)
+      self._AddSymbol(
+          ('.'.join((package, enum.name)) if package else enum.name),
+          file_desc_proto,
+      )
       for enum_value in enum.value:
         self._file_desc_protos_by_symbol[
-            '.'.join((package, enum_value.name))] = file_desc_proto
+            '.'.join((package, enum_value.name)) if package else enum_value.name
+        ] = file_desc_proto
     for extension in file_desc_proto.extension:
-      self._AddSymbol(('.'.join((package, extension.name))), file_desc_proto)
+      self._AddSymbol(
+          ('.'.join((package, extension.name)) if package else extension.name),
+          file_desc_proto,
+      )
     for service in file_desc_proto.service:
-      self._AddSymbol(('.'.join((package, service.name))), file_desc_proto)
+      self._AddSymbol(
+          ('.'.join((package, service.name)) if package else service.name),
+          file_desc_proto,
+      )
 
-  def FindFileByName(self, name):
+  def FindFileByName(self, name: str) -> 'descriptor_pb2.FileDescriptorProto':
     """Finds the file descriptor proto by file name.
 
     Typically the file name is a relative path ending to a .proto file. The
@@ -80,7 +95,9 @@ class DescriptorDatabase(object):
 
     return self._file_desc_protos_by_file[name]
 
-  def FindFileContainingSymbol(self, symbol):
+  def FindFileContainingSymbol(
+      self, symbol: str
+  ) -> 'descriptor_pb2.FileDescriptorProto':
     """Finds the file descriptor proto containing the specified symbol.
 
     The symbol should be a fully qualified name including the file descriptor's
@@ -102,6 +119,14 @@ class DescriptorDatabase(object):
     Raises:
       KeyError if no file contains the specified symbol.
     """
+    if symbol.count('.') == 1 and symbol[0] == '.':
+      symbol = symbol.lstrip('.')
+      warnings.warn(
+          'Please remove the leading "." when '
+          'FindFileContainingSymbol, this will turn to error '
+          'in 2026 Jan.',
+          RuntimeWarning,
+      )
     try:
       return self._file_desc_protos_by_symbol[symbol]
     except KeyError:
@@ -117,15 +142,19 @@ class DescriptorDatabase(object):
         # Raise the original symbol as a KeyError for better diagnostics.
         raise KeyError(symbol)
 
-  def FindFileContainingExtension(self, extendee_name, extension_number):
+  def FindFileContainingExtension(
+      self, extendee_name: str, extension_number: int  # pylint: disable=unused-argument
+  ) -> Optional['descriptor_pb2.FileDescriptorProto']:
     # TODO: implement this API.
     return None
 
-  def FindAllExtensionNumbers(self, extendee_name):
+  def FindAllExtensionNumbers(self, extendee_name: str) -> list[int]:  # pylint: disable=unused-argument
     # TODO: implement this API.
     return []
 
-  def _AddSymbol(self, name, file_desc_proto):
+  def _AddSymbol(
+      self, name: str, file_desc_proto: 'descriptor_pb2.FileDescriptorProto'
+  ) -> None:
     if name in self._file_desc_protos_by_symbol:
       warn_msg = ('Conflict register for file "' + file_desc_proto.name +
                   '": ' + name +
@@ -135,7 +164,9 @@ class DescriptorDatabase(object):
     self._file_desc_protos_by_symbol[name] = file_desc_proto
 
 
-def _ExtractSymbols(desc_proto, package):
+def _ExtractSymbols(
+    desc_proto: 'descriptor_pb2.DescriptorProto', package: str
+) -> Iterator[str]:
   """Pulls out all the symbols from a descriptor proto.
 
   Args:

@@ -6,8 +6,10 @@ from typing import Optional
 from typing import get_origin
 
 from peewee import AutoField
+from peewee import BackrefAccessor
 from peewee import ForeignKeyField
 from peewee import Model
+from peewee import Node
 from playhouse.reflection import FieldTypeMap
 
 from pydantic import BaseModel
@@ -25,11 +27,17 @@ def choices_description(choices):
 def get_field_type(field):
     if isinstance(field, ForeignKeyField):
         field = field.rel_field
+    if field.field_type in ('JSON', 'JSONB'):
+        # A json value may be an object, array, scalar or null - the dict
+        # mapping in reflection is too narrow for schema validation.
+        return Any
     return FieldTypeMap.get(field.field_type, Any)
 
 def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
                 model_name=None, relationships=None, base_model=None):
-    exclude = exclude or set()
+    exclude = {exclude} if isinstance(exclude, str) else set(exclude or ())
+    if include is not None:
+        include = {include} if isinstance(include, str) else set(include)
     relationships = relationships or {}
     fields = {}
 
@@ -38,14 +46,26 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
     for field, schema in relationships.items():
         if isinstance(field, ForeignKeyField):
             rel_fields[field.name] = schema
-        else:
+        elif isinstance(field, BackrefAccessor):
             backref_fields[field.field.backref] = schema
+        else:
+            raise ValueError('relationships keys must be ForeignKeyField '
+                             'or back-reference accessors (e.g. '
+                             'User.tweets), got: %r' % (field,))
 
     for field in model_cls._meta.sorted_fields:
         name = field.name
-        if name in exclude:
+        names = {name}
+        if isinstance(field, ForeignKeyField):
+            # Plain FKs are emitted as the column name ('user_id'), so honor
+            # either name when filtering.
+            names.add(field.column_name)
+        if names & exclude:
             continue
-        elif include is not None and name not in include:
+        elif (include is not None and not (names & include)
+              and name not in rel_fields):
+            # Explicit relationships entries are exempt from include=
+            # filtering; exclude= always wins.
             continue
         elif exclude_autofield and isinstance(field, AutoField):
             continue
@@ -84,11 +104,16 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
         if description:
             field_kwargs['description'] = description
 
-        if field.default is not None:
-            if callable(field.default):
-                field_kwargs['default_factory'] = field.default
+        default = field.default
+        if isinstance(default, Node):
+            # Server-side default, e.g. SQL('CURRENT_TIMESTAMP') or
+            # fn.now() - not representable as a python-side value.
+            default = None
+        if default is not None:
+            if callable(default):
+                field_kwargs['default_factory'] = default
             else:
-                field_kwargs['default'] = field.default
+                field_kwargs['default'] = default
             if field.null:
                 python_type = Optional[python_type]
         elif field.null:
@@ -98,6 +123,8 @@ def to_pydantic(model_cls, exclude=None, include=None, exclude_autofield=True,
         fields[name] = (python_type, Field(**field_kwargs))
 
     for name, schema in backref_fields.items():
+        if name in exclude:
+            continue
         origin = get_origin(schema)
         if origin is not list:
             raise ValueError('back-references must use a List type')

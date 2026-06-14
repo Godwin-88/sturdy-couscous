@@ -1,12 +1,15 @@
 import asyncio
 import collections
 import contextvars
+import itertools
 import json
 import logging
+import re
 
 from greenlet import greenlet, getcurrent
 from peewee import *
 from peewee import _atomic, _savepoint, _transaction
+from peewee import _callable_context_manager
 from peewee import __exception_wrapper__
 from peewee import Node
 from peewee import Psycopg3Adapter
@@ -33,6 +36,14 @@ logger = logging.getLogger(__name__)
 
 class MissingGreenletBridge(RuntimeError):
     pass
+
+
+_BRIDGE_ERR_HINT = (
+    ' Hint: in async code, run queries through the async API, e.g. '
+    '`await Model.aget(...)`, `await query.aexecute()`, `await '
+    'db.list(query)`, or wrap synchronous code with `await db.run(fn)`. '
+    'For lazy foreign-key access use `await obj.afetch(Model.rel_field)`. See '
+    'https://docs.peewee-orm.com/en/latest/peewee/asyncio.html#sharp-corners')
 
 
 async def greenlet_spawn(fn, *args, **kwargs):
@@ -69,7 +80,10 @@ def await_(awaitable):
     current = getcurrent()
     parent = current.parent
     if parent is None:
-        raise MissingGreenletBridge('await_() called outside greenlet_spawn()')
+        if asyncio.iscoroutine(awaitable):
+            awaitable.close()  # Avoid a "never awaited" RuntimeWarning.
+        errmsg = 'await_() called outside greenlet_spawn()' + _BRIDGE_ERR_HINT
+        raise MissingGreenletBridge(errmsg)
     return parent.switch(awaitable)
 
 
@@ -197,9 +211,8 @@ class AsyncDatabaseMixin(object):
         try:
             return await_(self.aexecute_sql(sql, params or ()))
         except MissingGreenletBridge as exc:
-            raise MissingGreenletBridge(
-                f'Attempted query {sql} ({params}) outside greenlet runner.') \
-                    from exc
+            errmsg = f'Attempted query outside greenlet runner: {sql}.'
+            raise MissingGreenletBridge(errmsg + _BRIDGE_ERR_HINT) from exc
 
     async def aexecute_sql(self, sql, params=None):
         conn = await self.aconnect()
@@ -231,6 +244,9 @@ class AsyncDatabaseMixin(object):
         return await_(self.aclose())
 
     async def aclose(self):
+        if self.in_transaction():
+            raise OperationalError('Attempting to close database while '
+                                   'transaction is open.')
         conn = self._state.conn
         if conn:
             self._state.reset()
@@ -242,7 +258,12 @@ class AsyncDatabaseMixin(object):
             if self._pool is None:
                 self._pool = await self._create_pool_async()
 
-        conn = await self._pool_acquire()
+        try:
+            conn = await self._pool_acquire()
+        except asyncio.TimeoutError:
+            raise OperationalError(
+                'Timed out acquiring connection from pool '
+                '(acquire_timeout=%s).' % self._acquire_timeout) from None
         logger.debug('Acquired connection %s from pool.', id(conn))
         return conn
 
@@ -301,11 +322,11 @@ class AsyncDatabaseMixin(object):
     async def __aexit__(self, exc_typ, exc, tb):
         await self.run(self.close)
 
-    def atomic(self):
-        return async_atomic(self)
+    def atomic(self, *args, **kwargs):
+        return async_atomic(self, *args, **kwargs)
 
-    def transaction(self):
-        return async_transaction(self)
+    def transaction(self, *args, **kwargs):
+        return async_transaction(self, *args, **kwargs)
 
     def savepoint(self):
         return async_savepoint(self)
@@ -322,6 +343,9 @@ class AsyncDatabaseMixin(object):
 
     async def get(self, query):
         return await self.run(query.get)
+
+    async def first(self, query, n=1):
+        return await self.run(query.first, n=n)
 
     async def list(self, query):
         return await self.run(list, query)
@@ -343,7 +367,8 @@ class AsyncDatabaseMixin(object):
         query.bind(self)
         sql, params = query.sql()
         conn = await self.aconnect()
-        cursor = await conn.execute_iter(sql, params or ())
+        with __exception_wrapper__:
+            cursor = await conn.execute_iter(sql, params or ())
         if buffer_size is not None:
             cursor._buffer_size = buffer_size
 
@@ -371,6 +396,105 @@ class AsyncDatabaseMixin(object):
             return self._state.closed
         except RuntimeError:
             return True
+
+    @property
+    def Model(self):
+        if not hasattr(self, '_Model'):
+            class Meta: database = self
+            self._Model = type('AsyncBaseModel', (AsyncModel,), {'Meta': Meta})
+        return self._Model
+
+
+def _aio_database(model):
+    # Ensure we have an asyncio-friendly db.
+    db = model._meta.database
+    if isinstance(db, Proxy):
+        db = db.obj
+    if db is None:
+        raise InterfaceError('%s is not bound to a database. Async methods '
+                             'require an Async database.' % model.__name__)
+    elif not isinstance(db, AsyncDatabaseMixin):
+        raise InterfaceError('%s is not bound to an asyncio-compatible '
+                             'database (%s). Async methods require an Async '
+                             'database.' % (model.__name__, type(db).__name__))
+    return db
+
+
+class AsyncModelMixin(object):
+    @classmethod
+    async def acreate(cls, **query):
+        return await _aio_database(cls).run(cls.create, **query)
+
+    @classmethod
+    async def aget(cls, *query, **filters):
+        return await _aio_database(cls).run(cls.get, *query, **filters)
+
+    @classmethod
+    async def aget_or_none(cls, *query, **filters):
+        return await _aio_database(cls).run(cls.get_or_none, *query, **filters)
+
+    @classmethod
+    async def aget_by_id(cls, pk):
+        return await _aio_database(cls).run(cls.get_by_id, pk)
+
+    @classmethod
+    async def aget_or_create(cls, **kwargs):
+        # Delegates to Model.get_or_create: atomic() + IntegrityError race
+        # recovery run inside the bridge.
+        return await _aio_database(cls).run(cls.get_or_create, **kwargs)
+
+    @classmethod
+    async def aset_by_id(cls, key, value):
+        return await _aio_database(cls).run(cls.set_by_id, key, value)
+
+    @classmethod
+    async def adelete_by_id(cls, pk):
+        return await _aio_database(cls).run(cls.delete_by_id, pk)
+
+    @classmethod
+    async def abulk_create(cls, model_list, batch_size=None):
+        return await _aio_database(cls).run(
+            cls.bulk_create,
+            model_list,
+            batch_size)
+
+    @classmethod
+    async def abulk_update(cls, model_list, fields, batch_size=None):
+        return await _aio_database(cls).run(
+            cls.bulk_update,
+            model_list,
+            fields,
+            batch_size)
+
+    async def asave(self, force_insert=False, only=None):
+        # resolve MRO, e.g. playhouse.signals overrides running in bridge.
+        return await _aio_database(type(self)).run(
+            self.save,
+            force_insert,
+            only)
+
+    async def adelete_instance(self, recursive=False, delete_nullable=False):
+        return await _aio_database(type(self)).run(
+            self.delete_instance,
+            recursive,
+            delete_nullable)
+
+    async def afetch(self, field):
+        # await tweet.afetch(Tweet.user), lazy foreign-key helper.
+        if isinstance(field, str):
+            field = self._meta.combined[field]
+        if not isinstance(field, ForeignKeyField):
+            raise ValueError('afetch() accepts a foreign-key field.')
+        if field.name in self.__rel__:
+            return self.__rel__[field.name]  # Load cached.
+        if not field.lazy_load:
+            raise ValueError('%s.%s is declared with lazy_load=False.' %
+                             (type(self).__name__, field.name))
+        return await _aio_database(type(self)).run(getattr, self, field.name)
+
+
+class AsyncModel(AsyncModelMixin, Model):
+    pass
 
 
 class CursorAdapter(object):
@@ -405,7 +529,8 @@ class CursorAdapter(object):
         if not self._buffer:
             if self._exhausted:
                 return None
-            rows = await_(self._fetch_many(self._buffer_size))
+            with __exception_wrapper__:
+                rows = await_(self._fetch_many(self._buffer_size))
             if not rows:
                 self._exhausted = True
                 return None
@@ -454,13 +579,38 @@ class DummyCursor(object):
 
 
 class AsyncConnectionWrapper(object):
+    # Grace period for an abandoned iterate() generator to finalize (e.g.
+    # the caller broke out of the async-for) before a competing query on
+    # this connection gives up instead of deadlocking.
+    streaming_timeout = 5.0
+
     def __init__(self, conn):
         self.conn = conn
         self._lock = asyncio.Lock()
+        self._streaming = False  # Lock is held by an open iterate() cursor.
+
+    async def _acquire_lock(self):
+        # When an iterate() cursor holds the lock, wait briefly for it to
+        # finalize rather than deadlocking - this covers plain queries AND
+        # a second iterate() on the same connection.
+        if self._streaming:
+            try:
+                await asyncio.wait_for(self._lock.acquire(),
+                                       self.streaming_timeout)
+            except asyncio.TimeoutError:
+                raise InterfaceError(
+                    'Connection is busy streaming results from iterate(). '
+                    'Run the query from another task, or exhaust or '
+                    'aclose() the iterator.') from None
+        else:
+            await self._lock.acquire()
 
     async def execute(self, sql, params=None):
-        async with self._lock:
+        await self._acquire_lock()
+        try:
             return await self._execute(sql, params)
+        finally:
+            self._lock.release()
 
     async def _execute(self, sql, params):
         raise NotImplementedError('Subclasses must implement.')
@@ -500,8 +650,8 @@ class AsyncSqlitePool(object):
             isolation_level=None,
             **self._connect_params)
         if self._on_connect is not None:
-            await self._on_connect(conn )
-        wrapped = AsyncSqliteConnection(conn )
+            await self._on_connect(conn)
+        wrapped = AsyncSqliteConnection(conn)
         self._all_connections.append(wrapped)
         return wrapped
 
@@ -514,14 +664,26 @@ class AsyncSqlitePool(object):
         driver_conn = conn.conn
         if driver_conn is None:
             return False
-        if not driver_conn._running or not driver_conn._connection:
+        # aiosqlite private attrs - tolerate their absence in new versions.
+        if not getattr(driver_conn, '_running', True):
+            return False
+        if not getattr(driver_conn, '_connection', True):
             return False
         return True
 
     async def release(self, conn):
         if self._closed:
             return
-        elif self._conn_is_valid(conn):
+        valid = self._conn_is_valid(conn)
+        if valid and conn.conn.in_transaction:
+            # Roll back any transaction left open, e.g. by a dead task, so
+            # the next acquirer gets a clean connection.
+            try:
+                await conn.conn.rollback()
+            except Exception:
+                logger.warning('Error rolling back connection', exc_info=True)
+                valid = False
+        if valid:
             await self._queue.put(conn)
         else:
             try:
@@ -554,10 +716,12 @@ class AsyncSqliteConnection(AsyncConnectionWrapper):
                              description=description)
 
     async def execute_iter(self, sql, params=None):
-        await self._lock.acquire()
+        await self._acquire_lock()
+        self._streaming = True
         try:
             cursor = await self.conn.execute(sql, params or ())
         except BaseException:
+            self._streaming = False
             self._lock.release()
             raise
 
@@ -570,6 +734,7 @@ class AsyncSqliteConnection(AsyncConnectionWrapper):
             try:
                 await cursor.close()
             finally:
+                self._streaming = False
                 lock.release()
 
         return CursorAdapter(
@@ -582,24 +747,68 @@ class AsyncSqliteDatabase(AsyncDatabaseMixin, SqliteDatabase):
     async def _create_pool_async(self):
         if aiosqlite is None:
             raise ImproperlyConfigured('aiosqlite is not installed')
-        pool = AsyncSqlitePool(self.database, pool_size=self._pool_size,
-                               on_connect=self._add_conn_hooks)
+        if self.database == ':memory:':
+            # Pooled in-memory connections would each be a separate, empty
+            # database - use a single shared connection instead.
+            pool_size = 1
+        else:
+            pool_size = self._pool_size
+        pool = AsyncSqlitePool(self.database, pool_size=pool_size,
+                               on_connect=self._add_conn_hooks,
+                               timeout=self._timeout,
+                               **self.connect_params)
         return await pool.initialize()
 
     async def _add_conn_hooks(self, conn):
+        if self._attached:
+            await self._attach_databases(conn)
         if self._pragmas:
             await self._set_pragmas(conn)
+        if self._aggregates:
+            await self._load_aggregates(conn)
+        if self._collations:
+            await self._load_collations(conn)
         if self._functions:
             await self._load_functions(conn)
+        if self._window_functions and \
+           aiosqlite.sqlite_version_info >= (3, 25, 0):
+            await self._load_window_functions(conn)
+        if self._extensions:
+            await self._load_extensions(conn)
+
+    async def _attach_databases(self, conn):
+        for name, db in self._attached.items():
+            await conn.execute('ATTACH DATABASE "%s" AS "%s"' % (db, name))
 
     async def _set_pragmas(self, conn):
         for pragma, value in self._pragmas:
             await conn.execute('PRAGMA %s = %s;' % (pragma, value))
 
+    async def _load_aggregates(self, conn):
+        # aiosqlite exposes no create_aggregate - run it on the worker
+        # thread against the raw sqlite3 connection.
+        for name, (klass, num_params) in self._aggregates.items():
+            await conn._execute(
+                conn._conn.create_aggregate, name, num_params, klass)
+
+    async def _load_collations(self, conn):
+        for name, fn in self._collations.items():
+            await conn._execute(conn._conn.create_collation, name, fn)
+
     async def _load_functions(self, conn):
         for name, (fn, n_params, deterministic) in self._functions.items():
             kwargs = {'deterministic': deterministic} if deterministic else {}
             await conn.create_function(name, n_params, fn, **kwargs)
+
+    async def _load_window_functions(self, conn):
+        for name, (klass, num_params) in self._window_functions.items():
+            await conn._execute(
+                conn._conn.create_window_function, name, num_params, klass)
+
+    async def _load_extensions(self, conn):
+        await conn.enable_load_extension(True)
+        for extension in self._extensions:
+            await conn.load_extension(extension)
 
     async def _pool_acquire(self):
         return await self._pool.acquire(timeout=self._acquire_timeout)
@@ -629,12 +838,14 @@ class AsyncMySQLConnection(AsyncConnectionWrapper):
                              description=description)
 
     async def execute_iter(self, sql, params=None):
-        await self._lock.acquire()
+        await self._acquire_lock()
+        self._streaming = True
         try:
             # Server-side cursor for unbuffered streaming.
             cursor = await self.conn.cursor(aiomysql.SSCursor)
             await cursor.execute(sql, params or ())
         except BaseException:
+            self._streaming = False
             self._lock.release()
             raise
 
@@ -647,6 +858,7 @@ class AsyncMySQLConnection(AsyncConnectionWrapper):
             try:
                 await cursor.close()
             finally:
+                self._streaming = False
                 lock.release()
 
         return CursorAdapter(
@@ -670,10 +882,23 @@ class AsyncMySQLDatabase(AsyncDatabaseMixin, MySQLDatabase):
         conn = await asyncio.wait_for(
             self._pool.acquire(),
             timeout=self._acquire_timeout)
+        if self.server_version is None:
+            # Distinguishes MySQL from MariaDB, e.g. for JSONField SQL.
+            self.server_version = self._extract_server_version(
+                conn.get_server_info())
         return AsyncMySQLConnection(conn)
 
     async def _pool_release(self, conn):
         if conn and conn.conn:
+            if conn.conn.get_transaction_status():
+                # Roll back any transaction left open, e.g. by a dead task,
+                # so the next acquirer gets a clean connection (aiomysql
+                # destroys connections released mid-transaction).
+                try:
+                    await conn.conn.rollback()
+                except Exception:
+                    logger.warning('Error rolling back connection',
+                                   exc_info=True)
             self._pool.release(conn.conn)
 
     async def _pool_close(self):
@@ -687,20 +912,30 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
         if params:
             sql = self._translate_placeholders(sql)
 
-        records = await self.conn.fetch(sql, *(params or ()))
+        stmt = await self.conn.prepare(sql)
+        records = await stmt.fetch(*(params or ()))
         if records:
             description = [(k,) for k in records[0].keys()]
-            rows = records
         else:
             description = []
-            rows = []
 
-        return CursorAdapter(rows, description=description)
+        # asyncpg exposes no rowcount; parse the command-status tail, e.g.
+        # "UPDATE 3" / "DELETE 2" / "INSERT 0 3".
+        status = (stmt.get_statusmsg() or '').rsplit(' ', 1)
+        if len(status) == 2 and status[1].isdigit():
+            rowcount = int(status[1])
+        else:
+            rowcount = len(records)
+
+        return CursorAdapter(records, rowcount=rowcount,
+                             description=description)
 
     async def execute_iter(self, sql, params=None):
         if params:
             sql = self._translate_placeholders(sql)
-        await self._lock.acquire()
+        await self._acquire_lock()
+        self._streaming = True
+        tr = None
         try:
             # NB: asyncpg cursors require an active transaction.
             # Right now we cannot use peewee-managed transactions because
@@ -712,6 +947,13 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
             stmt = await self.conn.prepare(sql)
             cursor = await stmt.cursor(*(params or ()))
         except BaseException:
+            if tr is not None:
+                # Don't leave the connection inside an open transaction.
+                try:
+                    await tr.rollback()
+                except Exception:
+                    pass
+            self._streaming = False
             self._lock.release()
             raise
 
@@ -723,9 +965,10 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
         async def cleanup():
             try:
                 await tr.rollback()
-            except:
+            except Exception:
                 pass
             finally:
+                self._streaming = False
                 lock.release()
 
         return CursorAdapter(
@@ -735,14 +978,17 @@ class AsyncPostgresqlConnection(AsyncConnectionWrapper):
 
     @staticmethod
     def _translate_placeholders(sql):
-        parts = sql.split('%s')
-        if len(parts) == 1:
+        # %s is treated as a placeholder wherever it appears, including
+        # inside quoted strings, and %% as an escaped literal percent -
+        # mirroring psycopg. Pass literal values as parameters.
+        if '%' not in sql:
             return sql
-        accum = [parts[0]]
-        for i, part in enumerate(parts[1:], 1):
-            accum.append('$%d' % i)
-            accum.append(part)
-        return ''.join(accum)
+        counter = itertools.count(1)
+        def replace(match):
+            if match.group(0) == '%%':
+                return '%'
+            return '$%d' % next(counter)
+        return re.sub('%%|%s', replace, sql)
 
 
 class AsyncPgAdapter(Psycopg3Adapter):
@@ -752,7 +998,7 @@ class AsyncPgAdapter(Psycopg3Adapter):
         self.jsonb_type = Json
 
 
-class AsyncPgAtomic(object):
+class AsyncPgAtomic(_callable_context_manager):
     def __init__(self, db, *args, **kwargs):
         self.db = db
         self._begin_args = (args, kwargs)
@@ -769,8 +1015,13 @@ class AsyncPgAtomic(object):
         else:
             try:
                 self.commit(False)
-            except:
-                self.rollback(False)
+            except Exception:
+                # asyncpg marks the transaction FAILED when commit errors,
+                # making rollback raise too - don't mask the original.
+                try:
+                    self.rollback(False)
+                except Exception:
+                    pass
                 raise
 
     def commit(self, begin=True):
@@ -782,17 +1033,20 @@ class AsyncPgAtomic(object):
     async def _abegin(self):
         a, k = self._begin_args
         conn = await self.db.aconnect()
-        self._tx = conn.conn.transaction(*a, **k)
-        await self._tx.start()
+        with __exception_wrapper__:
+            self._tx = conn.conn.transaction(*a, **k)
+            await self._tx.start()
         return self._tx
 
     async def acommit(self, begin=True):
-        await self._tx.commit()
+        with __exception_wrapper__:
+            await self._tx.commit()
         if begin:
             await self._abegin()
 
     async def arollback(self, begin=True):
-        await self._tx.rollback()
+        with __exception_wrapper__:
+            await self._tx.rollback()
         if begin:
             await self._abegin()
 
@@ -808,23 +1062,39 @@ class AsyncPgAtomic(object):
         else:
             try:
                 await self.acommit(False)
-            except:
-                await self.arollback(False)
+            except Exception:
+                # asyncpg marks the transaction FAILED when commit errors,
+                # making rollback raise too - don't mask the original.
+                try:
+                    await self.arollback(False)
+                except Exception:
+                    pass
                 raise
 
 
 class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
     psycopg2_adapter = psycopg3_adapter = AsyncPgAdapter
 
+    def init(self, database, **kwargs):
+        # asyncpg has no psycopg-style isolation-level constants; keep the
+        # raw value and apply it per-connection in register_adapters().
+        self._async_isolation_level = kwargs.pop('isolation_level', None)
+        super(AsyncPostgresqlDatabase, self).init(database, **kwargs)
+
     async def register_adapters(self, conn):
+        def encode_json(val):
+            return val if isinstance(val, bytes) else val.encode('utf8')
+
         def decode_json(bval):
             return json.loads(bval.decode())
 
         await conn.set_type_codec(
-            'json', encoder=str.encode, decoder=decode_json,
+            'json', encoder=encode_json, decoder=decode_json,
             schema='pg_catalog', format='binary')
 
         def encode_jsonb(val):
+            if isinstance(val, bytes):
+                return b'\x01' + val
             return b'\x01' + val.encode('utf8')
 
         def decode_jsonb(bval):
@@ -834,14 +1104,24 @@ class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
             'jsonb', encoder=encode_jsonb, decoder=decode_jsonb,
             schema='pg_catalog', format='binary')
 
+        if self._async_isolation_level:
+            await conn.execute(
+                'SET SESSION CHARACTERISTICS AS TRANSACTION '
+                'ISOLATION LEVEL %s' % self._async_isolation_level)
+
     async def _create_pool_async(self):
         if asyncpg is None:
             raise ImproperlyConfigured('asyncpg is not installed')
+        if self.database and self.database.startswith(
+                ('postgresql://', 'postgres://')):
+            db_params = {'dsn': self.database}
+        else:
+            db_params = {'database': self.database}
         return await asyncpg.create_pool(
-            database=self.database,
             min_size=self._pool_min_size,
             max_size=self._pool_size,
             init=self.register_adapters,
+            **db_params,
             **self.connect_params)
 
     async def _pool_acquire(self):
@@ -852,6 +1132,14 @@ class AsyncPostgresqlDatabase(AsyncDatabaseMixin, PostgresqlDatabase):
 
     async def _pool_release(self, conn):
         if conn and conn.conn:
+            if conn.conn.is_in_transaction():
+                # Roll back any transaction left open, e.g. by a dead task -
+                # otherwise asyncpg's pool reset logs a noisy warning.
+                try:
+                    await conn.conn.execute('ROLLBACK')
+                except Exception:
+                    logger.warning('Error rolling back connection',
+                                   exc_info=True)
             await self._pool.release(conn.conn)
 
     async def _pool_close(self):
