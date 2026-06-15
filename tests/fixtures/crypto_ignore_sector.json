@@ -1,0 +1,36 @@
+{
+  "signal": {
+    "schema_version": "1",
+    "cycle_id": "66666666-6666-6666-6666-666666666666",
+    "timestamp": "2023-01-15T00:00:00Z",
+    "regime": "Trending",
+    "strategy": "MomentumOverlay",
+    "ticker": "BTC-USD",
+    "venue": "kraken",
+    "venue_symbol": "XBTUSD",
+    "asset_class": "crypto",
+    "direction": "buy",
+    "score": 0.8,
+    "quant_score": 0.8,
+    "sentiment_score": 0.0,
+    "news_overlay": 0.0,
+    "macro_overlay": 0.0,
+    "kg_formula_contribution": 0.0,
+    "contradiction_blocked": false
+  },
+  "portfolio": {
+    "nav": 10000.0,
+    "cash": 10000.0,
+    "drawdown_from_peak": 0.0,
+    "positions": []
+  },
+  "prices": {
+    "BTC-USD": [20000.0, 20200.0, 20500.0, 20800.0, 21000.0]
+  },
+  "expected": {
+    "risk_checks_all_passed": true,
+    "rejection_reason": "",
+    "sector_pct_ok": true,
+    "note": "crypto must always pass sector cap"
+  }
+}

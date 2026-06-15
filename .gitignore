@@ -116,3 +116,13 @@ coverage.xml
 # Documentation builds
 docs/_build/
 site/
+
+# C++ / CMake
+cpp-risk/build/
+*.o
+*.a
+*.so
+*.lo
+*.la
+*.lai
+*.slo

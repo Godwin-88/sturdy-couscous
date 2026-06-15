@@ -1,0 +1,34 @@
+{
+  "signal": {
+    "schema_version": "1",
+    "cycle_id": "22222222-2222-2222-2222-222222222222",
+    "timestamp": "2023-01-15T00:00:00Z",
+    "regime": "Trending",
+    "strategy": "MomentumOverlay",
+    "ticker": "SPY",
+    "venue": "ibkr",
+    "venue_symbol": "SPY",
+    "asset_class": "equity_xstock",
+    "direction": "hold",
+    "score": 0.0,
+    "quant_score": 0.0,
+    "sentiment_score": 0.0,
+    "news_overlay": 0.0,
+    "macro_overlay": 0.0,
+    "kg_formula_contribution": 0.0,
+    "contradiction_blocked": false
+  },
+  "portfolio": {
+    "nav": 10000.0,
+    "cash": 10000.0,
+    "drawdown_from_peak": 0.0,
+    "positions": []
+  },
+  "prices": {
+    "SPY": [100.0, 101.0, 102.0, 103.0, 104.0]
+  },
+  "expected": {
+    "risk_checks_all_passed": false,
+    "rejection_reason": "no_signal"
+  }
+}

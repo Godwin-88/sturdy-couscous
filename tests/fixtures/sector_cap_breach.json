@@ -1,0 +1,43 @@
+{
+  "signal": {
+    "schema_version": "1",
+    "cycle_id": "44444444-4444-4444-4444-444444444444",
+    "timestamp": "2023-01-15T00:00:00Z",
+    "regime": "Trending",
+    "strategy": "MomentumOverlay",
+    "ticker": "QQQ",
+    "venue": "ibkr",
+    "venue_symbol": "QQQ",
+    "asset_class": "equity_tech",
+    "direction": "buy",
+    "score": 0.5,
+    "quant_score": 0.5,
+    "sentiment_score": 0.0,
+    "news_overlay": 0.0,
+    "macro_overlay": 0.0,
+    "kg_formula_contribution": 0.0,
+    "contradiction_blocked": false
+  },
+  "portfolio": {
+    "nav": 10000.0,
+    "cash": 10000.0,
+    "drawdown_from_peak": 0.0,
+    "positions": [
+      {
+        "ticker": "SPY",
+        "venue": "ibkr",
+        "asset_class": "equity_tech",
+        "sector": "equity_broad",
+        "notional": 6500.0,
+        "quantity": 65.0
+      }
+    ]
+  },
+  "prices": {
+    "QQQ": [300.0, 301.0, 302.0, 303.0, 304.0]
+  },
+  "expected": {
+    "risk_checks_all_passed": false,
+    "rejection_reason": "sector_cap"
+  }
+}
