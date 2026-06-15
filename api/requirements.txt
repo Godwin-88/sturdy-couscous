@@ -9,3 +9,9 @@ pydantic==2.7.1
 python-dotenv==1.0.1
 loguru==0.7.2
 prometheus-client==0.20.0
+numpy<2.0.0
+pandas
+yfinance
+arch
+jsonschema
+scipy

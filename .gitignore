@@ -12,6 +12,18 @@ ENV/
 backend/venv/
 backend/venv311/
 backend/env/
+# Uncomment or add this (critical)
+.env
+
+# Add tool-local directories
+.kilo/
+.venv/
+.venv311/
+
+# Add scratch/temp patterns
+tests commands.txt
+*.tmp
+*~
 
 # FastAPI / Backend
 #backend/.env

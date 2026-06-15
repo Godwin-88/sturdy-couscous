@@ -16,10 +16,10 @@ import psycopg2
 from loguru import logger
 
 
-MAX_POSITION_PCT   = float(os.getenv("RISK_MAX_POSITION_PCT", 0.15))   # 15% per position
-MAX_SECTOR_PCT     = float(os.getenv("RISK_MAX_SECTOR_PCT", 0.40))      # 40% per sector
-VAR_CONFIDENCE     = float(os.getenv("RISK_VAR_CONFIDENCE", 0.99))
-MAX_VAR_PCT        = float(os.getenv("RISK_MAX_VAR_PCT", 0.05))         # 5% daily VaR limit
+MAX_POSITION_PCT   = float(os.getenv("AGENT_MAX_POSITION_PCT",  "0.20"))   # 20% per position
+MAX_SECTOR_PCT     = float(os.getenv("RISK_MAX_SECTOR_PCT",     "0.40"))      # 40% per sector
+VAR_CONFIDENCE     = float(os.getenv("RISK_VAR_CONFIDENCE",     "0.99"))
+MAX_VAR_PCT        = float(os.getenv("RISK_MAX_VAR_PCT",        "0.05"))         # 5% daily VaR limit
 INITIAL_CAPITAL    = float(os.getenv("INITIAL_CAPITAL_USD", 10000))
 
 SECTOR_MAP = {

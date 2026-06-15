@@ -36,13 +36,15 @@ class _MacroCalendar:
         rows: List[MacroEvent] = []
         reader = csv.DictReader(io.StringIO(_DEFAULT_MACRO_CSV))
         for row in reader:
+            if not row.get("date"):
+                continue
             rows.append(MacroEvent(
                 date=row["date"],
-                event=row["event"],
-                window_start=row["window_start"],
-                window_end=row["window_end"],
-                affected_tickers=row["affected_tickers"],
-                dampening=float(row["dampening"]),
+                event=row.get("event", ""),
+                window_start=row.get("window_start", ""),
+                window_end=row.get("window_end", ""),
+                affected_tickers=row.get("affected_tickers", ""),
+                dampening=float(row["dampening"]) if row.get("dampening") is not None else 0.0,
             ))
         self._rows = rows
 
@@ -51,7 +53,7 @@ class _MacroCalendar:
         for row in self._rows:
             if row.date <= t <= row.window_end:
                 tickers = [x.strip() for x in row.affected_tickers.split(";") if x.strip()]
-                if ticker in tickers or "ALL" in tickers:
+                if row.dampening is not None and (ticker in tickers or "ALL" in tickers):
                     return float(row.dampening)
         return 0.0
 

@@ -13,6 +13,7 @@ _REGISTRY: Dict[str, Any] = {}
 def _register(name: str):
     def decorator(cls):
         _REGISTRY[name] = cls
+        _REGISTRY[name.lower()] = cls
         return cls
     return decorator
 
@@ -23,7 +24,7 @@ class MomentumOverlay:
 
     def generate_signal(self, bar: Dict[str, Any], kg_context: Dict[str, Any]) -> Dict[str, Any]:
         for ticker, tkbar in bar.items():
-            if ticker in {"ticker", "close", "^VIX"}:
+            if ticker in {"ticker", "close", "vix", "^VIX"}:
                 continue
             close = float(tkbar.get("close", 0))
             ma21 = tkbar.get("ma21")
@@ -44,7 +45,7 @@ class GARCHVolStrategy:
 
     def generate_signal(self, bar: Dict[str, Any], kg_context: Dict[str, Any]) -> Dict[str, Any]:
         for ticker, tkbar in bar.items():
-            if ticker in {"ticker", "close", "^VIX"}:
+            if ticker in {"ticker", "close", "vix", "^VIX"}:
                 continue
             av = tkbar.get("annual_vol")
             if av is None or np.isnan(av):
@@ -64,7 +65,7 @@ class BayesianNetworkProxy:
 
     def generate_signal(self, bar: Dict[str, Any], kg_context: Dict[str, Any]) -> Dict[str, Any]:
         for ticker, tkbar in bar.items():
-            if ticker in {"ticker", "close", "^VIX"}:
+            if ticker in {"ticker", "close", "vix", "^VIX"}:
                 continue
             ret21 = tkbar.get("return_21")
             vol21 = tkbar.get("vol_21")
@@ -85,7 +86,7 @@ class ValueMeanReversion:
 
     def generate_signal(self, bar: Dict[str, Any], kg_context: Dict[str, Any]) -> Dict[str, Any]:
         for ticker, tkbar in bar.items():
-            if ticker in {"ticker", "close", "^VIX"}:
+            if ticker in {"ticker", "close", "vix", "^VIX"}:
                 continue
             close = float(tkbar.get("close", 0))
             ma200 = tkbar.get("ma200")

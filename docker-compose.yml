@@ -124,8 +124,8 @@ services:
   # ── Backtesting (on-demand, not always running) ───────────────────────────────
   backtest:
     build:
-      context: ./backtest
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backtest/Dockerfile
     container_name: graphalpha-backtest
     depends_on:
       memgraph:
@@ -134,8 +134,8 @@ services:
         condition: service_healthy
     env_file: .env
     volumes:
-      - ./backtest:/app
-      - backtest_results:/app/results
+      - ./backtest:/app/backtest
+      - backtest_results:/app/backtest/results
     profiles: ["backtest"]          # only starts with: docker compose --profile backtest up
 
   # ── Monitoring ────────────────────────────────────────────────────────────────

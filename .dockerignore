@@ -1,0 +1,14 @@
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+build/
+.git/
+.gitignore
+.env
+.venv/
+node_modules/
+infra/
+frontend/
+graph/
+docs/

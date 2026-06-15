@@ -30,7 +30,7 @@ class BacktestConfig:
     quant_weight: float = 0.70
     sentiment_weight: float = 0.30
     score_clip: float = 1.0
-    trade_threshold: float = 0.15
+    trade_threshold: float = float(os.getenv("BT_TRADE_THRESHOLD", "0.15"))
 
     # Fees / slippage (env-overridable)
     crypto_fee_pct: float = float(os.getenv("BACKTEST_CRYPTO_FEE_PCT", "0.0026"))
@@ -51,3 +51,6 @@ class BacktestConfig:
 
     # KB formula cost model note (backtest-only approximation)
     ibkr_fill_mode: str = "backtest_simulated"
+
+
+cfg = BacktestConfig()
