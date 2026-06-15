@@ -58,18 +58,15 @@ class SignalAgent:
                     continue
 
                 signal = {
-                    "strategy":      strategy["name"],
-                    "strategy_type": strategy.get("type", "overlay"),
-                    "ticker":        quant["ticker"],
-                    "kraken_pair":   TICKER_MAP.get(quant["ticker"], quant["ticker"]),
-                    "direction":     "sell" if fused_score < -0.2 else
-                                     "buy"  if fused_score > 0.2 else "hold",
-                    "score":         fused_score,
-                    "quant_score":   quant["score"],
-                    "sentiment_score": sentiment["score"],
-                    "reasoning":     quant["reasoning"],
-                    "graph_path":    formula.get("graph_path", []),
-                    "regime":        regime,
+                    "strategy":         strategy["name"],
+                    "ticker":           quant["ticker"],
+                    "direction":        "sell" if fused_score < -0.2 else
+                                        "buy"  if fused_score > 0.2 else "hold",
+                    "score":            fused_score,
+                    "quant_score":      quant["score"],
+                    "sentiment_score":  sentiment["score"],
+                    "graph_path":       formula.get("graph_path", []),
+                    "regime":           regime,
                 }
                 if signal["direction"] != "hold":
                     signals.append(signal)

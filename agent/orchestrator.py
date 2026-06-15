@@ -17,6 +17,7 @@ import asyncio
 import json
 import os
 import time
+import uuid
 from datetime import datetime
 
 import redis.asyncio as aioredis
@@ -32,6 +33,8 @@ from research_agent import ResearchAgent
 from news_agent import NewsAgent
 from macro_calendar import MacroCalendarAgent
 from kg_signal_generator import KGSignalGenerator
+from common.schema_validator import validate_signal
+from common.versioning import validate_schema_version
 
 load_dotenv()
 
@@ -123,6 +126,8 @@ class Orchestrator:
                 logger.warning(f"KGSignalGenerator failed: {e}")
 
             # ── Step 3: Price/vol signal generation ───────────────────────────
+            cycle_id = str(uuid.uuid4())
+            timestamp = datetime.utcnow().isoformat()
             signals = await self.signal_agent.run(
                 regime=regime,
                 active_strategies=regime_result["active_strategies"]
@@ -131,6 +136,9 @@ class Orchestrator:
             # Merge KG formula signals into the main signal list
             signals = signals + kg_signals
 
+            # Schema v1 injection: stamp every signal with canonical fields
+            signals = self._inject_schema_v1(signals, cycle_id, timestamp)
+
             # Apply news sentiment boost/penalty to overlapping tickers
             if news_result.get("ticker_sentiment"):
                 signals = self._apply_news_overlay(signals, news_result["ticker_sentiment"])
@@ -138,6 +146,9 @@ class Orchestrator:
             # Apply pre-event size reduction if macro event is imminent
             if macro_result.get("pre_event_signals"):
                 signals = self._apply_macro_overlay(signals, macro_result["pre_event_signals"])
+
+            # Schema v1 injection: stamp every signal with canonical fields before RiskAgent
+            signals = self._inject_schema_v1(signals, cycle_id, timestamp)
 
             audit["signals"] = signals
             audit["steps"].append({"agent": "SignalAgent", "status": "ok",
@@ -196,6 +207,47 @@ class Orchestrator:
         audit["cycle_duration_s"] = round(time.time() - cycle_start, 2)
         LOOP_COUNTER.inc()
         return audit
+
+    def _inject_schema_v1(self, signals, cycle_id, timestamp):
+        from backtest.universe import lookup as _lookup
+        from common.versioning import validate_schema_version
+        validate_schema_version(1)
+        out = []
+        for sig in signals:
+            ticker = sig.get("ticker", "")
+            try:
+                u = _lookup(ticker)
+            except KeyError:
+                continue
+            payload = {
+                "schema_version": 1,
+                "cycle_id": cycle_id,
+                "timestamp": timestamp,
+                "regime": sig.get("regime", ""),
+                "strategy": sig.get("strategy", ""),
+                "ticker": ticker,
+                "venue": u.venue,
+                "venue_symbol": u.venue_symbol,
+                "asset_class": u.asset_class,
+                "direction": sig.get("direction", "hold"),
+                "score": float(sig.get("score", 0.0)),
+                "quant_score": float(sig.get("quant_score", 0.0)),
+                "sentiment_score": float(sig.get("sentiment_score", 0.0)),
+                "news_overlay": float(sig.get("news_sentiment", sig.get("news_overlay", 0.0))),
+                "macro_overlay": float(sig.get("macro_reduction", sig.get("macro_overlay", 0.0))),
+                "kg_formula_contribution": float(sig.get("kg_formula_contribution", 0.0)),
+                "graph_path": sig.get("graph_path", []),
+                "contradiction_blocked": bool(sig.get("contradiction_blocked", False)),
+            }
+            try:
+                validate_signal(payload)
+            except ValueError:
+                payload["score"] = 0.0
+                payload["direction"] = "hold"
+                payload["contradiction_blocked"] = True
+            out.append(payload)
+        return out
+
 
     # ── Signal overlay helpers ─────────────────────────────────────────────────
 

@@ -1,34 +1,40 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 
 
 class Signal(BaseModel):
-    strategy:        str
-    strategy_type:   str
-    ticker:          str
-    kraken_pair:     str
-    direction:       str          # buy | sell
-    score:           float
-    quant_score:     float
+    schema_version: int
+    cycle_id: str
+    timestamp: str
+    regime: str
+    strategy: str
+    ticker: str
+    venue: str
+    venue_symbol: str
+    asset_class: str
+    direction: str
+    score: float
+    quant_score: float
     sentiment_score: float
-    reasoning:       str
-    graph_path:      list[str]
-    regime:          str
+    news_overlay: float
+    macro_overlay: float
+    kg_formula_contribution: float
+    graph_path: List[str]
+    contradiction_blocked: bool
 
 
 class Order(BaseModel):
-    order_id:         str
-    strategy:         Optional[str]
-    ticker:           str
-    kraken_pair:      str
-    direction:        str
-    quantity:         float
-    notional_usd:     float
-    kelly_fraction:   float
-    var_contribution: float
-    price_estimate:   float
-    fill_price:       Optional[float]
-    fee_usd:          Optional[float]
-    mode:             str
-    status:           str
-    timestamp:        str
+    schema_version: int
+    order_id: str
+    cycle_id: str
+    ticker: str
+    venue: str
+    venue_symbol: str
+    direction: str
+    quantity: float
+    notional_usd: float
+    kelly_fraction: float
+    var_contribution_pct: float
+    mode: str
+    risk_checks: dict
+

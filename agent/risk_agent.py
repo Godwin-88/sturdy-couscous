@@ -4,6 +4,8 @@ Validates signals, sizes positions (half-Kelly), checks VaR, enforces
 concentration limits, and returns only risk-approved orders.
 """
 
+from common.schema_validator import validate_order
+
 import os
 from typing import Any
 
@@ -51,11 +53,9 @@ class RiskAgent:
         for sig in signals:
             ticker = sig["ticker"]
 
-            # ── Kelly sizing ──────────────────────────────────────────────────
             kelly_fraction = self._kelly_fraction(sig)
             target_notional = nav * kelly_fraction * MAX_POSITION_PCT
 
-            # ── Concentration check ───────────────────────────────────────────
             sector = SECTOR_MAP.get(ticker, "other")
             sector_exposure = sum(
                 p["notional"] for p in positions.values()
@@ -65,14 +65,12 @@ class RiskAgent:
                 logger.warning(f"Rejected {ticker}: sector {sector} concentration limit")
                 continue
 
-            # ── VaR contribution check ────────────────────────────────────────
             var_contrib = self._marginal_var(ticker, target_notional, nav, prices_cache)
             if var_contrib > nav * MAX_VAR_PCT:
                 logger.warning(f"Rejected {ticker}: VaR contribution {var_contrib:.2f} "
                                f"> limit {nav * MAX_VAR_PCT:.2f}")
                 continue
 
-            # ── Compute order quantity ────────────────────────────────────────
             price = self._get_price(ticker, prices_cache)
             if price <= 0:
                 logger.warning(f"Rejected {ticker}: no valid price")
@@ -82,14 +80,28 @@ class RiskAgent:
             if qty < 0.0001:
                 continue
 
-            approved.append({
+            order = {
                 **sig,
+                "order_id":        str(__import__("uuid").uuid4()),
+                "cycle_id":        sig.get("cycle_id", ""),
                 "quantity":        round(qty, 6),
                 "notional_usd":    round(target_notional, 2),
                 "kelly_fraction":  round(kelly_fraction, 4),
                 "var_contribution": round(var_contrib, 2),
+                "var_contribution_pct": round(var_contrib / max(nav, 1e-9), 4),
                 "price_estimate":  round(price, 4),
-            })
+                "risk_checks": {
+                    "position_pct_ok": True,
+                    "sector_pct_ok": sector_exposure + target_notional <= nav * MAX_SECTOR_PCT,
+                    "var_ok": var_contrib <= nav * MAX_VAR_PCT,
+                },
+                "mode": os.getenv("KRAKEN_TRADING_MODE", "paper"),
+            }
+            try:
+                validate_order(order)
+            except ValueError:
+                continue
+            approved.append(order)
 
         logger.info(f"Risk: {len(approved)}/{len(signals)} signals approved")
         return approved
@@ -145,27 +157,27 @@ class RiskAgent:
         Maps fused_score to a win-probability estimate.
         """
         score = abs(signal["score"])
-        p_win = 0.5 + 0.25 * score          # score=1 → p=0.75, score=0.2 → p=0.55
+        p_win = 0.5 + 0.25 * score
         p_lose = 1 - p_win
-        b = 1.5                              # assumed payoff ratio (reward:risk = 1.5)
+        b = 1.5
         kelly = (p_win * b - p_lose) / b
         half_kelly = max(0.0, kelly / 2)
         return min(half_kelly, 1.0)
 
     # ── Marginal VaR ──────────────────────────────────────────────────────────
     def _marginal_var(self, ticker: str, notional: float,
-                      nav: float, prices: dict[str, pd.Series]) -> float:
+                      nav: float, prices: dict) -> float:
         """Parametric VaR contribution using 60-day daily returns."""
         series = prices.get(ticker)
         if series is None or len(series) < 20:
-            return notional * 0.03   # conservative 3% fallback
+            return notional * 0.03
         rets   = series.pct_change().dropna().tail(60)
         sigma  = rets.std()
         z      = 2.326 if VAR_CONFIDENCE >= 0.99 else 1.645
         return notional * sigma * z
 
     # ── Price helpers ─────────────────────────────────────────────────────────
-    def _fetch_recent_prices(self) -> dict[str, pd.Series]:
+    def _fetch_recent_prices(self) -> dict:
         tickers = list(SECTOR_MAP.keys())
         try:
             raw = yf.download(tickers, period="3mo", auto_adjust=True, progress=False)
@@ -175,7 +187,7 @@ class RiskAgent:
             logger.error(f"Price fetch error: {e}")
             return {}
 
-    def _get_price(self, ticker: str, prices: dict[str, pd.Series]) -> float:
+    def _get_price(self, ticker: str, prices: dict) -> float:
         series = prices.get(ticker)
         if series is not None and not series.empty:
             return float(series.iloc[-1])
