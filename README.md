@@ -599,6 +599,31 @@ Sanity checks:
 
 ---
 
+## Schema v1 & Replay Export
+
+P0 establishes the canonical Python↔C++ data contract.
+
+- **Signal schema**: `schemas/signal_schema_v1.json`
+- **ApprovedOrder schema**: `schemas/approved_order_schema_v1.json`
+- **Validators**: `common/schema_validator.py` (Python, used by both engines)
+- **Versioning policy**: `docs/SCHEMA_POLICY.md` — any contract change bumps `schema_version`; consumers must reject newer versions rather than guess defaults.
+
+### Replay Export (backtest → C++ parity testing)
+
+```bash
+python backtest/replay_export.py \
+  --input backtest/output.json \
+  --output /tmp/replay.jsonl \
+  --start 2022-01-01 --end 2022-12-31 \
+  --use-graph
+```
+
+Output is deterministic JSONL: one `# META ` header line followed by one validated `Signal` per line, sorted by `(timestamp, cycle_id, strategy)`. The C++ replay runner (P7) consumes this file for parity testing.
+
+```bash
+python3 -m unittest tests.test_schemas -v
+```
+
 ## Production Deployment (Vultr)
 
 ### One-time Vultr VM setup

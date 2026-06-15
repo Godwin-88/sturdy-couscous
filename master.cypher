@@ -3556,71 +3556,24 @@ MATCH (a:Concept {name:'Encoder-Decoder Model'}),          (b:Concept {name:'Tra
 // -----------------------------------------------------------------------------
 // 62. FORMULA NODES — DEEP LEARNING & BACKTESTING BATCH
 // -----------------------------------------------------------------------------
-
-MERGE (f:Formula {id: 'f_attention'})
-  SET f.name       = 'Scaled Dot-Product Attention',
-      f.expression = 'Attention(Q,K,V) = softmax(QKᵀ/sqrt(d_k))·V',
-      f.latex       = '\text{Attention}(Q,K,V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V',
-      f.params      = ['Q','K','V','d_k'],
-      f.output      = 'attention_weighted_values';
-
-MERGE (f:Formula {id: 'f_deepar_loglik'})
-  SET f.name       = 'DeepAR Log-Likelihood Objective',
-      f.expression = 'L = Σᵢ Σₜ log l(z_{i,t} | θ(h_{i,t}))',
-      f.latex       = '\mathcal{L} = \sum_{i=1}^N\sum_{t=t_0}^T \log\ell\!\left(z_{i,t}\,\big|\,\theta\!\left(\mathbf{h}_{i,t}\right)\right)',
-      f.params      = ['z_it','θ','h_it','N','T'],
-      f.output      = 'log_likelihood';
-
-MERGE (f:Formula {id: 'f_deepvar_portfolio'})
-  SET f.name       = 'DeepVaR Portfolio VaR',
-      f.expression = 'VaR_p = sqrt(V · R · Vᵀ)',
-      f.latex       = 'VaR_p = \sqrt{\mathbf{V} \mathbf{R} \mathbf{V}^\top}',
-      f.params      = ['V','R'],
-      f.output      = 'portfolio_var';
-
-MERGE (f:Formula {id: 'f_quadratic_loss'})
-  SET f.name       = 'Quadratic VaR Loss',
-      f.expression = 'L_quad = hit * (1 + (actual - forecast)²)',
-      f.latex       = 'L_{\text{quad}} = I_t \cdot \left(1 + (r_t - \widehat{VaR}_t)^2\right)',
-      f.params      = ['I_t','r_t','VaR_hat'],
-      f.output      = 'quadratic_loss';
-
-MERGE (f:Formula {id: 'f_smooth_loss'})
-  SET f.name       = 'Smooth VaR Loss',
-      f.expression = 'L_smooth = (alpha - (1+exp(delta*(actual-forecast)))⁻¹) * (actual-forecast)',
-      f.latex       = 'L_{\text{smooth}} = \left(\alpha - \frac{1}{1+e^{\delta(r_t-\widehat{VaR}_t)}}\right)(r_t - \widehat{VaR}_t)',
-      f.params      = ['alpha','delta','r_t','VaR_hat'],
-      f.output      = 'smooth_loss';
-
-MERGE (f:Formula {id: 'f_tick_loss'})
-  SET f.name       = 'Tick (Quantile) VaR Loss',
-      f.expression = 'L_tick = (alpha - hit_series) * (actual - forecast)',
-      f.latex       = 'L_{\text{tick}} = (\alpha - I_t)(r_t - \widehat{VaR}_t)',
-      f.params      = ['alpha','I_t','r_t','VaR_hat'],
-      f.output      = 'tick_loss';
-
-MERGE (f:Formula {id: 'f_firm_loss'})
-  SET f.name       = 'Firm VaR Loss',
-      f.expression = 'L_firm = hit*(1+(actual-VaR)²) - c*(1-hit)',
-      f.latex       = 'L_{\text{firm}} = I_t\!\left(1+(r_t-\widehat{VaR}_t)^2\right) - c(1-I_t)',
-      f.params      = ['I_t','r_t','VaR_hat','c'],
-      f.output      = 'firm_loss';
-
-MERGE (f:Formula {id: 'f_positional_encoding'})
-  SET f.name       = 'Transformer Positional Encoding',
-      f.expression = 'PE(pos,2i)=sin(pos/10000^(2i/d)); PE(pos,2i+1)=cos(pos/10000^(2i/d))',
-      f.latex       = 'PE_{(pos,2i)}=\sin\!\left(\frac{pos}{10000^{2i/d}}\right),\quad PE_{(pos,2i+1)}=\cos\!\left(\frac{pos}{10000^{2i/d}}\right)',
-      f.params      = ['pos','i','d'],
-      f.output      = 'position_embedding';
-
-MERGE (f:Formula {id: 'f_hit_rate'})
-  SET f.name       = 'VaR Hit Rate (Violation Rate)',
-      f.expression = 'Hit Rate = mean(I_t) = (1/T)·Σ 1{actual_t < VaR_t}',
-      f.latex       = '\bar{I} = \frac{1}{T}\sum_{t=1}^T \mathbf{1}\{r_t < \widehat{VaR}_t\}',
-      f.params      = ['r_t','VaR_hat','T'],
-      f.output      = 'violation_rate';
-
-
+UNWIND [
+  {id: 'f_attention', name: 'Scaled Dot-Product Attention', expression: 'Attention(Q,K,V) = softmax(QKᵀ/sqrt(d_k))·V', latex: '\\text{Attention}(Q,K,V) = \\text{softmax}\\!\\left(\\frac{QK^\\top}{\\sqrt{d_k}}\\right)V', params: ['Q','K','V','d_k'], output: 'attention_weighted_values'},
+  {id: 'f_deepar_loglik', name: 'DeepAR Log-Likelihood Objective', expression: 'L = Σᵢ Σₜ log l(z_{i,t} | θ(h_{i,t}))', latex: '\\mathcal{L} = \\sum_{i=1}^N\\sum_{t=t_0}^T \\log\\ell\\!\\left(z_{i,t}\\,\\big|\\,\\theta\\!\\left(\\mathbf{h}_{i,t}\\right)\\right)', params: ['z_it','θ','h_it','N','T'], output: 'log_likelihood'},
+  {id: 'f_deepvar_portfolio', name: 'DeepVaR Portfolio VaR', expression: 'VaR_p = sqrt(V · R · Vᵀ)', latex: 'VaR_p = \\sqrt{\\mathbf{V} \\mathbf{R} \\mathbf{V}^\\top}', params: ['V','R'], output: 'portfolio_var'},
+  {id: 'f_quadratic_loss', name: 'Quadratic VaR Loss', expression: 'L_quad = hit * (1 + (actual - forecast)²)', latex: 'L_{\\text{quad}} = I_t \\cdot \\left(1 + (r_t - \\widehat{VaR}_t)^2\\right)', params: ['I_t','r_t','VaR_hat'], output: 'quadratic_loss'},
+  {id: 'f_smooth_loss', name: 'Smooth VaR Loss', expression: 'L_smooth = (alpha - (1+exp(delta*(actual-forecast)))⁻¹) * (actual-forecast)', latex: 'L_{\\text{smooth}} = \\left(\\alpha - \\frac{1}{1+e^{\\delta(r_t-\\widehat{VaR}_t)}}\\right)(r_t - \\widehat{VaR}_t)', params: ['alpha','delta','r_t','VaR_hat'], output: 'smooth_loss'},
+  {id: 'f_tick_loss', name: 'Tick (Quantile) VaR Loss', expression: 'L_tick = (alpha - hit_series) * (actual - forecast)', latex: 'L_{\\text{tick}} = (\\alpha - I_t)(r_t - \\widehat{VaR}_t)', params: ['alpha','I_t','r_t','VaR_hat'], output: 'tick_loss'},
+  {id: 'f_firm_loss', name: 'Firm VaR Loss', expression: 'L_firm = hit*(1+(actual-VaR)²) - c*(1-hit)', latex: 'L_{\\text{firm}} = I_t\\!\\left(1+(r_t-\\widehat{VaR}_t)^2\\right) - c(1-I_t)', params: ['I_t','r_t','VaR_hat','c'], output: 'firm_loss'},
+  {id: 'f_positional_encoding', name: 'Transformer Positional Encoding', expression: 'PE(pos,2i)=sin(pos/10000^(2i/d)); PE(pos,2i+1)=cos(pos/10000^(2i/d))', latex: 'PE_{(pos,2i)}=\\sin\\!\\left(\\frac{pos}{10000^{2i/d}}\\right),\\quad PE_{(pos,2i+1)}=\\cos\\!\\left(\\frac{pos}{10000^{2i/d}}\\right)', params: ['pos','i','d'], output: 'position_embedding'},
+  {id: 'f_hit_rate', name: 'VaR Hit Rate (Violation Rate)', expression: 'Hit Rate = mean(I_t) = (1/T)·Σ 1{actual_t < VaR_t}', latex: '\\bar{I} = \\frac{1}{T}\\sum_{t=1}^T \\mathbf{1}\\{r_t < \\widehat{VaR}_t\\}', params: ['r_t','VaR_hat','T'], output: 'violation_rate'}
+] AS data
+MERGE (f:Formula {id: data.id})
+SET f.name = data.name,
+    f.expression = data.expression,
+    f.latex = data.latex,
+    f.params = data.params,
+    f.output = data.output
+RETURN count(f) AS formulas_processed;
 // -----------------------------------------------------------------------------
 // 63. CONCEPT → FORMULA RELATIONSHIPS (v0.5.0)
 // -----------------------------------------------------------------------------
@@ -4075,59 +4028,24 @@ MATCH (a:Concept {name:'Pinball Loss'}), (b:Concept {name:'Smooth Loss (VaR)'})
 // -----------------------------------------------------------------------------
 // L. FORMULA NODES — v0.5.1
 // -----------------------------------------------------------------------------
-
-MERGE (f:Formula {id: 'f_garch11'})
-  SET f.name       = 'GARCH(1,1) Variance Recursion',
-      f.expression = 'σ²_t = ω + α·ε²_{t-1} + β·σ²_{t-1}',
-      f.latex      = '\sigma^2_t = \omega + \alpha\,\varepsilon^2_{t-1} + \beta\,\sigma^2_{t-1}',
-      f.params     = ['ω','α','β','ε_t'],
-      f.constraints = 'ω>0; α,β≥0; α+β<1 (stationarity)',
-      f.output     = 'conditional_variance';
-
-MERGE (f:Formula {id: 'f_bipower_variation'})
-  SET f.name       = 'Bipower Variation',
-      f.expression = 'BV = (π/2) · Σ_{t=2}^{T} |r_{t-1}| · |r_t|',
-      f.latex      = 'BV = \frac{\pi}{2}\sum_{t=2}^{T}|r_{t-1}|\cdot|r_t|',
-      f.params     = ['r_t','T'],
-      f.output     = 'integrated_variance_estimate';
-
-MERGE (f:Formula {id: 'f_jump_qv'})
-  SET f.name       = 'Jump Quadratic Variation',
-      f.expression = 'JV = RV - BV',
-      f.latex      = 'JV = RV - BV \geq 0',
-      f.params     = ['RV','BV'],
-      f.output     = 'jump_variance';
-
-MERGE (f:Formula {id: 'f_kupiec_pof'})
-  SET f.name       = 'Kupiec POF Likelihood Ratio',
-      f.expression = 'LR_POF = -2·ln[(1-p)^(T-N)·p^N] + 2·ln[(1-N/T)^(T-N)·(N/T)^N]',
-      f.latex      = 'LR_{POF} = -2\ln\!\left[(1-p)^{T-N}p^N\right] + 2\ln\!\left[\left(1-\tfrac{N}{T}\right)^{T-N}\!\!\left(\tfrac{N}{T}\right)^N\right]',
-      f.params     = ['p','N','T'],
-      f.output     = 'chi2_1_statistic';
-
-MERGE (f:Formula {id: 'f_layer_norm'})
-  SET f.name       = 'Layer Normalization',
-      f.expression = 'LN(x) = γ · (x - μ) / σ + β',
-      f.latex      = 'LN(\mathbf{x}) = \gamma \cdot \frac{\mathbf{x} - \mu}{\sigma} + \beta',
-      f.params     = ['x','γ','β','μ','σ'],
-      f.output     = 'normalised_activation';
-
-MERGE (f:Formula {id: 'f_picp'})
-  SET f.name       = 'Prediction Interval Coverage Probability',
-      f.expression = 'PICP = (1/T) · Σ 1{y_t ∈ [ŷ_low,t, ŷ_high,t]}',
-      f.latex      = 'PICP = \frac{1}{T}\sum_{t=1}^{T}\mathbf{1}\!\left\{y_t \in [\hat{y}^{low}_t,\,\hat{y}^{high}_t]\right\}',
-      f.params     = ['y_t','ŷ_low','ŷ_high','T'],
-      f.output     = 'empirical_coverage';
-
-MERGE (f:Formula {id: 'f_ledoit_wolf'})
-  SET f.name       = 'Ledoit-Wolf Shrinkage Estimator',
-      f.expression = 'Σ_LW = (1 - α) · S + α · μ_S · I',
-      f.latex      = '\hat{\Sigma}_{LW} = (1-\alpha)\,S + \alpha\,\mu_S\,I',
-      f.params     = ['S','α','μ_S'],
-      f.note       = 'α solved analytically; μ_S = trace(S)/n scales identity target',
-      f.output     = 'shrinkage_covariance';
-
-
+UNWIND [
+  {id: 'f_garch11', name: 'GARCH(1,1) Variance Recursion', expression: 'σ²_t = ω + α·ε²_{t-1} + β·σ²_{t-1}', latex: '\\sigma^2_t = \\omega + \\alpha\\,\\varepsilon^2_{t-1} + \\beta\\,\\sigma^2_{t-1}', params: ['ω','α','β','ε_t'], constraints: 'ω>0; α,β≥0; α+β<1 (stationarity)', output: 'conditional_variance'},
+  {id: 'f_bipower_variation', name: 'Bipower Variation', expression: 'BV = (π/2) · Σ_{t=2}^{T} |r_{t-1}| · |r_t|', latex: 'BV = \\frac{\\pi}{2}\\sum_{t=2}^{T}|r_{t-1}|\\cdot|r_t|', params: ['r_t','T'], output: 'integrated_variance_estimate'},
+  {id: 'f_jump_qv', name: 'Jump Quadratic Variation', expression: 'JV = RV - BV', latex: 'JV = RV - BV \\geq 0', params: ['RV','BV'], output: 'jump_variance'},
+  {id: 'f_kupiec_pof', name: 'Kupiec POF Likelihood Ratio', expression: 'LR_POF = -2·ln[(1-p)^(T-N)·p^N] + 2·ln[(1-N/T)^(T-N)·(N/T)^N]', latex: 'LR_{POF} = -2\\ln\\!\\left[(1-p)^{T-N}p^N\\right] + 2\\ln\\!\\left[\\left(1-\\tfrac{N}{T}\\right)^{T-N}\\!\\!\\left(\\tfrac{N}{T}\\right)^N\\right]', params: ['p','N','T'], output: 'chi2_1_statistic'},
+  {id: 'f_layer_norm', name: 'Layer Normalization', expression: 'LN(x) = γ · (x - μ) / σ + β', latex: 'LN(\\mathbf{x}) = \\gamma \\cdot \\frac{\\mathbf{x} - \\mu}{\\sigma} + \\beta', params: ['x','γ','β','μ','σ'], output: 'normalised_activation'},
+  {id: 'f_picp', name: 'Prediction Interval Coverage Probability', expression: 'PICP = (1/T) · Σ 1{y_t ∈ [ŷ_low,t, ŷ_high,t]}', latex: 'PICP = \\frac{1}{T}\\sum_{t=1}^{T}\\mathbf{1}\\!\\left\\{y_t \\in [\\hat{y}^{low}_t,\\,\\hat{y}^{high}_t]\\right\\}', params: ['y_t','ŷ_low','ŷ_high','T'], output: 'empirical_coverage'},
+  {id: 'f_ledoit_wolf', name: 'Ledoit-Wolf Shrinkage Estimator', expression: 'Σ_LW = (1 - α) · S + α · μ_S · I', latex: '\\hat{\\Sigma}_{LW} = (1-\\alpha)\\,S + \\alpha\\,\\mu_S\\,I', params: ['S','α','μ_S'], note: 'α solved analytically; μ_S = trace(S)/n scales identity target', output: 'shrinkage_covariance'}
+] AS data
+MERGE (f:Formula {id: data.id})
+SET f.name = data.name,
+    f.expression = data.expression,
+    f.latex = data.latex,
+    f.params = data.params,
+    f.output = data.output,
+    f.constraints = data.constraints,
+    f.note = data.note
+RETURN count(f) AS formulas_processed;
 // -----------------------------------------------------------------------------
 // M. CONCEPT → FORMULA RELATIONSHIPS (v0.5.1)
 // -----------------------------------------------------------------------------
@@ -4735,87 +4653,26 @@ MATCH (a:Concept {name:'Frechet Distribution'}), (b:Concept {name:'Gumbel Distri
 // N. FORMULA NODES — v0.6.0
 // -----------------------------------------------------------------------------
 
-MERGE (f:Formula {id: 'f_egarch'})
-  SET f.name       = 'EGARCH Log-Variance Equation',
-      f.expression = 'ln(σ²_t) = ω + β·ln(σ²_{t-1}) + γ·z_{t-1} + α·(|z_{t-1}| - E|z|)',
-      f.latex      = '\ln\sigma^2_t = \omega + \beta\ln\sigma^2_{t-1} + \gamma z_{t-1} + \alpha\!\left(|z_{t-1}| - \mathbb{E}|z|\right)',
-      f.params     = ['ω','β','γ','α','z_t'],
-      f.note       = 'z_t = ε_t/σ_t standardised innovation; γ<0 captures leverage effect; no non-negativity restrictions',
-      f.output     = 'log_conditional_variance';
-
-MERGE (f:Formula {id: 'f_gjr_garch'})
-  SET f.name       = 'GJR-GARCH Variance Equation',
-      f.expression = 'σ²_t = ω + (α + γ·I_{t-1})·ε²_{t-1} + β·σ²_{t-1}',
-      f.latex      = '\sigma^2_t = \omega + (\alpha + \gamma I_{t-1})\varepsilon^2_{t-1} + \beta\sigma^2_{t-1}',
-      f.params     = ['ω','α','γ','β','I_t'],
-      f.note       = 'I_{t-1}=1{ε_{t-1}<μ}; mean reversion: α+γ/2+β<1',
-      f.output     = 'conditional_variance';
-
-MERGE (f:Formula {id: 'f_gjr_unconditional'})
-  SET f.name       = 'GJR-GARCH Unconditional Variance',
-      f.expression = 'σ² = ω / (1 - α - β - γ/2)',
-      f.latex      = '\sigma^2 = \frac{\omega}{1 - \alpha - \beta - \gamma/2}',
-      f.params     = ['ω','α','β','γ'],
-      f.note       = 'Exists iff α+γ/2+β<1; ½ from symmetry of innovation distribution',
-      f.output     = 'unconditional_variance';
-
-MERGE (f:Formula {id: 'f_aparch'})
-  SET f.name       = 'APARCH Power Variance Equation',
-      f.expression = 'σ^δ_t = ω + Σᵢ αᵢ·(|ε_{t-i}| - γᵢ·ε_{t-i})^δ + Σⱼ βⱼ·σ^δ_{t-j}',
-      f.latex      = '\sigma^\delta_t = \omega + \sum_i \alpha_i(|\varepsilon_{t-i}| - \gamma_i\varepsilon_{t-i})^\delta + \sum_j \beta_j\sigma^\delta_{t-j}',
-      f.params     = ['ω','αᵢ','γᵢ','βⱼ','δ'],
-      f.note       = 'δ>0 free parameter; δ=2,γ=0→GARCH; δ=2→GJR; δ=0→EGARCH; empirical δ≈1.43-1.52 for US equities',
-      f.output     = 'power_conditional_variance';
-
-MERGE (f:Formula {id: 'f_gpd_var'})
-  SET f.name       = 'GPD-Based VaR Formula',
-      f.expression = 'VaR_p = u + (σ/ξ)·[(n/N_u·(1-p))^(-ξ) - 1]',
-      f.latex      = 'VaR_p = u + \frac{\sigma}{\xi}\!\left[\left(\frac{n}{N_u(1-p)}\right)^{-\xi} - 1\right]',
-      f.params     = ['u','σ','ξ','n','N_u','p'],
-      f.note       = 'u=threshold; N_u=exceedances above u; n=total obs; p=confidence level',
-      f.output     = 'var_quantile';
-
-MERGE (f:Formula {id: 'f_gpd_es'})
-  SET f.name       = 'GPD-Based Expected Shortfall',
-      f.expression = 'ES_p = (VaR_p + σ - ξ·u) / (1 - ξ)',
-      f.latex      = 'ES_p = \frac{VaR_p + \sigma - \xi u}{1 - \xi}',
-      f.params     = ['VaR_p','σ','ξ','u'],
-      f.note       = 'Valid for ξ<1; closed-form ES from GPD fit',
-      f.output     = 'expected_shortfall';
-
-MERGE (f:Formula {id: 'f_gev_cdf'})
-  SET f.name       = 'GEV Cumulative Distribution Function',
-      f.expression = 'F(x) = exp(-(1 + ξ·(x-μ)/σ)^(-1/ξ))',
-      f.latex      = 'F(x) = \exp\!\left(-\left(1 + \xi\,\frac{x-\mu}{\sigma}\right)^{-1/\xi}\right)',
-      f.params     = ['x','ξ','μ','σ'],
-      f.note       = 'ξ→0 limit gives Gumbel: exp(-exp(-(x-μ)/σ))',
-      f.output     = 'gev_cdf';
-
-MERGE (f:Formula {id: 'f_mean_excess'})
-  SET f.name       = 'Mean Excess Function (GPD Linearity)',
-      f.expression = 'e(u) = (σ + ξ·u) / (1 - ξ)',
-      f.latex      = 'e(u) = \frac{\sigma + \xi u}{1 - \xi}',
-      f.params     = ['σ','ξ','u'],
-      f.note       = 'Linear in u ⟺ exceedances follow GPD. Plot e(u) vs u; choose threshold u₀ where linearity begins',
-      f.output     = 'expected_exceedance';
-
-MERGE (f:Formula {id: 'f_mha'})
-  SET f.name       = 'Multi-Head Attention',
-      f.expression = 'MultiHead(Q,K,V) = Concat(head₁,...,headₕ)·W^O  where headᵢ = Attention(Q·Wᵢ^Q, K·Wᵢ^K, V·Wᵢ^V)',
-      f.latex      = '\text{MultiHead}(Q,K,V) = \text{Concat}(\text{head}_1,\ldots,\text{head}_h)W^O',
-      f.params     = ['Q','K','V','h','W^Q_i','W^K_i','W^V_i','W^O'],
-      f.note       = 'Batched implementation: each tensor is (batch_size, seq_len, embed_dim); h=5 in Multi-Transformer',
-      f.output     = 'multi_head_attention';
-
-MERGE (f:Formula {id: 'f_hill'})
-  SET f.name       = 'Hill Tail Index Estimator',
-      f.expression = 'ξ_Hill = (1/k) · Σᵢ₌₁ᵏ ln(X_{(n-i+1)} / X_{(n-k)})',
-      f.latex      = '\hat{\xi}_{Hill} = \frac{1}{k}\sum_{i=1}^{k}\ln\frac{X_{(n-i+1)}}{X_{(n-k)}}',
-      f.params     = ['X','k','n'],
-      f.note       = 'Valid for ξ>0 (Frechet MDA only); k choice is bias-variance tradeoff',
-      f.output     = 'tail_index';
-
-
+UNWIND [
+  {id: 'f_egarch', name: 'EGARCH Log-Variance Equation', expression: 'ln(σ²_t) = ω + β·ln(σ²_{t-1}) + γ·z_{t-1} + α·(|z_{t-1}| - E|z|)', latex: '\\ln\\sigma^2_t = \\omega + \\beta\\ln\\sigma^2_{t-1} + \\gamma z_{t-1} + \\alpha\\!\\left(|z_{t-1}| - \\mathbb{E}|z|\\right)', params: ['ω','β','γ','α','z_t'], note: 'z_t = ε_t/σ_t standardised innovation; γ<0 captures leverage effect; no non-negativity restrictions', output: 'log_conditional_variance'},
+  {id: 'f_gjr_garch', name: 'GJR-GARCH Variance Equation', expression: 'σ²_t = ω + (α + γ·I_{t-1})·ε²_{t-1} + β·σ²_{t-1}', latex: '\\sigma^2_t = \\omega + (\\alpha + \\gamma I_{t-1})\\varepsilon^2_{t-1} + \\beta\\sigma^2_{t-1}', params: ['ω','α','γ','β','I_t'], note: 'I_{t-1}=1{ε_{t-1}<μ}; mean reversion: α+γ/2+β<1', output: 'conditional_variance'},
+  {id: 'f_gjr_unconditional', name: 'GJR-GARCH Unconditional Variance', expression: 'σ² = ω / (1 - α - β - γ/2)', latex: '\\sigma^2 = \\frac{\\omega}{1 - \\alpha - \\beta - \\gamma/2}', params: ['ω','α','β','γ'], note: 'Exists iff α+γ/2+β<1; ½ from symmetry of innovation distribution', output: 'unconditional_variance'},
+  {id: 'f_aparch', name: 'APARCH Power Variance Equation', expression: 'σ^δ_t = ω + Σᵢ αᵢ·(|ε_{t-i}| - γᵢ·ε_{t-i})^δ + Σⱼ βⱼ·σ^δ_{t-j}', latex: '\\sigma^\\delta_t = \\omega + \\sum_i \\alpha_i(|\\varepsilon_{t-i}| - \\gamma_i\\varepsilon_{t-i})^\\delta + \\sum_j \\beta_j\\sigma^\\delta_{t-j}', params: ['ω','αᵢ','γᵢ','βⱼ','δ'], note: 'δ>0 free parameter; δ=2,γ=0→GARCH; δ=2→GJR; δ=0→EGARCH; empirical δ≈1.43-1.52 for US equities', output: 'power_conditional_variance'},
+  {id: 'f_gpd_var', name: 'GPD-Based VaR Formula', expression: 'VaR_p = u + (σ/ξ)·[(n/N_u·(1-p))^(-ξ) - 1]', latex: 'VaR_p = u + \\frac{\\sigma}{\\xi}\\!\\left[\\left(\\frac{n}{N_u(1-p)}\\right)^{-\\xi} - 1\\right]', params: ['u','σ','ξ','n','N_u','p'], note: 'u=threshold; N_u=exceedances above u; n=total obs; p=confidence level', output: 'var_quantile'},
+  {id: 'f_gpd_es', name: 'GPD-Based Expected Shortfall', expression: 'ES_p = (VaR_p + σ - ξ·u) / (1 - ξ)', latex: 'ES_p = \\frac{VaR_p + \\sigma - \\xi u}{1 - \\xi}', params: ['VaR_p','σ','ξ','u'], note: 'Valid for ξ<1; closed-form ES from GPD fit', output: 'expected_shortfall'},
+  {id: 'f_gev_cdf', name: 'GEV Cumulative Distribution Function', expression: 'F(x) = exp(-(1 + ξ·(x-μ)/σ)^(-1/ξ))', latex: 'F(x) = \\exp\\!\\left(-\\left(1 + \\xi\\,\\frac{x-\\mu}{\\sigma}\\right)^{-1/\\xi}\\right)', params: ['x','ξ','μ','σ'], note: 'ξ→0 limit gives Gumbel: exp(-exp(-(x-μ)/σ))', output: 'gev_cdf'},
+  {id: 'f_mean_excess', name: 'Mean Excess Function (GPD Linearity)', expression: 'e(u) = (σ + ξ·u) / (1 - ξ)', latex: 'e(u) = \\frac{\\sigma + \\xi u}{1 - \\xi}', params: ['σ','ξ','u'], note: 'Linear in u ⟺ exceedances follow GPD. Plot e(u) vs u; choose threshold u₀ where linearity begins', output: 'expected_exceedance'},
+  {id: 'f_mha', name: 'Multi-Head Attention', expression: 'MultiHead(Q,K,V) = Concat(head₁,...,headₕ)·W^O  where headᵢ = Attention(Q·Wᵢ^Q, K·Wᵢ^K, V·Wᵢ^V)', latex: '\\text{MultiHead}(Q,K,V) = \\text{Concat}(\\text{head}_1,\\ldots,\\text{head}_h)W^O', params: ['Q','K','V','h','W^Q_i','W^K_i','W^V_i','W^O'], note: 'Batched implementation: each tensor is (batch_size, seq_len, embed_dim); h=5 in Multi-Transformer', output: 'multi_head_attention'},
+  {id: 'f_hill', name: 'Hill Tail Index Estimator', expression: 'ξ_Hill = (1/k) · Σᵢ₌₁ᵏ ln(X_{(n-i+1)} / X_{(n-k)})', latex: '\\hat{\\xi}_{Hill} = \\frac{1}{k}\\sum_{i=1}^{k}\\ln\\frac{X_{(n-i+1)}}{X_{(n-k)}}', params: ['X','k','n'], note: 'Valid for ξ>0 (Frechet MDA only); k choice is bias-variance tradeoff', output: 'tail_index'}
+] AS data
+MERGE (f:Formula {id: data.id})
+SET f.name = data.name,
+    f.expression = data.expression,
+    f.latex = data.latex,
+    f.params = data.params,
+    f.output = data.output,
+    f.note = data.note
+RETURN count(f) AS formulas_processed;
 // -----------------------------------------------------------------------------
 // O. CONCEPT → FORMULA RELATIONSHIPS (v0.6.0)
 // -----------------------------------------------------------------------------
@@ -5329,38 +5186,20 @@ MATCH (a:Concept {name:'Fat Tails'}),                            (b:Concept {nam
 // J. FORMULA NODES — v0.7.0
 // -----------------------------------------------------------------------------
 
-MERGE (f:Formula {id: 'f_bayes'})
-  SET f.name       = 'Bayes Theorem',
-      f.expression = 'P(θ|X) = P(X|θ)·P(θ) / P(X)',
-      f.latex      = 'P(\theta|X) = \frac{P(X|\theta)\,P(\theta)}{P(X)}',
-      f.params     = ['θ','X'],
-      f.note       = 'P(θ)=prior; P(X|θ)=likelihood; P(X)=evidence (normalizing constant); P(θ|X)=posterior',
-      f.output     = 'posterior_distribution';
-
-MERGE (f:Formula {id: 'f_factor_posterior'})
-  SET f.name       = 'Factor Graph Posterior',
-      f.expression = 'P(x) = (1/Z) · ∏ₘ fₘ(xₘ)',
-      f.latex      = 'P(\mathbf{x}) \equiv \frac{1}{Z}P^*(\mathbf{x}) = \frac{1}{Z}\prod_{m=1}^{M}f_m(\mathbf{x}_m)',
-      f.params     = ['Z','fₘ','xₘ'],
-      f.note       = 'Z=partition function (normalizing constant); fₘ=factor m; product over all M factors',
-      f.output     = 'posterior_distribution';
-
-MERGE (f:Formula {id: 'f_bn_factorization'})
-  SET f.name       = 'Bayesian Network Joint Factorization',
-      f.expression = 'P(x₁,...,xₙ) = ∏ᵢ P(xᵢ | parents(xᵢ))',
-      f.latex      = 'P(x_1,\ldots,x_n) = \prod_{i=1}^{n} P\!\left(x_i \mid \text{pa}(x_i)\right)',
-      f.params     = ['xᵢ','parents(xᵢ)'],
-      f.note       = 'Chain rule on DAG topology; each node depends only on direct parents',
-      f.output     = 'joint_probability';
-
-MERGE (f:Formula {id: 'f_kde'})
-  SET f.name       = 'Kernel Density Estimator',
-      f.expression = 'f̂(x) = (1/(n·h)) · Σᵢ K((x - xᵢ)/h)',
-      f.latex      = '\hat{f}(x) = \frac{1}{nh}\sum_{i=1}^{n}K\!\left(\frac{x-x_i}{h}\right)',
-      f.params     = ['n','h','K','xᵢ'],
-      f.note       = 'h=bandwidth (smoothing parameter); K=kernel function (e.g. Gaussian); bias-variance tradeoff in h',
-      f.output     = 'density_estimate';
-
+UNWIND [
+  {id: 'f_bayes', name: 'Bayes Theorem', expression: 'P(θ|X) = P(X|θ)·P(θ) / P(X)', latex: 'P(\\theta|X) = \\frac{P(X|\\theta)\\,P(\\theta)}{P(X)}', params: ['θ','X'], note: 'P(θ)=prior; P(X|θ)=likelihood; P(X)=evidence (normalizing constant); P(θ|X)=posterior', output: 'posterior_distribution'},
+  {id: 'f_factor_posterior', name: 'Factor Graph Posterior', expression: 'P(x) = (1/Z) · ∏ₘ fₘ(xₘ)', latex: 'P(\\mathbf{x}) \\equiv \\frac{1}{Z}P^*(\\mathbf{x}) = \\frac{1}{Z}\\prod_{m=1}^{M}f_m(\\mathbf{x}_m)', params: ['Z','fₘ','xₘ'], note: 'Z=partition function (normalizing constant); fₘ=factor m; product over all M factors', output: 'posterior_distribution'},
+  {id: 'f_bn_factorization', name: 'Bayesian Network Joint Factorization', expression: 'P(x₁,...,xₙ) = ∏ᵢ P(xᵢ | parents(xᵢ))', latex: 'P(x_1,\\ldots,x_n) = \\prod_{i=1}^{n} P\\!\\left(x_i \\mid \\text{pa}(x_i)\\right)', params: ['xᵢ','parents(xᵢ)'], note: 'Chain rule on DAG topology; each node depends only on direct parents', output: 'joint_probability'},
+  {id: 'f_kde', name: 'Kernel Density Estimator', expression: 'f̂(x) = (1/(n·h)) · Σᵢ K((x - xᵢ)/h)', latex: '\\hat{f}(x) = \\frac{1}{nh}\\sum_{i=1}^{n}K\\!\\left(\\frac{x-x_i}{h}\\right)', params: ['n','h','K','xᵢ'], note: 'h=bandwidth (smoothing parameter); K=kernel function (e.g. Gaussian); bias-variance tradeoff in h', output: 'density_estimate'}
+] AS data
+MERGE (f:Formula {id: data.id})
+SET f.name = data.name,
+    f.expression = data.expression,
+    f.latex = data.latex,
+    f.params = data.params,
+    f.note = data.note,
+    f.output = data.output
+RETURN count(f) AS formulas_processed;
 
 // -----------------------------------------------------------------------------
 // K. CONCEPT → FORMULA RELATIONSHIPS (v0.7.0)
@@ -5691,40 +5530,20 @@ MERGE (c:Concept {name: 'Ancestral Sampling'})
       c.source       = 'Going Deeper with Bayesian Nets; WQU M6L4';
 
 // ── Formula nodes ─────────────────────────────────────────────────────────────
-MERGE (f:Formula {id: 'f_k2_score'})
-  SET f.name       = 'K2 Structure Score',
-      f.expression = 'Score_K2(G,D) = Σ_i Σ_j [ log(Γ(α_ij)/Γ(α_ij+N_ij)) + Σ_k log(Γ(α_ijk+N_ijk)/Γ(α_ijk)) ]',
-      f.latex      = 'f(x_i,\Pi_i,D)=\prod_{j=1}^{q_i}\frac{(r_i-1)!}{(N_{ij}+r_i-1)!}\prod_{k=1}^{r_i}N_{ijk}!',
-      f.params     = ['r_i','q_i','N_ijk','alpha_ijk'],
-      f.output     = 'structure_score';
-
-MERGE (f:Formula {id: 'f_bic_score'})
-  SET f.name       = 'BIC Structure Score',
-      f.expression = 'BIC(G,D) = log P(D|G,θ_MLE) - (d/2)·log(N)',
-      f.latex      = '\text{BIC}(G,D)=\ell(\hat{\theta}|D,G)-\frac{d}{2}\ln N',
-      f.params     = ['log_likelihood','d','N'],
-      f.output     = 'penalized_structure_score';
-
-MERGE (f:Formula {id: 'f_bdeu_score'})
-  SET f.name       = 'BDeu Structure Score',
-      f.expression = 'BDeu(G,D) = Σ_i Σ_j [ logΓ(α/q_i) - logΓ(α/q_i + N_ij) + Σ_k logΓ(α/(q_i·r_i) + N_ijk) - logΓ(α/(q_i·r_i)) ]',
-      f.latex      = '\sum_i\sum_j\left[\log\frac{\Gamma(\alpha/q_i)}{\Gamma(\alpha/q_i+N_{ij})}+\sum_k\log\frac{\Gamma(\alpha/(q_i r_i)+N_{ijk})}{\Gamma(\alpha/(q_i r_i))}\right]',
-      f.params     = ['alpha','q_i','r_i','N_ijk'],
-      f.output     = 'bayesian_structure_score';
-
-MERGE (f:Formula {id: 'f_mle_cpd'})
-  SET f.name       = 'MLE CPD Estimate',
-      f.expression = 'θ_ijk = N_ijk / N_ij',
-      f.latex      = '\hat{\theta}_{ijk}=\frac{N_{ijk}}{N_{ij}}',
-      f.params     = ['N_ijk','N_ij'],
-      f.output     = 'conditional_probability';
-
-MERGE (f:Formula {id: 'f_hmm_joint'})
-  SET f.name       = 'HMM Joint Distribution',
-      f.expression = 'P(X_{1:T},O_{1:T}) = P(X_1)·Π_t P(X_t|X_{t-1})·P(O_t|X_t)',
-      f.latex      = 'P(X_{1:T},O_{1:T})=P(X_1)\prod_{t=2}^T P(X_t|X_{t-1})\prod_{t=1}^T P(O_t|X_t)',
-      f.params     = ['X_t','O_t','T'],
-      f.output     = 'joint_probability_sequence';
+UNWIND [
+  {id: 'f_k2_score', name: 'K2 Structure Score', expression: 'Score_K2(G,D) = Σ_i Σ_j [ log(Γ(α_ij)/Γ(α_ij+N_ij)) + Σ_k log(Γ(α_ijk+N_ijk)/Γ(α_ijk)) ]', latex: 'f(x_i,\\Pi_i,D)=\\prod_{j=1}^{q_i}\\frac{(r_i-1)!}{(N_{ij}+r_i-1)!}\\prod_{k=1}^{r_i}N_{ijk}!', params: ['r_i','q_i','N_ijk','alpha_ijk'], output: 'structure_score'},
+  {id: 'f_bic_score', name: 'BIC Structure Score', expression: 'BIC(G,D) = log P(D|G,θ_MLE) - (d/2)·log(N)', latex: '\\text{BIC}(G,D)=\\ell(\\hat{\\theta}|D,G)-\\frac{d}{2}\\ln N', params: ['log_likelihood','d','N'], output: 'penalized_structure_score'},
+  {id: 'f_bdeu_score', name: 'BDeu Structure Score', expression: 'BDeu(G,D) = Σ_i Σ_j [ logΓ(α/q_i) - logΓ(α/q_i + N_ij) + Σ_k logΓ(α/(q_i·r_i) + N_ijk) - logΓ(α/(q_i·r_i)) ]', latex: '\\sum_i\\sum_j\\left[\\log\\frac{\\Gamma(\\alpha/q_i)}{\\Gamma(\\alpha/q_i+N_{ij})}+\\sum_k\\log\\frac{\\Gamma(\\alpha/(q_i r_i)+N_{ijk})}{\\Gamma(\\alpha/(q_i r_i))}\\right]', params: ['alpha','q_i','r_i','N_ijk'], output: 'bayesian_structure_score'},
+  {id: 'f_mle_cpd', name: 'MLE CPD Estimate', expression: 'θ_ijk = N_ijk / N_ij', latex: '\\hat{\\theta}_{ijk}=\\frac{N_{ijk}}{N_{ij}}', params: ['N_ijk','N_ij'], output: 'conditional_probability'},
+  {id: 'f_hmm_joint', name: 'HMM Joint Distribution', expression: 'P(X_{1:T},O_{1:T}) = P(X_1)·Π_t P(X_t|X_{t-1})·P(O_t|X_t)', latex: 'P(X_{1:T},O_{1:T})=P(X_1)\\prod_{t=2}^T P(X_t|X_{t-1})\\prod_{t=1}^T P(O_t|X_t)', params: ['X_t','O_t','T'], output: 'joint_probability_sequence'}
+] AS data
+MERGE (f:Formula {id: data.id})
+SET f.name = data.name,
+    f.expression = data.expression,
+    f.latex = data.latex,
+    f.params = data.params,
+    f.output = data.output
+RETURN count(f) AS formulas_processed;
 
 // ── BELONGS_TO ────────────────────────────────────────────────────────────────
 MATCH (c:Concept {name:'D-Separation'}), (cat:Category {name:'bayesian_networks'}) MERGE (c)-[:BELONGS_TO]->(cat);

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphalpha.dev/schemas/order_schema_v1.json",
+  "$comment": "Versioned ApprovedOrder contract for C++ RiskEngine -> ExecutionEngine boundary. Any schema change increments $version below.",
+  "version": "1.0.0",
+  "title": "ApprovedOrder",
+  "description": "Schema v1: A single, versioned definition of what a risk-approved order looks like as it leaves the RiskEngine.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "order_id",
+    "cycle_id",
+    "ticker",
+    "venue",
+    "venue_symbol",
+    "direction",
+    "quantity",
+    "notional_usd",
+    "kelly_fraction",
+    "var_contribution_pct",
+    "mode",
+    "risk_checks"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version. Must equal 1 in this phase. Consumers reject any other value."
+    },
+    "order_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique order identifier."
+    },
+    "cycle_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID shared with the originating Signal (enables traceability/parity testing)."
+    },
+    "ticker": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Primary instrument ticker."
+    },
+    "venue": {
+      "type": "string",
+      "enum": ["kraken", "ibkr"],
+      "description": "Execution venue."
+    },
+    "venue_symbol": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Venue-specific symbol (Kraken pair or IBKR contract identifier)."
+    },
+    "direction": {
+      "type": "string",
+      "enum": ["buy", "sell"],
+      "description": "Order direction. 'hold' orders are never emitted."
+    },
+    "quantity": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Order quantity in units of the instrument. Strictly positive."
+    },
+    "notional_usd": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Notional value in USD. Strictly positive."
+    },
+    "kelly_fraction": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 0.5,
+      "description": "Half-Kelly fraction used for sizing. Bounded to [0, 0.5]."
+    },
+    "var_contribution_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Marginal VaR contribution as a fraction of NAV. Bounded to [0, 1]."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["paper", "live"],
+      "description": "Execution mode."
+    },
+    "risk_checks": {
+      "type": "object",
+      "description": "Outcome of all risk checks. All must be true for the order to exist.",
+      "required": ["position_pct_ok", "sector_pct_ok", "var_ok"],
+      "properties": {
+        "position_pct_ok": {
+          "type": "boolean",
+          "description": "True if target notional respects AGENT_MAX_POSITION_PCT."
+        },
+        "sector_pct_ok": {
+          "type": "boolean",
+          "description": "True if sector concentration respects RISK_MAX_SECTOR_PCT."
+        },
+        "var_ok": {
+          "type": "boolean",
+          "description": "True if marginal VaR contribution respects RISK_MAX_VAR_PCT."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "if": {
+    "properties": { "venue": { "const": "ibkr" } }
+  },
+  "then": {
+    "properties": { "mode": { "const": "paper" } },
+    "description": "IBKR orders must always be paper in this phase. Hard-coded into schema, not left to downstream checks."
+  }
+}

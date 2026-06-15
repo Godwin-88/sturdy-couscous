@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphalpha.dev/schemas/signal_schema_v1.json",
+  "$comment": "Versioned Signal contract for Python <-> C++ boundary. Any schema change increments $version below. Do not hand-maintain parallel definitions.",
+  "version": "1.0.0",
+  "title": "Signal",
+  "description": "Schema v1: A single, versioned definition of what a trading signal looks like as it crosses from the Python research/agent layer into the C++ risk/execution layer.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "cycle_id",
+    "timestamp",
+    "regime",
+    "strategy",
+    "ticker",
+    "venue",
+    "venue_symbol",
+    "asset_class",
+    "direction",
+    "score",
+    "quant_score",
+    "sentiment_score",
+    "news_overlay",
+    "macro_overlay",
+    "kg_formula_contribution",
+    "graph_path",
+    "contradiction_blocked"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version. Must equal 1 in this phase. Consumers reject any other value."
+    },
+    "cycle_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID shared across all signals emitted in one orchestrator cycle (enables grouping/joining downstream)."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of signal emission."
+    },
+    "regime": {
+      "type": "string",
+      "description": "Market regime at emission time. Must match a :Regime node name in master.cypher.",
+      "enum": [
+        "Trending",
+        "MeanReverting",
+        "HighVolatility",
+        "LowVolatility",
+        "Crisis",
+        "SystemicStress",
+        "Recovery"
+      ]
+    },
+    "strategy": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Strategy name that generated the signal."
+    },
+    "ticker": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Primary instrument ticker (e.g., 'SPY', 'BTC-USD')."
+    },
+    "venue": {
+      "type": "string",
+      "enum": ["kraken", "ibkr"],
+      "description": "Execution venue. Must be consistent with asset_class per cross-check rules."
+    },
+    "venue_symbol": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Venue-specific symbol (Kraken pair like 'XLEUSD' or IBKR contract like 'XLE/SMART/USD')."
+    },
+    "asset_class": {
+      "type": "string",
+      "enum": ["equity_xstock", "crypto", "macro_proxy"],
+      "description": "Asset class for routing and risk-parameter selection."
+    },
+    "direction": {
+      "type": "string",
+      "enum": ["buy", "sell", "hold"],
+      "description": "Signal direction. 'hold' implies |score| below the fused-score threshold."
+    },
+    "score": {
+      "type": "number",
+      "minimum": -1.0,
+      "maximum": 1.0,
+      "description": "Final fused score after applying news_overlay and macro_overlay to the 70/30 quant/sentiment fusion."
+    },
+    "quant_score": {
+      "type": "number",
+      "minimum": -1.0,
+      "maximum": 1.0,
+      "description": "Quantitative model score (70% weight in fusion)."
+    },
+    "sentiment_score": {
+      "type": "number",
+      "minimum": -1.0,
+      "maximum": 1.0,
+      "description": "LLM sentiment score (30% weight in fusion)."
+    },
+    "news_overlay": {
+      "type": "number",
+      "minimum": -1.0,
+      "maximum": 1.0,
+      "default": 0.0,
+      "description": "News sentiment boost/penalty applied to score. Bounded to [-1,1]."
+    },
+    "macro_overlay": {
+      "type": "number",
+      "minimum": -1.0,
+      "maximum": 1.0,
+      "default": 0.0,
+      "description": "Macro calendar pre-event size modifier applied to score. Bounded to [-1,1]."
+    },
+    "kg_formula_contribution": {
+      "type": "number",
+      "minimum": -1.0,
+      "maximum": 1.0,
+      "default": 0.0,
+      "description": "KG SignalGenerator formula evaluation contribution. Bounded to [-1,1]."
+    },
+    "graph_path": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "KG traversal path for audit trail. Currently emitted as a list of Concept node names by SignalAgent. The schema accepts any string array; downstream consumers should not assume alternating Concept/Relationship structure unless the emitter is updated."
+    },
+    "contradiction_blocked": {
+      "type": "boolean",
+      "description": "True if the signal was blocked by a CONTRADICTED_BY edge in the KG."
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "asset_class": { "const": "crypto" } }
+      },
+      "then": {
+        "properties": { "venue": { "not": { "const": "ibkr" } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "asset_class": { "enum": ["equity_xstock", "macro_proxy"] } }
+      },
+      "then": {
+        "properties": { "venue": { "not": { "const": "kraken" } } }
+      }
+    }
+  ]
+}
