@@ -189,14 +189,13 @@ class TestReplayExport(unittest.TestCase):
     def test_deterministic_export(self):
         with tempfile.TemporaryDirectory() as tmp:
             signals = [_make_signal({"cycle_id": f"c{i:02d}"}) for i in range(3)]
-            metadata = {"use_graph": True, "instrument_universe": ["SPY", "QQQ"]}
             out = Path(tmp) / "replay.jsonl"
-            export_signals(signals, metadata, out)
+            export_signals(signals, out, "run1", use_graph=True, tickers=["SPY", "QQQ"])
             lines = out.read_text().splitlines()
             self.assertEqual(lines[0][:7], "# META ")
             self.assertEqual(len(lines), 4)  # 1 header + 3 signals
             second = Path(tmp) / "replay2.jsonl"
-            export_signals(signals, metadata, second)
+            export_signals(signals, second, "run1", use_graph=True, tickers=["SPY", "QQQ"])
             second_lines = second.read_text().splitlines()
             self.assertEqual(lines[0][:7], second_lines[0][:7])  # both start with # META
             self.assertEqual(lines[1:], second_lines[1:])  # signal lines are byte-identical
@@ -205,7 +204,7 @@ class TestReplayExport(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             signals = [_make_signal()]
             out = Path(tmp) / "meta.jsonl"
-            export_signals(signals, {"use_graph": False, "instrument_universe": []}, out)
+            export_signals(signals, out, "run1", use_graph=False, tickers=[])
             header_line = out.read_text().splitlines()[0]
             self.assertEqual(header_line[:7], "# META ")
             meta = json.loads(header_line[7:])
@@ -217,12 +216,12 @@ class TestReplayExport(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             signals = [_make_signal({"score": 9.0})]
             with self.assertRaises(ValueError, msg="validation failed"):
-                export_signals(signals, {}, Path(tmp) / "bad.jsonl")
+                export_signals(signals, Path(tmp) / "bad.jsonl", "run1")
 
     def test_empty_list_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ValueError, msg="empty signal list"):
-                export_signals([], {}, Path(tmp) / "empty.jsonl")
+                export_signals([], Path(tmp) / "empty.jsonl", "run1")
 
 
 if __name__ == "__main__":

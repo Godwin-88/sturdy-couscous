@@ -16,11 +16,12 @@ import psycopg2
 from loguru import logger
 
 
-MAX_POSITION_PCT   = float(os.getenv("AGENT_MAX_POSITION_PCT",  "0.20"))   # 20% per position
-MAX_SECTOR_PCT     = float(os.getenv("RISK_MAX_SECTOR_PCT",     "0.40"))      # 40% per sector
+MAX_POSITION_PCT   = float(os.getenv("AGENT_MAX_POSITION_PCT",  "0.20"))
+MAX_SECTOR_PCT     = float(os.getenv("RISK_MAX_SECTOR_PCT",     "0.40"))
 VAR_CONFIDENCE     = float(os.getenv("RISK_VAR_CONFIDENCE",     "0.99"))
-MAX_VAR_PCT        = float(os.getenv("RISK_MAX_VAR_PCT",        "0.05"))         # 5% daily VaR limit
+MAX_VAR_PCT        = float(os.getenv("RISK_MAX_VAR_PCT",        "0.05"))
 INITIAL_CAPITAL    = float(os.getenv("INITIAL_CAPITAL_USD", 10000))
+SHADOW_MODE        = os.getenv("SHADOW_MODE", "false").lower() == "true"
 
 SECTOR_MAP = {
     "SPY": "equity_broad",
@@ -41,7 +42,7 @@ class RiskAgent:
             f"password={os.getenv('POSTGRES_PASSWORD', '')}"
         )
 
-    async def run(self, signals: list[dict]) -> list[dict]:
+    async def run(self, signals: list[dict], cycle_id: str = "") -> list[dict]:
         """Validate and size each signal. Returns approved orders only."""
         portfolio = await self.get_portfolio_state()
         nav       = portfolio["nav"]
@@ -63,33 +64,45 @@ class RiskAgent:
             )
             if sector_exposure + target_notional > nav * MAX_SECTOR_PCT:
                 logger.warning(f"Rejected {ticker}: sector {sector} concentration limit")
+                self._write_shadow(cycle_id, sig, {"action": "reject", "reason": "sector_cap"}, nav)
                 continue
 
             var_contrib = self._marginal_var(ticker, target_notional, nav, prices_cache)
             if var_contrib > nav * MAX_VAR_PCT:
                 logger.warning(f"Rejected {ticker}: VaR contribution {var_contrib:.2f} "
                                f"> limit {nav * MAX_VAR_PCT:.2f}")
+                self._write_shadow(cycle_id, sig, {"action": "reject", "reason": "var_cap"}, nav)
                 continue
 
             price = self._get_price(ticker, prices_cache)
             if price <= 0:
                 logger.warning(f"Rejected {ticker}: no valid price")
+                self._write_shadow(cycle_id, sig, {"action": "reject", "reason": "no_price"}, nav)
                 continue
 
             qty = target_notional / price
             if qty < 0.0001:
                 continue
 
+            decision = {
+                "action": "approve",
+                "quantity": round(qty, 6),
+                "notional_usd": round(target_notional, 2),
+                "kelly_fraction": round(kelly_fraction, 4),
+                "var_contribution_pct": round(var_contrib / max(nav, 1e-9), 4),
+                "price_estimate": round(price, 4),
+            }
+
             order = {
                 **sig,
                 "order_id":        str(__import__("uuid").uuid4()),
-                "cycle_id":        sig.get("cycle_id", ""),
-                "quantity":        round(qty, 6),
-                "notional_usd":    round(target_notional, 2),
-                "kelly_fraction":  round(kelly_fraction, 4),
+                "cycle_id":        sig.get("cycle_id", cycle_id),
+                "quantity":        decision["quantity"],
+                "notional_usd":    decision["notional_usd"],
+                "kelly_fraction":  decision["kelly_fraction"],
                 "var_contribution": round(var_contrib, 2),
-                "var_contribution_pct": round(var_contrib / max(nav, 1e-9), 4),
-                "price_estimate":  round(price, 4),
+                "var_contribution_pct": decision["var_contribution_pct"],
+                "price_estimate":  decision["price_estimate"],
                 "risk_checks": {
                     "position_pct_ok": True,
                     "sector_pct_ok": sector_exposure + target_notional <= nav * MAX_SECTOR_PCT,
@@ -100,11 +113,44 @@ class RiskAgent:
             try:
                 validate_order(order)
             except ValueError:
+                self._write_shadow(cycle_id, sig, {"action": "reject", "reason": "schema_validation"}, nav)
                 continue
+
+            self._write_shadow(cycle_id, sig, decision, nav)
             approved.append(order)
 
         logger.info(f"Risk: {len(approved)}/{len(signals)} signals approved")
         return approved
+
+    def _write_shadow(self, cycle_id: str, signal: dict, decision: dict, nav: float) -> None:
+        if not SHADOW_MODE:
+            return
+        if not cycle_id:
+            return
+        try:
+            import json
+            import psycopg2.extras
+            conn = psycopg2.connect(self._db_conn_str)
+            cur = conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO shadow_comparison
+                  (cycle_id, ticker, strategy, signal, python_decision)
+                VALUES (%s, %s, %s, %s::jsonb, %s::jsonb)
+                """,
+                (
+                    cycle_id,
+                    signal.get("ticker", ""),
+                    signal.get("strategy", ""),
+                    json.dumps(signal),
+                    json.dumps(decision),
+                ),
+            )
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as exc:
+            logger.debug(f"shadow_comparison write skipped: {exc}")
 
     # ── Portfolio state ───────────────────────────────────────────────────────
     async def get_portfolio_state(self) -> dict:

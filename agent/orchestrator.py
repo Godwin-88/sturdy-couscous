@@ -35,6 +35,7 @@ from macro_calendar import MacroCalendarAgent
 from kg_signal_generator import KGSignalGenerator
 from common.schema_validator import validate_signal
 from common.versioning import validate_schema_version
+from common.redis_publisher import publish_signal_batch, publish_heartbeat
 
 load_dotenv()
 
@@ -147,7 +148,7 @@ class Orchestrator:
             if macro_result.get("pre_event_signals"):
                 signals = self._apply_macro_overlay(signals, macro_result["pre_event_signals"])
 
-            # Schema v1 injection: stamp every signal with canonical fields before RiskAgent
+            # Schema v1 injection (final): stamp canonical fields before RiskAgent
             signals = self._inject_schema_v1(signals, cycle_id, timestamp)
 
             audit["signals"] = signals
@@ -160,7 +161,7 @@ class Orchestrator:
             await self._cache_signals(signals)
 
             # ── Step 4: Risk validation ────────────────────────────────────────
-            approved_orders = await self.risk_agent.run(signals=signals)
+            approved_orders = await self.risk_agent.run(signals=signals, cycle_id=cycle_id)
             audit["approved_orders"] = approved_orders
             audit["steps"].append({"agent": "RiskAgent", "status": "ok",
                                    "approved": len(approved_orders),
@@ -172,6 +173,15 @@ class Orchestrator:
                 regime_result, signals, approved_orders,
                 time.time() - cycle_start
             )
+
+            # Publish validated signals to C++ risk engine (fire-and-forget)
+            asyncio.create_task(self._publish_signals(signals, cycle_id))
+
+            # Publish heartbeat so ops can distinguish quiet cycles from stalls
+            asyncio.create_task(publish_heartbeat(
+                cycle_id,
+                f"cycle_complete:{len(signals)}_signals:{len(approved_orders)}_orders"
+            ))
 
             # ── Step 5: Execution ──────────────────────────────────────────────
             if not self.halted and approved_orders:
@@ -311,8 +321,13 @@ class Orchestrator:
         return (f"redis://{os.getenv('REDIS_HOST', 'redis')}:"
                 f"{os.getenv('REDIS_PORT', 6379)}")
 
+    async def _publish_signals(self, signals: list[dict], cycle_id: str) -> None:
+        published = await publish_signal_batch(signals)
+        logger.debug(f"Redis publish: {published}/{len(signals)} signals written to "
+                     f"{os.getenv('REDIS_SIGNALS_CHANNEL', 'graphalpha:signals:v1')}")
+
     async def _write_status(self, regime_result: dict, signals: list,
-                             approved: list, duration: float):
+                             approved: list, duration: float, cycle_id: str = ""):
         r = aioredis.from_url(self._redis_url())
         status = {
             "regime":            regime_result["regime"],

@@ -96,7 +96,7 @@ class EventEngineTestCase(unittest.TestCase):
         self.assertGreater(len(ee.signals), 0)
         for sig in ee.signals:
             self.assertEqual(sig.schema_version, 1)
-            self.assertIn(sig.regime, {"Trending", "BearMarket", "LowVolatility", "HighVolatility", "SystemicStress", "Crisis", "Recovery"})
+            self.assertIn(sig.regime, {"Trending", "MeanReverting", "LowVolatility", "HighVolatility", "SystemicStress", "Crisis", "Recovery"})
 
     def test_no_graph_generates_signals(self):
         from backtest.event_engine import EventEngine

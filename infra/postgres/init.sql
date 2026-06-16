@@ -29,8 +29,9 @@ CREATE TABLE IF NOT EXISTS order_audit (
     signal_score     NUMERIC(8,4),
     kelly_fraction   NUMERIC(8,4),
     var_contribution NUMERIC(12,2),
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    raw_response     JSONB
+    rejection_reason TEXT,
+    raw_response     JSONB,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_order_audit_created ON order_audit(created_at DESC);
@@ -78,3 +79,34 @@ CREATE TABLE IF NOT EXISTS agent_cycle_log (
     halted           BOOLEAN DEFAULT FALSE,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS shadow_comparison (
+    id              SERIAL PRIMARY KEY,
+    cycle_id        UUID NOT NULL,
+    ticker          VARCHAR(20) NOT NULL,
+    strategy        VARCHAR(255),
+    signal          JSONB NOT NULL,
+    python_decision JSONB,
+    cpp_decision    JSONB,
+    raw_discrepancy JSONB,
+    discrepancy     BOOLEAN GENERATED ALWAYS AS (
+                       (python_decision IS NULL AND cpp_decision IS NULL)
+                       OR (
+                         python_decision->>'action' IS NOT DISTINCT FROM cpp_decision->>'action'
+                         AND (
+                           python_decision->>'kelly_fraction' IS NULL
+                           OR cpp_decision->>'kelly_fraction' IS NULL
+                           OR ABS((python_decision->>'kelly_fraction')::float - (cpp_decision->>'kelly_fraction')::float) <= 1e-6
+                         )
+                         AND (
+                           python_decision->>'notional_usd' IS NULL
+                           OR cpp_decision->>'notional_usd' IS NULL
+                           OR ABS((python_decision->>'notional_usd')::float - (cpp_decision->>'notional_usd')::float) <= 1e-6
+                         )
+                       )
+                     ) STORED,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_shadow_cycle ON shadow_comparison(cycle_id);
+CREATE INDEX IF NOT EXISTS idx_shadow_discrepancy ON shadow_comparison(discrepancy) WHERE discrepancy = false;

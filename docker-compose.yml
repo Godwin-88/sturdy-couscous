@@ -138,6 +138,30 @@ services:
       - backtest_results:/app/backtest/results
     profiles: ["backtest"]          # only starts with: docker compose --profile backtest up
 
+  # ── C++ Risk & Execution Engine ──────────────────────────────────────────────
+  risk-engine:
+    build:
+      context: .
+      dockerfile: cpp-risk/Dockerfile
+    container_name: graphalpha-risk-engine
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-graphalpha}
+      POSTGRES_USER: ${POSTGRES_USER:-graphalpha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - ./tests/fixtures:/workspace/tests/fixtures:ro
+    profiles: ["cpp"]
+    command: /workspace/cpp-risk/build/risk-engine /workspace/tests/fixtures/baseline_portfolio.json
+
   # ── Monitoring ────────────────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest

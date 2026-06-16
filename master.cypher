@@ -15,7 +15,7 @@
 //   Formula          — mathematical formula attached to a concept
 //   Strategy         — tradeable strategy node (instantiated from Concepts)
 //   Parameter        — named parameter within a formula or strategy
-//   Regime           — detected market regime (Trending, MeanReverting, HighVol, etc.)
+//   Regime           — detected market regime (Trending, MeanReverting, HighVol, etc.) — 8 total
 //   Signal           — live runtime signal emitted by the agent
 //   Ticker           — xStock/equity instrument
 //   Position         — open trade position
@@ -95,7 +95,9 @@ MERGE (:Regime {name: 'MeanReverting',   description: 'Oscillating prices, high 
 MERGE (:Regime {name: 'HighVolatility',  description: 'Elevated realized vol, regime uncertainty',          momentum_score: 0.5, vol_level: 'high'});
 MERGE (:Regime {name: 'LowVolatility',   description: 'Compressed vol, range-bound, carry-favourable',      momentum_score: 0.3, vol_level: 'low'});
 MERGE (:Regime {name: 'Crisis',          description: 'Fat tails, correlation spike, liquidity stress',     momentum_score: 0.1, vol_level: 'extreme'});
+MERGE (:Regime {name: 'SystemicStress',  description: 'Densifying interbank network, rising contagion probability, shadow banking expansion, pre-crisis liquidity pressure', momentum_score: 0.15, vol_level: 'extreme'});
 MERGE (:Regime {name: 'Recovery',        description: 'Post-crisis mean-reversion with rising vol of vol',  momentum_score: 0.6, vol_level: 'medium'});
+MERGE (:Regime {name: 'Neutral',         description: 'Default baseline, no strong directional or vol signal', momentum_score: 0.5, vol_level: 'medium'});
 
 
 // -----------------------------------------------------------------------------

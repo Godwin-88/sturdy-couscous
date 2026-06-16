@@ -86,7 +86,7 @@ class EventEngine:
         self._position_counter: int = 0
         self._kg_cache: dict[str, list[str]] = {}
         self._contradiction_cache: list[tuple] = []
-        self._current_regime = "LowVolatility"
+        self._current_regime = "Neutral"
         self._regime_series: pd.Series | None = None
         self.price_cache: dict[str, pd.Series] = {}
         self.nav: float = capital
@@ -131,20 +131,25 @@ class EventEngine:
         w = prices.iloc[max(0, idx - 252):idx + 1]
         spy = w.get("SPY", pd.Series(dtype=float))
         vix = w.get("^VIX", pd.Series(dtype=float))
+        hyg = w.get("HYG", pd.Series(dtype=float))
         if spy.empty or len(spy) < 22:
             return "LowVolatility"
         vix_now = float(vix.iloc[-1]) if not vix.empty else 20.0
         ret_21 = float(spy.pct_change(21).iloc[-1]) if len(spy) > 21 else 0.0
         vol_21 = float(spy.pct_change().rolling(21).std().iloc[-1] * np.sqrt(252)) if len(spy) > 21 else 0.1
         ma_200 = float(spy.rolling(200).mean().iloc[-1]) if len(spy) >= 200 else float(spy.mean())
-        if vix_now > 35:
+        hyg_dd = 0.0
+        if not hyg.empty:
+            hyg_peak = hyg.rolling(63).max().iloc[-1]
+            hyg_dd = (hyg_peak - hyg.iloc[-1]) / hyg_peak
+        if vix_now > 35 or hyg_dd > 0.06:
             return "SystemicStress"
         if vix_now > 25 and ret_21 < -0.05:
             return "Crisis"
         if vol_21 > 0.25:
             return "HighVolatility"
         if spy.iloc[-1] < ma_200 * 0.95:
-            return "BearMarket"
+            return "Crisis"
         if ret_21 > 0.03 and vix_now < 18:
             return "Trending"
         return "LowVolatility"

@@ -15,8 +15,8 @@ from loguru import logger
 
 
 REGIME_NAMES = [
-    "BullMarket", "BearMarket", "HighVolatility",
-    "LowVolatility", "SystemicStress", "CrisisRegime", "RecoveryRegime"
+    "Trending", "MeanReverting", "HighVolatility",
+    "LowVolatility", "Crisis", "SystemicStress", "Recovery", "Neutral"
 ]
 
 
@@ -69,16 +69,16 @@ class RegimeAgent:
         if vix_now > 35 or hyg_dd > 0.06:
             return "SystemicStress"
         if vix_now > 25 and ret_21 < -0.05:
-            return "CrisisRegime"
+            return "Crisis"
         if vol_21 > 0.25:
             return "HighVolatility"
         if spy.iloc[-1] < ma_200 * 0.95:
-            return "BearMarket"
+            return "Crisis"
         if ret_21 > 0.03 and vix_now < 18:
-            return "BullMarket"
+            return "Trending"
         if ret_21 > 0.0 and vix_now < vix_ma_30:
-            return "RecoveryRegime"
-        return "LowVolatility"
+            return "Recovery"
+        return "Neutral"
 
     def _regime_confidence(self, prices: pd.DataFrame, regime: str) -> float:
         """Simple confidence: how far are we from the nearest regime boundary?"""
@@ -89,7 +89,7 @@ class RegimeAgent:
             return min(1.0, (vix - 35) / 15 + 0.6)
         if regime == "HighVolatility":
             return min(1.0, (vol - 0.20) / 0.10 + 0.6)
-        if regime == "BullMarket":
+        if regime == "Trending":
             spy = prices["SPY"]
             dist = (spy.iloc[-1] / spy.rolling(200).mean().iloc[-1]) - 1
             return min(1.0, dist / 0.10 + 0.6)

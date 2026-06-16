@@ -72,10 +72,10 @@ def classify_regime(prices, idx):
     vol_21  = spy.pct_change().rolling(21).std().iloc[-1] * np.sqrt(252)
     ma_200  = spy.rolling(200).mean().iloc[-1] if len(spy) >= 200 else spy.mean()
     if vix_now > 35:           return "SystemicStress"
-    if vix_now > 25 and ret_21 < -0.05: return "CrisisRegime"
+    if vix_now > 25 and ret_21 < -0.05: return "Crisis"
     if vol_21 > 0.25:          return "HighVolatility"
-    if spy.iloc[-1] < ma_200 * 0.95: return "BearMarket"
-    if ret_21 > 0.03 and vix_now < 18: return "BullMarket"
+    if spy.iloc[-1] < ma_200 * 0.95: return "Crisis"
+    if ret_21 > 0.03 and vix_now < 18: return "Trending"
     return "LowVolatility"
 
 

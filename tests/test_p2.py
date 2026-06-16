@@ -82,13 +82,13 @@ class BreakdownByRegimeTest(unittest.TestCase):
     def test_groups(self):
         from backtest.metrics_breakdown import breakdown_by_regime
         trades = [
-            {"pnl": 10.0, "regime_at_entry": "BullMarket", "entry_ts": "2022-01-01", "exit_ts": "2022-01-05"},
-            {"pnl": -5.0, "regime_at_entry": "BearMarket", "entry_ts": "2022-02-01", "exit_ts": "2022-02-10"},
-            {"pnl": 3.0,  "regime_at_entry": "BullMarket", "entry_ts": "2022-03-01", "exit_ts": "2022-03-05"},
+            {"pnl": 10.0, "regime_at_entry": "Trending", "entry_ts": "2022-01-01", "exit_ts": "2022-01-05"},
+            {"pnl": -5.0, "regime_at_entry": "Crisis", "entry_ts": "2022-02-01", "exit_ts": "2022-02-10"},
+            {"pnl": 3.0,  "regime_at_entry": "Trending", "entry_ts": "2022-03-01", "exit_ts": "2022-03-05"},
         ]
         out = breakdown_by_regime(trades)
-        self.assertIn("BullMarket", out)
-        self.assertIn("BearMarket", out)
+        self.assertIn("Trending", out)
+        self.assertIn("Crisis", out)
 
 
 class BreakdownByOverlayConfigTest(unittest.TestCase):
