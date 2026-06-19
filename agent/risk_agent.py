@@ -137,6 +137,9 @@ class RiskAgent:
                 INSERT INTO shadow_comparison
                   (cycle_id, ticker, strategy, signal, python_decision)
                 VALUES (%s, %s, %s, %s::jsonb, %s::jsonb)
+                ON CONFLICT (cycle_id, ticker, strategy) DO UPDATE SET
+                  python_decision = EXCLUDED.python_decision,
+                  signal = EXCLUDED.signal
                 """,
                 (
                     cycle_id,

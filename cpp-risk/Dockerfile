@@ -1,3 +1,4 @@
+# P5 rebuild
 FROM ubuntu:22.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -10,4 +11,4 @@ COPY cpp-risk/ ./cpp-risk/
 COPY tests/fixtures/ ./tests/fixtures/
 
 RUN cd cpp-risk && rm -rf build && mkdir -p build && cd build && \
-    cmake .. && cmake --build . && ctest --output-on-failure
+    cmake .. && cmake --build . --clean-first && ctest --output-on-failure

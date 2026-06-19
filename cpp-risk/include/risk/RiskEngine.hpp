@@ -23,6 +23,7 @@ struct PortfolioState {
   double nav = 0.0;
   double cash = 0.0;
   double drawdown_from_peak = 0.0;
+  bool halted = false;
   std::vector<Position> positions;
 };
 

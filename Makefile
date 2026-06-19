@@ -1,4 +1,4 @@
-.PHONY: up down logs load-graph verify shell-memgraph shell-api test backtest deploy
+.PHONY: up down logs load-graph verify shell-memgraph shell-api test backtest deploy up-risk-engine
 
 # ── Local development ─────────────────────────────────────────────────────────
 up:
@@ -11,6 +11,23 @@ up:
 	@echo "  Frontend : http://localhost:5173"
 	@echo "  API      : http://localhost:8000/docs"
 	@echo "  Memgraph : http://localhost:3000"
+
+up-risk-engine:
+	@echo "Starting risk-engine service..."
+	docker compose --profile cpp up -d --build risk-engine
+	@echo "risk-engine started. Logs: docker compose logs risk-engine"
+
+up-all:
+	@echo "Building and starting all services..."
+	docker compose up -d --build
+	@echo "Waiting for graph loader..."
+	@docker compose run --rm graph-loader
+	@echo ""
+	@echo "GraphAlpha is running:"
+	@echo "  Frontend     : http://localhost:5173"
+	@echo "  API          : http://localhost:8000/docs"
+	@echo "  Memgraph     : http://localhost:3000"
+	@echo "  RiskEngine   : see docker compose logs risk-engine"
 
 up-monitoring:
 	docker compose --profile monitoring up -d --build

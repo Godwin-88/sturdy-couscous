@@ -49,6 +49,7 @@ DRAWDOWN_GAUGE  = Gauge("portfolio_drawdown_pct", "Current drawdown from peak")
 LOOP_INTERVAL   = int(os.getenv("AGENT_LOOP_INTERVAL_SECONDS", 300))
 MAX_DRAWDOWN    = float(os.getenv("AGENT_MAX_DRAWDOWN_HALT", 0.10))
 TRADING_MODE    = os.getenv("KRAKEN_TRADING_MODE", "paper")
+SHADOW_MODE     = os.getenv("SHADOW_MODE", "false").lower() == "true"
 
 # How often to run each slower sub-cycle (in main loop ticks)
 NEWS_EVERY      = int(os.getenv("NEWS_CYCLE_TICKS", 1))       # every tick (~5 min)
@@ -160,7 +161,10 @@ class Orchestrator:
             # Cache signals for the API WebSocket
             await self._cache_signals(signals)
 
-            # ── Step 4: Risk validation ────────────────────────────────────────
+            # P5: publish signals to C++ risk-engine (fire-and-forget, additive)
+            publish_task = asyncio.create_task(self._publish_signals(signals, cycle_id))
+
+            # ── Step 4: Risk validation (Python path, remains default) ────────────
             approved_orders = await self.risk_agent.run(signals=signals, cycle_id=cycle_id)
             audit["approved_orders"] = approved_orders
             audit["steps"].append({"agent": "RiskAgent", "status": "ok",
@@ -173,9 +177,6 @@ class Orchestrator:
                 regime_result, signals, approved_orders,
                 time.time() - cycle_start
             )
-
-            # Publish validated signals to C++ risk engine (fire-and-forget)
-            asyncio.create_task(self._publish_signals(signals, cycle_id))
 
             # Publish heartbeat so ops can distinguish quiet cycles from stalls
             asyncio.create_task(publish_heartbeat(

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS positions (
     closed_at        TIMESTAMPTZ
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_positions_ticker_open ON positions(ticker) WHERE status = 'open';
 CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
 CREATE INDEX IF NOT EXISTS idx_positions_ticker  ON positions(ticker);
 
@@ -105,7 +106,8 @@ CREATE TABLE IF NOT EXISTS shadow_comparison (
                          )
                        )
                      ) STORED,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(cycle_id, ticker, strategy)
 );
 
 CREATE INDEX IF NOT EXISTS idx_shadow_cycle ON shadow_comparison(cycle_id);

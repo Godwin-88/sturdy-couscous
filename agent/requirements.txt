@@ -17,3 +17,4 @@ statsmodels==0.14.2        # VAR, statistical tests
 tqdm==4.66.4
 feedparser==6.0.11         # RSS feed parsing for NewsAgent
 websockets>=13.0           # required by yfinance live module
+jsonschema>=4.0.0          # Schema v1 validation

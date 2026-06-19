@@ -1,10 +1,23 @@
 import os
 import json
+import math
 from fastapi import APIRouter
 import yfinance as yf
 import redis
 
 router = APIRouter(prefix="/market", tags=["market"])
+
+
+def _sanitize(obj):
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return 0.0
+        return obj
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    return obj
 
 def _redis():
     return redis.Redis(
@@ -127,8 +140,8 @@ def get_quotes(tickers: str = ""):
                 "error":       str(e),
             })
 
-    r.setex(cache_key, CACHE_TTL, json.dumps(results))
-    return results
+    r.setex(cache_key, CACHE_TTL, json.dumps(_sanitize(results)))
+    return _sanitize(results)
 
 
 @router.get("/watchlist")

@@ -6,7 +6,7 @@ namespace risk {
 std::optional<Signal> Signal::from_json(const nlohmann::json& j) {
   Signal sig;
   if (!j.contains("schema_version")) throw std::invalid_argument("missing schema_version");
-  sig.schema_version = j["schema_version"].get<std::string>();
+  sig.schema_version = j["schema_version"].get<int>();
   validate_schema_version(sig.schema_version);
   if (!j.contains("cycle_id")) throw std::invalid_argument("missing cycle_id");
   sig.cycle_id = validate_uuid(j["cycle_id"].get<std::string>());

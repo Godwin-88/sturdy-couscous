@@ -28,8 +28,9 @@ class EventPublisher {
   bool publish_halt(bool halted);
   bool subscribe(const std::string& channel);
   void set_subscriber_callback(std::function<void(const std::string&)> cb);
+  bool publish_portfolio_state(const std::string& nav_json);
 
-  private:
+ private:
   bool _publish_json(const std::string& message);
   std::string redis_host_;
   int redis_port_;

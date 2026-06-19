@@ -29,7 +29,7 @@ inline std::string direction_to_string(Direction d) {
 }
 
 struct Signal {
-  std::string schema_version = "1";
+  int schema_version = 1;
   std::string cycle_id;
   std::string timestamp;
   std::string regime;
@@ -60,17 +60,17 @@ inline void validate_range(const std::string& field, double value, double lo, do
 
 inline void validate_regime(const std::string& regime) {
   static const std::unordered_set<std::string> valid = {
-    "Trending", "BearMarket", "LowVolatility", "HighVolatility",
-    "SystemicStress", "Crisis", "Recovery"
+    "Trending", "MeanReverting", "HighVolatility", "LowVolatility",
+    "Crisis", "SystemicStress", "Recovery", "Neutral"
   };
   if (!valid.contains(regime)) {
     throw std::invalid_argument("invalid regime: " + regime);
   }
 }
 
-inline void validate_schema_version(const std::string& v) {
-  if (v != "1") {
-    throw std::invalid_argument("unsupported schema version: " + v);
+inline void validate_schema_version(int v) {
+  if (v != 1) {
+    throw std::invalid_argument("unsupported schema version: " + std::to_string(v));
   }
 }
 
