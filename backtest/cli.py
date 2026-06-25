@@ -31,11 +31,15 @@ def _parse_args(argv=None):
     p.add_argument("--disable-macro-overlay", action="store_true")
     p.add_argument("--interval", default="1d")
     p.add_argument("--output", default=None)
+    p.add_argument("--universe", choices=["default", "crypto", "equity", "macro"], default="default",
+                   help="Universe preset to use")
+    p.add_argument("--tickers", nargs="+", default=None,
+                   help="Custom ticker list (overrides --universe)")
     p.add_argument("--ablate-overlays", action="store_true",
                    help="Run 4 configs (baseline, news-off, macro-off, both-off) and emit combined JSON")
     p.add_argument("--granularity", default="portfolio",
-                   choices=["portfolio", "asset_class", "strategy"],
-                   help="Select which breakdowns to include")
+                    choices=["portfolio", "asset_class", "strategy"],
+                    help="Select which breakdowns to include")
     return p.parse_args(argv)
 
 
@@ -149,6 +153,13 @@ def _jobson_korkie_safe(r1: np.ndarray, r2: np.ndarray) -> tuple[float, float]:
 
 def main(argv=None) -> int:
     args = _parse_args(argv)
+
+    from .universe import set_universe, use_preset
+
+    if args.tickers:
+        set_universe(args.tickers)
+    elif args.universe:
+        use_preset(args.universe)
 
     if args.ablate_overlays:
         configs = {

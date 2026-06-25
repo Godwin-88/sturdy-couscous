@@ -256,6 +256,24 @@ class CLISmokeTest(unittest.TestCase):
         self.assertIn("metrics_by_overlay_config", data)
 
 
+class BreakdownByAssetClassTest(unittest.TestCase):
+    def test_jk_by_asset_class(self):
+        from backtest.metrics_breakdown import jk_by_asset_class
+        trades = [
+            {"pnl": 10.0, "asset_class": "equity_broad"},
+            {"pnl": -5.0, "asset_class": "equity_broad"},
+            {"pnl": 20.0, "asset_class": "crypto"},
+            {"pnl": -2.0, "asset_class": "crypto"},
+        ]
+        prices = {
+            "SPY": pd.Series(np.linspace(100, 110, 100)),
+            "BTC-USD": pd.Series(np.linspace(40000, 45000, 100)),
+        }
+        out = jk_by_asset_class(trades, prices)
+        self.assertIn("equity_broad", out)
+        self.assertIn("crypto", out)
+
+
 class EnvAlignmentTest(unittest.TestCase):
     def test_thresholds_match_dotenv(self):
         from backtest.risk_sim import (

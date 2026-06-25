@@ -19,9 +19,9 @@ from lingam import VARLiNGAM
 from loguru import logger
 
 SPEECHMATICS_KEY  = os.getenv("SPEECHMATICS_API_KEY", "")
-FEATHERLESS_URL   = os.getenv("FEATHERLESS_BASE_URL", "https://api.featherless.ai/v1")
-FEATHERLESS_KEY   = os.getenv("FEATHERLESS_API_KEY", "")
-FEATHERLESS_MODEL = os.getenv("FEATHERLESS_MODEL", "")
+LLM_URL = os.getenv("GROQ_BASE_URL", os.getenv("FEATHERLESS_BASE_URL", "https://api.groq.com/openai/v1"))
+LLM_KEY = os.getenv("GROQ_API_KEY", os.getenv("FEATHERLESS_API_KEY", ""))
+LLM_MODEL = os.getenv("GROQ_MODEL", os.getenv("FEATHERLESS_MODEL", "llama-3.3-70b-versatile"))
 FRED_API_KEY      = os.getenv("FRED_API_KEY", "")
 
 VARLINGAM_TICKERS = ["SPY", "XLF", "XLE", "QQQ", "BTC-USD", "ETH-USD"]
@@ -212,7 +212,7 @@ class ResearchAgent:
             return transcript_r.text
 
     async def _extract_entities(self, transcript: str, ticker: str) -> list[dict]:
-        if not FEATHERLESS_KEY:
+        if not LLM_KEY:
             return []
         prompt = (
             f"Extract financial entities from this earnings call transcript for {ticker}. "
@@ -222,14 +222,14 @@ class ResearchAgent:
         )
         async with httpx.AsyncClient(timeout=30.0) as client:
             r = await client.post(
-                f"{FEATHERLESS_URL}/chat/completions",
+                f"{LLM_URL}/chat/completions",
                 json={
-                    "model":       FEATHERLESS_MODEL,
+                    "model":       LLM_MODEL,
                     "messages":    [{"role": "user", "content": prompt}],
                     "max_tokens":  512,
                     "temperature": 0.1,
                 },
-                headers={"Authorization": f"Bearer {FEATHERLESS_KEY}"},
+                headers={"Authorization": f"Bearer {LLM_KEY}"},
             )
         raw = r.json()["choices"][0]["message"]["content"]
         try:

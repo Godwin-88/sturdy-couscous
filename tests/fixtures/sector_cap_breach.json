@@ -26,8 +26,8 @@
       {
         "ticker": "SPY",
         "venue": "ibkr",
-        "asset_class": "equity_tech",
-        "sector": "equity_broad",
+        "asset_class": "equity_broad",
+        "sector": "equity_tech",
         "notional": 6500.0,
         "quantity": 65.0
       }
@@ -38,6 +38,7 @@
   },
   "expected": {
     "risk_checks_all_passed": false,
-    "rejection_reason": "sector_cap"
+    "rejection_reason": "sector_cap",
+    "sector_pct_ok": false
   }
 }

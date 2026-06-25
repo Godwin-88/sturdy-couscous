@@ -133,3 +133,33 @@ class ReplayExportTestCase(unittest.TestCase):
             import json
             sig = json.loads(line)
             self.assertEqual(sig["schema_version"], 1)
+
+
+class DynamicUniverseTestCase(unittest.TestCase):
+    def test_dynamic_tickers_any_asset(self):
+        from backtest.universe import set_universe, get_universe
+        set_universe(["AAPL", "MSFT", "TSLA"])
+        entries = get_universe()
+        tickers = [e.ticker for e in entries]
+        self.assertIn("AAPL", tickers)
+        self.assertIn("MSFT", tickers)
+        self.assertTrue(all(e.venue == "ibkr" for e in entries))
+        self.assertTrue(all(e.asset_class == "equity_xstock" for e in entries))
+
+    def test_dynamic_crypto_tickers(self):
+        from backtest.universe import set_universe, get_universe
+        set_universe(["ETH-USD", "SOL-USD"])
+        entries = get_universe()
+        tickers = [e.ticker for e in entries]
+        self.assertIn("ETH-USD", tickers)
+        self.assertIn("SOL-USD", tickers)
+        for e in entries:
+            self.assertEqual(e.asset_class, "crypto")
+            self.assertEqual(e.venue, "kraken")
+
+    def test_universe_presets(self):
+        from backtest.universe import use_preset, get_universe
+        use_preset("crypto")
+        self.assertEqual([e.ticker for e in get_universe()], ["BTC-USD", "ETH-USD"])
+        use_preset("equity")
+        self.assertEqual([e.ticker for e in get_universe()], ["SPY", "QQQ", "TLT", "GLD"])

@@ -31,16 +31,20 @@ bool AuditLog::write_order(const std::string& order_id,
   }
 
   std::string json_str = order_json.dump();
-  const char* paramValues[10] = {
-      order_id.c_str(),
+  std::string order_id_copy = order_id;
+  std::string qty_str = std::to_string(order.quantity);
+  std::string fill_price_str = std::to_string(fill.fill_price);
+  std::string fee_str = std::to_string(fill.fee_usd);
+  std::string ts_str = order.signal_timestamp;
+  const char* paramValues[9] = {
+      order_id_copy.c_str(),
       order.ticker.c_str(),
       order.direction.c_str(),
-      std::to_string(order.quantity).c_str(),
-      std::to_string(fill.fill_price).c_str(),
-      std::to_string(fill.fee_usd).c_str(),
+      qty_str.c_str(),
+      fill_price_str.c_str(),
+      fee_str.c_str(),
       order.mode.empty() ? "paper" : order.mode.c_str(),
-      std::to_string(std::stod(order.signal_timestamp)).c_str(),
-      order.cycle_id.c_str(),
+      ts_str.c_str(),
       json_str.c_str()};
 
   const char* sql =

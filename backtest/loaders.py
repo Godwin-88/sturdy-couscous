@@ -84,12 +84,7 @@ def load_for_ticker(ticker: str, start: str, end: str, interval: str = "1d") -> 
 
 
 def _is_crypto(ticker: str) -> bool:
-    return ticker.upper() in {u.ticker for u in _default_universe() if u.asset_class == "crypto"}
-
-
-def _default_universe():
-    from .universe import get_universe
-    return get_universe()
+    return "-USD" in ticker.upper() or ticker.upper() in {"BTC-USD", "ETH-USD", "BTC", "ETH"}
 
 
 def _load_yfinance(
@@ -129,7 +124,10 @@ def _load_coinbase_crypto(
     max_rows = 300
 
     for ticker in tickers:
-        pair = _venue_symbol(ticker)
+        symbol = ticker.upper().replace("-", "").replace("USD", "")
+        if symbol == "BTC":
+            symbol = "XBT"
+        pair = f"{symbol}USD" if symbol != "XBT" else "XBTUSD"
         rows = _cb_fetch_candles(pair, granularity, start_dt, end_dt, max_rows)
         if not rows:
             raise DataGapError(f"Coinbase returned no candles for {ticker} ({pair})")
@@ -148,11 +146,6 @@ def _load_coinbase_crypto(
     for col in df.columns:
         df[col] = df[col].astype(float)
     return df
-
-
-def _venue_symbol(ticker: str) -> str:
-    from .universe import lookup
-    return lookup(ticker).venue_symbol
 
 
 def _cb_fetch_candles(

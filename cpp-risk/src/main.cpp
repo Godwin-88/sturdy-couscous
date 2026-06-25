@@ -174,12 +174,12 @@ bool run_file_mode(const std::vector<Signal>& signals,
 }
 
 int run_subscriber_mode(const std::string& redis_host, int redis_port, EventPublisher& publisher) {
-  std::signal(SIGINT, signal_handler);
-  std::signal(SIGTERM, signal_handler);
+   std::signal(SIGINT, signal_handler);
+   std::signal(SIGTERM, signal_handler);
 
-  Config cfg;
-  RiskEngine risk_engine(cfg);
-  ExecutionEngine exec_engine(0.0026, 0.0005);
+   Config cfg;
+   RiskEngine risk_engine(cfg);
+   ExecutionEngine exec_engine;
 
   std::string conn_str = build_conn_str();
   AuditLog audit(conn_str);
@@ -336,7 +336,7 @@ int main(int argc, char** argv) {
     if (argc >= 2) {
       std::cerr << "[main] REDIS_SUBSCRIBE=1 mode: ignoring file arg '" << argv[1] << "'\n";
     }
-    EventPublisher publisher(redis_host_c, redis_port);
+    EventPublisher publisher(redis_host_c, redis_port, "graphalpha:events");
     return run_subscriber_mode(redis_host_c, redis_port, publisher);
   }
 
@@ -348,7 +348,7 @@ int main(int argc, char** argv) {
 
   Config cfg;
   RiskEngine risk_engine(cfg);
-  ExecutionEngine exec_engine(0.0026, 0.0005);
+  ExecutionEngine exec_engine;
 
   AuditLog audit(conn_str);
   EventPublisher publisher(redis_host_c, redis_port);

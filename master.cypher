@@ -356,134 +356,131 @@ MATCH (a:Concept {name:'Implied Volatility'}),        (b:Concept {name:'Vega Ris
 // -----------------------------------------------------------------------------
 // 6. FORMULA NODES  (mathematical expressions keyed to concepts)
 // -----------------------------------------------------------------------------
-
 MERGE (f:Formula {id: 'f_bs_call'})
   SET f.name       = 'Black-Scholes Call Price',
       f.expression = 'C = S·N(d₁) - K·e^{-rτ}·N(d₂)',
-      f.latex       = 'C = S \cdot \Phi(d_1) - K e^{-r\tau} \cdot \Phi(d_2)',
+      f.`latex`     = 'C = S \\cdot \\Phi(d_1) - K e^{-r\\tau} \\cdot \\Phi(d_2)',
       f.params      = ['S','K','r','τ','σ'],
       f.output      = 'call_price';
 
 MERGE (f:Formula {id: 'f_bs_d1'})
   SET f.name       = 'BS d₁ component',
       f.expression = 'd₁ = [ln(S/K) + (r + σ²/2)τ] / (σ√τ)',
-      f.latex       = 'd_1 = \frac{\ln(S/K)+(r+\sigma^2/2)\tau}{\sigma\sqrt{\tau}}',
+      f.`latex`     = 'd_1 = \\frac{\\ln(S/K)+(r+\\sigma^2/2)\\tau}{\\sigma\\sqrt{\\tau}}',
       f.params      = ['S','K','r','τ','σ'],
       f.output      = 'd1';
 
 MERGE (f:Formula {id: 'f_bs_d2'})
   SET f.name       = 'BS d₂ component',
       f.expression = 'd₂ = d₁ - σ√τ',
-      f.latex       = 'd_2 = d_1 - \sigma\sqrt{\tau}',
+      f.`latex`     = 'd_2 = d_1 - \\sigma\\sqrt{\\tau}',
       f.params      = ['d1','σ','τ'],
       f.output      = 'd2';
 
 MERGE (f:Formula {id: 'f_delta'})
   SET f.name       = 'Delta (call)',
       f.expression = 'Δ = N(d₁)',
-      f.latex       = '\Delta = \Phi(d_1)',
+      f.`latex`     = '\\Delta = \\Phi(d_1)',
       f.params      = ['d1'],
       f.output      = 'delta';
 
 MERGE (f:Formula {id: 'f_gamma'})
   SET f.name       = 'Gamma',
       f.expression = 'Γ = N′(d₁) / (S·σ·√τ)',
-      f.latex       = '\Gamma = \frac{\phi(d_1)}{S \sigma \sqrt{\tau}}',
+      f.`latex`     = '\\Gamma = \\frac{\\phi(d_1)}{S \\sigma \\sqrt{\\tau}}',
       f.params      = ['d1','S','σ','τ'],
       f.output      = 'gamma';
 
 MERGE (f:Formula {id: 'f_theta'})
   SET f.name       = 'Theta (call)',
       f.expression = 'Θ = -S·N′(d₁)·σ/(2√τ) - r·K·e^(-rτ)·N(d₂)',
-      f.latex       = '\Theta = -\frac{S\phi(d_1)\sigma}{2\sqrt{\tau}} - rKe^{-r\tau}\Phi(d_2)',
+      f.`latex`     = '\\Theta = -\\frac{S\\phi(d_1)\\sigma}{2\\sqrt{\\tau}} - rKe^{-r\\tau}\\Phi(d_2)',
       f.params      = ['S','K','r','τ','σ','d1','d2'],
       f.output      = 'theta';
 
 MERGE (f:Formula {id: 'f_vega'})
   SET f.name       = 'Vega',
       f.expression = 'ν = S·N′(d₁)·√τ',
-      f.latex       = '\nu = S \phi(d_1) \sqrt{\tau}',
+      f.`latex`     = '\\nu = S \\phi(d_1) \\sqrt{\\tau}',
       f.params      = ['S','d1','τ'],
       f.output      = 'vega';
 
 MERGE (f:Formula {id: 'f_pcp'})
   SET f.name       = 'Put-Call Parity',
       f.expression = 'C - P = S - K·e^(-rτ)',
-      f.latex       = 'C - P = S - Ke^{-r\tau}',
+      f.`latex`     = 'C - P = S - Ke^{-r\\tau}',
       f.params      = ['C','P','S','K','r','τ'],
       f.output      = 'parity_check';
 
 MERGE (f:Formula {id: 'f_gbm'})
   SET f.name       = 'GBM SDE',
       f.expression = 'dS = μS·dt + σS·dW',
-      f.latex       = 'dS = \mu S\,dt + \sigma S\,dW_t',
+      f.`latex`     = 'dS = \\mu S\\,dt + \\sigma S\\,dW_t',
       f.params      = ['S','μ','σ'],
       f.output      = 'dS';
 
 MERGE (f:Formula {id: 'f_heston_s'})
   SET f.name       = 'Heston price SDE',
       f.expression = 'dS = rS·dt + √v·S·dW₁',
-      f.latex       = 'dS = rS\,dt + \sqrt{v}\,S\,dW_1',
+      f.`latex`     = 'dS = rS\\,dt + \\sqrt{v}\\,S\\,dW_1',
       f.params      = ['S','r','v'],
       f.output      = 'dS';
 
 MERGE (f:Formula {id: 'f_heston_v'})
   SET f.name       = 'Heston variance SDE',
       f.expression = 'dv = κ(θ-v)·dt + ξ√v·dW₂',
-      f.latex       = 'dv = \kappa(\theta-v)\,dt + \xi\sqrt{v}\,dW_2',
+      f.`latex`     = 'dv = \\kappa(\\theta-v)\\,dt + \\xi\\sqrt{v}\\,dW_2',
       f.params      = ['v','κ','θ','ξ'],
       f.output      = 'dv';
 
 MERGE (f:Formula {id: 'f_cir'})
   SET f.name       = 'CIR Process',
       f.expression = 'dv = κ(θ-v)·dt + ξ√v·dW',
-      f.latex       = 'dv = \kappa(\theta - v)\,dt + \xi\sqrt{v}\,dW',
+      f.`latex`     = 'dv = \\kappa(\\theta - v)\\,dt + \\xi\\sqrt{v}\\,dW',
       f.params      = ['v','κ','θ','ξ'],
       f.output      = 'dv';
 
 MERGE (f:Formula {id: 'f_feller'})
   SET f.name       = 'Feller Condition',
       f.expression = '2κθ > ξ²',
-      f.latex       = '2\kappa\theta > \xi^2',
+      f.`latex`     = '2\\kappa\\theta > \\xi^2',
       f.params      = ['κ','θ','ξ'],
       f.output      = 'boolean';
 
 MERGE (f:Formula {id: 'f_mc'})
   SET f.name       = 'Monte Carlo estimator',
       f.expression = 'C ≈ e^(-rT) · (1/N) · Σ max(S_T^i - K, 0)',
-      f.latex       = 'C \approx e^{-rT}\frac{1}{N}\sum_{i=1}^N\max(S_T^i-K,0)',
+      f.`latex`     = 'C \\approx e^{-rT}\\frac{1}{N}\\sum_{i=1}^N\\max(S_T^i-K,0)',
       f.params      = ['r','T','K','N'],
       f.output      = 'price_estimate';
 
 MERGE (f:Formula {id: 'f_roc'})
   SET f.name       = 'Rate of Change (momentum)',
       f.expression = 'ROC(n) = (P_t - P_{t-n}) / P_{t-n} × 100',
-      f.latex       = 'ROC_n = \frac{P_t - P_{t-n}}{P_{t-n}} \times 100',
+      f.`latex`     = 'ROC_n = \\frac{P_t - P_{t-n}}{P_{t-n}} \\times 100',
       f.params      = ['P_t','P_tn','n'],
       f.output      = 'momentum_score';
 
 MERGE (f:Formula {id: 'f_zscore'})
   SET f.name       = 'Z-score (mean reversion)',
       f.expression = 'z = (x - μ) / σ',
-      f.latex       = 'z = \frac{x - \mu}{\sigma}',
+      f.`latex`     = 'z = \\frac{x - \\mu}{\\sigma}',
       f.params      = ['x','μ','σ'],
       f.output      = 'z_score';
 
 MERGE (f:Formula {id: 'f_kelly'})
   SET f.name       = 'Kelly Criterion',
       f.expression = 'f* = (bp - q) / b  where b=odds, p=win_prob, q=1-p',
-      f.latex       = 'f^* = \frac{bp - q}{b}',
+      f.`latex`     = 'f^* = \\frac{bp - q}{b}',
       f.params      = ['b','p','q'],
       f.output      = 'position_fraction';
 
 MERGE (f:Formula {id: 'f_sharpe'})
   SET f.name       = 'Sharpe Ratio',
       f.expression = 'SR = (R_p - R_f) / σ_p',
-      f.latex       = 'SR = \frac{R_p - R_f}{\sigma_p}',
+      f.`latex`     = 'SR = \\frac{R_p - R_f}{\\sigma_p}',
       f.params      = ['R_p','R_f','σ_p'],
       f.output      = 'risk_adjusted_return';
-
-
 // -----------------------------------------------------------------------------
 // 7. CONCEPT → FORMULA RELATIONSHIPS
 // -----------------------------------------------------------------------------
@@ -989,71 +986,68 @@ MATCH (a:Concept {name:'Fundamental Factor Model'}),(b:Concept {name:'Quality Pr
 // -----------------------------------------------------------------------------
 // 19. FORMULA NODES — FACTOR BATCH
 // -----------------------------------------------------------------------------
-
 MERGE (f:Formula {id: 'f_factor_model'})
   SET f.name       = 'Factor Model Return Decomposition',
       f.expression = 'R_it = α_i + βᵢᵀ·f_t + ε_it',
-      f.latex       = 'R_{it} = \alpha_i + \boldsymbol{\beta}_i^\top \mathbf{f}_t + \varepsilon_{it}',
+      f.`latex`     = 'R_{it} = \\alpha_i + \\boldsymbol{\\beta}_i^\\top \\mathbf{f}_t + \\varepsilon_{it}',
       f.params      = ['α_i','β_i','f_t'],
       f.output      = 'asset_return';
 
 MERGE (f:Formula {id: 'f_capm'})
   SET f.name       = 'CAPM Expected Return',
       f.expression = 'E[R_i] = r_f + β_i·(E[R_m] - r_f)',
-      f.latex       = 'E[R_i] = r_f + \beta_i (E[R_m] - r_f)',
+      f.`latex`     = 'E[R_i] = r_f + \\beta_i (E[R_m] - r_f)',
       f.params      = ['r_f','β_i','E_Rm'],
       f.output      = 'expected_return';
 
 MERGE (f:Formula {id: 'f_apt'})
   SET f.name       = 'APT Expected Return',
       f.expression = 'E[R_i] = r_f + Σ_k β_ik·λ_k',
-      f.latex       = 'E[R_i] = r_f + \sum_k \beta_{ik} \lambda_k',
+      f.`latex`     = 'E[R_i] = r_f + \\sum_k \\beta_{ik} \\lambda_k',
       f.params      = ['r_f','β_ik','λ_k'],
       f.output      = 'expected_return';
 
 MERGE (f:Formula {id: 'f_risk_model'})
   SET f.name       = 'Structural Risk Model',
       f.expression = 'Σ = B·Σ_f·Bᵀ + D',
-      f.latex       = '\Sigma = \mathbf{B}\Sigma_f\mathbf{B}^\top + \mathbf{D}',
+      f.`latex`     = '\\Sigma = \\mathbf{B}\\Sigma_f\\mathbf{B}^\\top + \\mathbf{D}',
       f.params      = ['B','Σ_f','D'],
       f.output      = 'covariance_matrix';
 
 MERGE (f:Formula {id: 'f_shrinkage'})
   SET f.name       = 'Ledoit-Wolf Shrinkage Estimator',
       f.expression = 'Σ̂_shrink = (1-λ)·Σ̂_sample + λ·F',
-      f.latex       = '\hat{\Sigma}_{\text{shrink}} = (1-\lambda)\hat{\Sigma}_{\text{sample}} + \lambda F',
+      f.`latex`     = '\\hat{\\Sigma}_{\\text{shrink}} = (1-\\lambda)\\hat{\\Sigma}_{\\text{sample}} + \\lambda F',
       f.params      = ['λ','Σ̂_sample','F'],
       f.output      = 'covariance_matrix';
 
 MERGE (f:Formula {id: 'f_factor_beta'})
   SET f.name       = 'Factor Loading (Beta)',
       f.expression = 'β_ik = Cov(R_i, f_k) / Var(f_k)',
-      f.latex       = '\beta_{ik} = \frac{\text{Cov}(R_i, f_k)}{\text{Var}(f_k)}',
+      f.`latex`     = '\\beta_{ik} = \\frac{\\text{Cov}(R_i, f_k)}{\\text{Var}(f_k)}',
       f.params      = ['R_i','f_k'],
       f.output      = 'factor_loading';
 
 MERGE (f:Formula {id: 'f_factor_alpha'})
   SET f.name       = 'Factor Alpha',
       f.expression = 'α_i = E[R_i] - βᵢᵀ·E[f]',
-      f.latex       = '\alpha_i = \mathbb{E}[R_i] - \boldsymbol{\beta}_i^\top \mathbb{E}[\mathbf{f}]',
+      f.`latex`     = '\\alpha_i = \\mathbb{E}[R_i] - \\boldsymbol{\\beta}_i^\\top \\mathbb{E}[\\mathbf{f}]',
       f.params      = ['E_Ri','β_i','E_f'],
       f.output      = 'abnormal_return';
 
 MERGE (f:Formula {id: 'f_rsquared'})
   SET f.name       = 'R-Squared',
       f.expression = 'R² = 1 - Var(ε) / Var(R)',
-      f.latex       = 'R^2 = 1 - \frac{\text{Var}(\varepsilon)}{\text{Var}(R)}',
+      f.`latex`     = 'R^2 = 1 - \\frac{\\text{Var}(\\varepsilon)}{\\text{Var}(R)}',
       f.params      = ['Var_ε','Var_R'],
       f.output      = 'explanatory_power';
 
 MERGE (f:Formula {id: 'f_factor_attribution'})
   SET f.name       = 'Factor Return Attribution',
       f.expression = 'R_p = Σ_k β_pk·f_k + α_p',
-      f.latex       = 'R_p = \sum_k \beta_{pk} f_k + \alpha_p',
+      f.`latex`     = 'R_p = \\sum_k \\beta_{pk} f_k + \\alpha_p',
       f.params      = ['β_pk','f_k','α_p'],
       f.output      = 'portfolio_return_decomposition';
-
-
 // -----------------------------------------------------------------------------
 // 20. CONCEPT → FORMULA RELATIONSHIPS (v0.2.0)
 // -----------------------------------------------------------------------------
@@ -1571,50 +1565,47 @@ MATCH (a:Concept {name:'SRISK'}),                      (b:Concept {name:'Too-Big
 // -----------------------------------------------------------------------------
 // 34. FORMULA NODES — SYSTEMIC RISK BATCH
 // -----------------------------------------------------------------------------
-
 MERGE (f:Formula {id: 'f_covar'})
   SET f.name       = 'CoVaR (Conditional Value at Risk)',
       f.expression = 'ΔCoVaR_i = CoVaR|distress_i - CoVaR|median_i',
-      f.latex       = '\Delta\text{CoVaR}_i = \text{CoVaR}^{system|X_i=\text{distress}} - \text{CoVaR}^{system|X_i=\text{median}}',
+      f.`latex`     = '\\Delta\\text{CoVaR}_i = \\text{CoVaR}^{system|X_i=\\text{distress}} - \\text{CoVaR}^{system|X_i=\\text{median}}',
       f.params      = ['VaR_i','conditioning_quantile','joint_distribution'],
       f.output      = 'systemic_risk_contribution';
 
 MERGE (f:Formula {id: 'f_srisk'})
   SET f.name       = 'SRISK (Expected Capital Shortfall)',
       f.expression = 'SRISK_i = max(0, k(Debt_i + Equity_i·LRMES_i) - Equity_i·(1-LRMES_i))',
-      f.latex       = 'SRISK_i = \max\bigl(0,\; k(D_i + E_i \cdot LRMES_i) - E_i(1-LRMES_i)\bigr)',
+      f.`latex`     = 'SRISK_i = \\max\\bigl(0,\\; k(D_i + E_i \\cdot LRMES_i) - E_i(1-LRMES_i)\\bigr)',
       f.params      = ['k','Debt','Equity','LRMES'],
       f.output      = 'capital_shortfall';
 
 MERGE (f:Formula {id: 'f_lrmes'})
   SET f.name       = 'Long-Run Marginal Expected Shortfall (LRMES)',
       f.expression = 'LRMES_i ≈ 1 - exp(log(1 - MES_i) × h)',
-      f.latex       = 'LRMES_i \approx 1 - \exp\!\bigl(\ln(1-MES_i)\cdot h\bigr)',
+      f.`latex`     = 'LRMES_i \\approx 1 - \\exp\\!\\bigl(\\ln(1-MES_i)\\cdot h\\bigr)',
       f.params      = ['MES_i','h'],
       f.output      = 'long_run_equity_loss';
 
 MERGE (f:Formula {id: 'f_network_centrality'})
   SET f.name       = 'Eigenvector Centrality (Financial Network)',
       f.expression = 'x_i = (1/λ) · Σ_j A_ij · x_j',
-      f.latex       = 'x_i = \frac{1}{\lambda}\sum_j A_{ij} x_j',
+      f.`latex`     = 'x_i = \\frac{1}{\\lambda}\\sum_j A_{ij} x_j',
       f.params      = ['A_ij','λ','x_j'],
       f.output      = 'centrality_score';
 
 MERGE (f:Formula {id: 'f_contagion_prob'})
   SET f.name       = 'Network Contagion Probability (simplified)',
       f.expression = 'P(contagion) = 1 - Π_j(1 - p_ij · I_j)',
-      f.latex       = 'P(\text{contagion}_i) = 1 - \prod_j (1 - p_{ij} \cdot I_j)',
+      f.`latex`     = 'P(\\text{contagion}_i) = 1 - \\prod_j (1 - p_{ij} \\cdot I_j)',
       f.params      = ['p_ij','I_j'],
       f.output      = 'contagion_probability';
 
 MERGE (f:Formula {id: 'f_stress_loss'})
   SET f.name       = 'Stress Test Loss Estimate',
       f.expression = 'L_stress = Σ_i w_i · Loss_i(scenario)',
-      f.latex       = 'L_{\text{stress}} = \sum_i w_i \cdot \ell_i(\text{scenario})',
+      f.`latex`     = 'L_{\\text{stress}} = \\sum_i w_i \\cdot \\ell_i(\\text{scenario})',
       f.params      = ['w_i','scenario','Loss_i'],
       f.output      = 'portfolio_stress_loss';
-
-
 // -----------------------------------------------------------------------------
 // 35. CONCEPT → FORMULA RELATIONSHIPS (v0.3.0)
 // -----------------------------------------------------------------------------
@@ -2170,10 +2161,11 @@ MERGE (c:Concept {name: 'Long Volatility Exposure'})
 MATCH (c:Concept), (cat:Category)
 WHERE c.category = cat.name
   AND c.menu_context IN ['RiskMgr', 'Pricer']
-  AND NOT (c)-[:BELONGS_TO]->()
+WITH c, cat
+OPTIONAL MATCH (c)-[r:BELONGS_TO]->(:Category)
+WITH c, cat, count(r) AS rel_count
+WHERE rel_count = 0
 MERGE (c)-[:BELONGS_TO]->(cat);
-
-
 // -----------------------------------------------------------------------------
 // 45. PREREQUISITE RELATIONSHIPS — v0.4.0 FULL BATCH
 // -----------------------------------------------------------------------------
@@ -2289,92 +2281,89 @@ MATCH (a:Concept {name:'Variation Margin (OTC)'}),      (b:Concept {name:'Direct
 // -----------------------------------------------------------------------------
 // 46. FORMULA NODES — v0.4.0 BATCH
 // -----------------------------------------------------------------------------
-
 MERGE (f:Formula {id: 'f_realized_var'})
   SET f.name       = 'Realized Variance',
       f.expression = 'σ²_realized = (252/N)·Σ[ln(S_t/S_{t-1})]²',
-      f.latex       = '\sigma^2_{\text{realized}} = \frac{252}{N}\sum_{t=1}^{N}\left[\ln\frac{S_t}{S_{t-1}}\right]^2',
+      f.`latex`     = '\\sigma^2_{\\text{realized}} = \\frac{252}{N}\\sum_{t=1}^{N}\\left[\\ln\\frac{S_t}{S_{t-1}}\\right]^2',
       f.params      = ['S_t','S_{t-1}','N'],
       f.output      = 'annualized_realized_variance';
 
 MERGE (f:Formula {id: 'f_var_swap_payoff'})
   SET f.name       = 'Variance Swap Payoff',
       f.expression = 'Payoff = N_vega·(σ²_realized - K²_var)',
-      f.latex       = '\text{Payoff} = N_{\text{vega}}\bigl(\sigma^2_{\text{realized}} - K^2_{\text{var}}\bigr)',
+      f.`latex`     = '\\text{Payoff} = N_{\\text{vega}}\\bigl(\\sigma^2_{\\text{realized}} - K^2_{\\text{var}}\\bigr)',
       f.params      = ['N_vega','σ²_realized','K²_var'],
       f.output      = 'swap_pnl';
 
 MERGE (f:Formula {id: 'f_model_free_var'})
   SET f.name       = 'Model-Free Variance Replication (Carr-Madan)',
       f.expression = 'E^Q[σ²] = (2/T)·[∫₀^F P(K)/K² dK + ∫_F^∞ C(K)/K² dK]',
-      f.latex       = '\mathbb{E}^Q[\sigma^2] = \frac{2}{T}\!\left[\int_0^F\!\frac{P(K)}{K^2}dK + \int_F^\infty\!\frac{C(K)}{K^2}dK\right]',
+      f.`latex`     = '\\mathbb{E}^Q[\\sigma^2] = \\frac{2}{T}\\!\\left[\\int_0^F\\!\\frac{P(K)}{K^2}dK + \\int_F^\\infty\\!\\frac{C(K)}{K^2}dK\\right]',
       f.params      = ['T','F','P(K)','C(K)'],
       f.output      = 'risk_neutral_variance';
 
 MERGE (f:Formula {id: 'f_breeden_litzenberger'})
   SET f.name       = 'Breeden-Litzenberger Risk-Neutral Density',
       f.expression = 'p(K) = e^(rT)·∂²C/∂K²',
-      f.latex       = 'p(K) = e^{rT}\frac{\partial^2 C}{\partial K^2}',
+      f.`latex`     = 'p(K) = e^{rT}\\frac{\\partial^2 C}{\\partial K^2}',
       f.params      = ['r','T','C','K'],
       f.output      = 'risk_neutral_pdf';
 
 MERGE (f:Formula {id: 'f_transfer_entropy'})
   SET f.name       = 'Transfer Entropy (X→Y)',
       f.expression = 'TE(X→Y) = Σ p(y_{t+1},y_t^k,x_t^l)·log[p(y_{t+1}|y_t^k,x_t^l)/p(y_{t+1}|y_t^k)]',
-      f.latex       = 'TE(X\to Y)=\sum p(y_{t+1},y_t^{(k)},x_t^{(l)})\log\frac{p(y_{t+1}|y_t^{(k)},x_t^{(l)})}{p(y_{t+1}|y_t^{(k)})}',
+      f.`latex`     = 'TE(X\\to Y)=\\sum p(y_{t+1},y_t^{(k)},x_t^{(l)})\\log\\frac{p(y_{t+1}|y_t^{(k)},x_t^{(l)})}{p(y_{t+1}|y_t^{(k)})}',
       f.params      = ['y_{t+1}','y_t^k','x_t^l','k','l'],
       f.output      = 'directed_information_flow';
 
 MERGE (f:Formula {id: 'f_absorption_ratio'})
   SET f.name       = 'Absorption Ratio',
       f.expression = 'AR = (Σ_{k=1}^{n} σ²_{fk}) / (Σ_{i=1}^{N} σ²_{Ai})',
-      f.latex       = 'AR = \frac{\sum_{k=1}^{n}\sigma^2_{f_k}}{\sum_{i=1}^{N}\sigma^2_{A_i}}',
+      f.`latex`     = 'AR = \\frac{\\sum_{k=1}^{n}\\sigma^2_{f_k}}{\\sum_{i=1}^{N}\\sigma^2_{A_i}}',
       f.params      = ['σ²_fk','σ²_Ai','n','N'],
       f.output      = 'systemic_risk_level';
 
 MERGE (f:Formula {id: 'f_dip'})
   SET f.name       = 'Distressed Insurance Premium (DIP)',
       f.expression = 'DIP = E^Q[max(L - δ·A, 0)] where L=credit losses, δ=threshold, A=total assets',
-      f.latex       = 'DIP = \mathbb{E}^Q\!\left[\max\!\left(\sum_i L_i - \delta \cdot A,\, 0\right)\right]',
+      f.`latex`     = 'DIP = \\mathbb{E}^Q\\!\\left[\\max\\!\\left(\\sum_i L_i - \\delta \\cdot A,\\, 0\\right)\\right]',
       f.params      = ['PD_i','ρ_ij','δ','A'],
       f.output      = 'systemic_insurance_premium';
 
 MERGE (f:Formula {id: 'f_mes'})
   SET f.name       = 'Marginal Expected Shortfall (MES)',
       f.expression = 'MES_i = E[R_i | R_m < VaR_m(α)]',
-      f.latex       = 'MES_i = \mathbb{E}\bigl[R_i \mid R_m < \text{VaR}_m(\alpha)\bigr]',
+      f.`latex`     = 'MES_i = \\mathbb{E}\\bigl[R_i \\mid R_m < \\text{VaR}_m(\\alpha)\\bigr]',
       f.params      = ['R_i','R_m','α'],
       f.output      = 'tail_co_movement';
 
 MERGE (f:Formula {id: 'f_kyles_lambda'})
   SET f.name       = "Kyle's Lambda (Price Impact)",
       f.expression = 'ΔP = λ·Q',
-      f.latex       = '\Delta P = \lambda \cdot Q',
+      f.`latex`     = '\\Delta P = \\lambda \\cdot Q',
       f.params      = ['λ','Q'],
       f.output      = 'price_impact';
 
 MERGE (f:Formula {id: 'f_expected_shortfall'})
   SET f.name       = 'Expected Shortfall (CVaR)',
       f.expression = 'ES_α = -E[R | R < VaR_α] = -(1/(1-α))·∫_{-∞}^{VaR_α} r·f(r) dr',
-      f.latex       = 'ES_\alpha = -\frac{1}{1-\alpha}\int_{-\infty}^{VaR_\alpha} r\,f(r)\,dr',
+      f.`latex`     = 'ES_\\alpha = -\\frac{1}{1-\\alpha}\\int_{-\\infty}^{VaR_\\alpha} r\\,f(r)\\,dr',
       f.params      = ['α','VaR_α','f(r)'],
       f.output      = 'expected_tail_loss';
 
 MERGE (f:Formula {id: 'f_constant_dollar_gamma'})
   SET f.name       = 'Constant Dollar Gamma',
       f.expression = 'Dollar Gamma = S²·Γ/2 = constant when option weighted by 1/K²',
-      f.latex       = '\text{Dollar}\;\Gamma = \frac{S^2 \Gamma}{2},\quad w_K = \frac{1}{K^2}',
+      f.`latex`     = '\\text{Dollar}\\;\\Gamma = \\frac{S^2 \\Gamma}{2},\\quad w_K = \\frac{1}{K^2}',
       f.params      = ['S','Γ','K'],
       f.output      = 'variance_sensitivity';
 
 MERGE (f:Formula {id: 'f_pd_from_cds'})
   SET f.name       = 'PD from CDS Spread',
       f.expression = 'PD ≈ CDS_spread / (1 - Recovery_rate)',
-      f.latex       = 'PD \approx \frac{\text{CDS spread}}{1 - \text{Recovery rate}}',
+      f.`latex`     = 'PD \\approx \\frac{\\text{CDS spread}}{1 - \\text{Recovery rate}}',
       f.params      = ['CDS_spread','Recovery_rate'],
       f.output      = 'probability_of_default';
-
-
 // -----------------------------------------------------------------------------
 // 47. CONCEPT → FORMULA RELATIONSHIPS (v0.4.0)
 // -----------------------------------------------------------------------------
@@ -2948,63 +2937,61 @@ MATCH (a:Concept {name:'OS Volatility Estimator'}),  (b:Concept {name:'Realized 
 // -----------------------------------------------------------------------------
 // 48. FORMULA NODES — PROCESS & JUMP BATCH
 // -----------------------------------------------------------------------------
-
 MERGE (f:Formula {id: 'f_levy_sde'})
   SET f.name       = 'Levy Process Log Return SDE',
       f.expression = 'dY_t = σ_t·dW_t + dJ_t',
-      f.latex       = 'dY_t = \sigma_t\,dW_t + dJ_t = dY_t^c + dJ_t',
+      f.`latex`     = 'dY_t = \\sigma_t\\,dW_t + dJ_t = dY_t^c + dJ_t',
       f.params      = ['σ_t','dW_t','dJ_t'],
       f.output      = 'log_return_increment';
 
 MERGE (f:Formula {id: 'f_integrated_var'})
   SET f.name       = 'Integrated Variance = Log Contract Expectation',
       f.expression = 'E[∫₀ᵀ σ²(S_t)dt] = -2E[log(S_T/F)]',
-      f.latex       = '\mathbb{E}\!\left[\int_0^T\sigma^2(S_t)\,dt\right] = -2\,\mathbb{E}\!\left[\log\frac{S_T}{F}\right]',
+      f.`latex`     = '\\mathbb{E}\\!\\left[\\int_0^T\\sigma^2(S_t)\\,dt\\right] = -2\\,\\mathbb{E}\\!\\left[\\log\\frac{S_T}{F}\\right]',
       f.params      = ['σ_t','S_T','F','T'],
       f.output      = 'integrated_variance';
 
 MERGE (f:Formula {id: 'f_spanning'})
   SET f.name       = 'Twice-Differentiable Payoff Spanning (Hilpisch)',
       f.expression = 'E_t[g(S_T)] = ∫₀^F g(K)·∂²P/∂K² dK + ∫_F^∞ g(K)·∂²C/∂K² dK',
-      f.latex       = '\mathbb{E}_t[g(S_T)] = \int_0^F g(K)\frac{\partial^2 P}{\partial K^2}dK + \int_F^\infty g(K)\frac{\partial^2 C}{\partial K^2}dK',
+      f.`latex`     = '\\mathbb{E}_t[g(S_T)] = \\int_0^F g(K)\\frac{\\partial^2 P}{\\partial K^2}dK + \\int_F^\\infty g(K)\\frac{\\partial^2 C}{\\partial K^2}dK',
       f.params      = ['g','P','C','K','F'],
       f.output      = 'replicated_expected_payoff';
 
 MERGE (f:Formula {id: 'f_rnpdf'})
   SET f.name       = 'Risk-Neutral PDF from Option Prices (Breeden-Litzenberger)',
       f.expression = 'p(S_T,T; S_t,t) = ∂²P/∂K² |_{S_T=K} = ∂²C/∂K² |_{S_T=K}',
-      f.latex       = 'p(S_T,T;S_t,t)=\left.\frac{\partial^2 P(S_t,K,T)}{\partial K^2}\right|_{S_T=K}=\left.\frac{\partial^2 C(S_t,K,T)}{\partial K^2}\right|_{S_T=K}',
+      f.`latex`     = 'p(S_T,T;S_t,t)=\\left.\\frac{\\partial^2 P(S_t,K,T)}{\\partial K^2}\\right|_{S_T=K}=\\left.\\frac{\\partial^2 C(S_t,K,T)}{\\partial K^2}\\right|_{S_T=K}',
       f.params      = ['P','C','K'],
       f.output      = 'risk_neutral_pdf';
 
 MERGE (f:Formula {id: 'f_os_threshold'})
   SET f.name       = 'OS Jump Threshold (Spadafora)',
       f.expression = 'θ̂ = θ(p, n′, k) · ŝ',
-      f.latex       = '\hat{\theta} = \theta(p,n^\prime,k)\cdot\hat{s}',
+      f.`latex`     = '\\hat{\\theta} = \\theta(p,n^\\prime,k)\\cdot\\hat{s}',
       f.params      = ['p','n_prime','k','s_hat'],
       f.output      = 'jump_threshold';
 
 MERGE (f:Formula {id: 'f_order_stat_cdf'})
   SET f.name       = 'k-th Order Statistic CDF (Normal)',
       f.expression = 'F_(k)(x) = I_{Φ(x)}(k, n-k+1)',
-      f.latex       = 'F_{(k)}(x) = I_{\Phi(x)}(k,\, n-k+1)',
+      f.`latex`     = 'F_{(k)}(x) = I_{\\Phi(x)}(k,\\, n-k+1)',
       f.params      = ['x','k','n'],
       f.output      = 'order_stat_probability';
 
 MERGE (f:Formula {id: 'f_log_contract'})
   SET f.name       = 'Log Contract Decomposition',
       f.expression = 'log(S_T/F) = ∫₀ᵀ dS_t/S_t - ∫₀ᵀ σ²(S_t)/2 dt',
-      f.latex       = '\log\frac{S_T}{F}=\int_0^T\frac{dS_t}{S_t}-\int_0^T\frac{\sigma^2(S_t)}{2}\,dt',
+      f.`latex`     = '\\log\\frac{S_T}{F}=\\int_0^T\\frac{dS_t}{S_t}-\\int_0^T\\frac{\\sigma^2(S_t)}{2}\\,dt',
       f.params      = ['S_T','F','σ_t'],
       f.output      = 'log_return_decomposition';
 
 MERGE (f:Formula {id: 'f_dollar_gamma'})
   SET f.name       = 'Dollar Gamma',
       f.expression = 'Dollar Gamma = ½·S²·Γ = ½·S²·∂²V/∂S²',
-      f.latex       = '\text{Dollar Gamma} = \tfrac{1}{2}S^2\Gamma = \tfrac{1}{2}S^2\frac{\partial^2 V}{\partial S^2}',
+      f.`latex`     = '\\text{Dollar Gamma} = \\tfrac{1}{2}S^2\\Gamma = \\tfrac{1}{2}S^2\\frac{\\partial^2 V}{\\partial S^2}',
       f.params      = ['S','Γ'],
       f.output      = 'dollar_gamma';
-
 
 // -----------------------------------------------------------------------------
 // 49. CONCEPT → FORMULA RELATIONSHIPS (v0.4.0)
@@ -5933,49 +5920,49 @@ MERGE (c:Concept {name: 'Carbon Price'})
 MERGE (f:Formula {id: 'f_expected_loss'})
   SET f.name       = 'Expected Loss (Credit Portfolio)',
       f.expression = 'EL = Σ_i PD_i · EAD_i · LGD_i',
-      f.latex      = 'EL = \sum_{i=1}^{N} PD_i \cdot EAD_i \cdot LGD_i',
+      f.`latex`     = 'EL = \\sum_{i=1}^{N} PD_i \\cdot EAD_i \\cdot LGD_i',
       f.params     = ['PD_i','EAD_i','LGD_i','N'],
       f.output     = 'expected_portfolio_loss';
 
 MERGE (f:Formula {id: 'f_lgd'})
   SET f.name       = 'Loss Given Default',
       f.expression = 'LGD = 1 - RR',
-      f.latex      = 'LGD_i = 1 - RR_i',
+      f.`latex`     = 'LGD_i = 1 - RR_i',
       f.params     = ['RR'],
       f.output     = 'loss_given_default';
 
 MERGE (f:Formula {id: 'f_vasicek_pd'})
   SET f.name       = 'Vasicek Conditional PD',
       f.expression = 'PD(Z) = Φ[ (Φ⁻¹(PD) - √ρ·Z) / √(1-ρ) ]',
-      f.latex      = 'PD(Z)=\Phi\!\left[\frac{\Phi^{-1}(PD)-\sqrt{\rho}\,Z}{\sqrt{1-\rho}}\right]',
+      f.`latex`     = 'PD(Z)=\\Phi\\!\\left[\\frac{\\Phi^{-1}(PD)-\\sqrt{\\rho}\\,Z}{\\sqrt{1-\\rho}}\\right]',
       f.params     = ['PD','rho','Z'],
       f.output     = 'conditional_default_probability';
 
 MERGE (f:Formula {id: 'f_vasicek_var'})
   SET f.name       = 'Vasicek Portfolio Loss Quantile',
       f.expression = 'q_α(L) = LGD · Φ[ (Φ⁻¹(PD) + √ρ·Φ⁻¹(α)) / √(1-ρ) ]',
-      f.latex      = 'q_\alpha(L)=LGD\cdot\Phi\!\left[\frac{\Phi^{-1}(PD)+\sqrt{\rho}\,\Phi^{-1}(\alpha)}{\sqrt{1-\rho}}\right]',
+      f.`latex`     = 'q_\\alpha(L)=LGD\\cdot\\Phi\\!\\left[\\frac{\\Phi^{-1}(PD)+\\sqrt{\\rho}\\,\\Phi^{-1}(\\alpha)}{\\sqrt{1-\\rho}}\\right]',
       f.params     = ['PD','rho','alpha','LGD'],
       f.output     = 'portfolio_loss_quantile';
 
 MERGE (f:Formula {id: 'f_credit_etl'})
   SET f.name       = 'Expected Tail Loss (Credit)',
       f.expression = 'ETL_α = E[L | L > VaR_α(L)] = (1/α) · ∫_{α}^{1} q_u(L) du',
-      f.latex      = 'ETL_\alpha = \frac{1}{\alpha}\int_\alpha^1 q_u(L)\,du',
+      f.`latex`     = 'ETL_\\alpha = \\frac{1}{\\alpha}\\int_\\alpha^1 q_u(L)\\,du',
       f.params     = ['alpha','loss_quantile_function'],
       f.output     = 'expected_tail_loss';
 
 MERGE (f:Formula {id: 'f_merton_dd'})
   SET f.name       = 'Merton Distance to Default',
       f.expression = 'DD = (ln(V_A/D) + (μ - σ_A²/2)·T) / (σ_A·√T)',
-      f.latex      = 'DD=\frac{\ln(V_A/D)+(\mu-\sigma_A^2/2)T}{\sigma_A\sqrt{T}}',
+      f.`latex`     = 'DD=\\frac{\\ln(V_A/D)+(\\mu-\\sigma_A^2/2)T}{\\sigma_A\\sqrt{T}}',
       f.params     = ['V_A','D','mu','sigma_A','T'],
       f.output     = 'distance_to_default';
 
 MERGE (f:Formula {id: 'f_mc_credit_loss'})
   SET f.name       = 'Monte Carlo Credit Loss (per simulation)',
       f.expression = 'L_sim = Σ_i 1[U_i < PD_i] · LGD_i · EAD_i',
-      f.latex      = 'L^{(s)}=\sum_i \mathbf{1}[U_i^{(s)}<PD_i]\cdot LGD_i\cdot EAD_i',
+      f.`latex`     = 'L^{(s)}=\\sum_i \\mathbf{1}[U_i^{(s)}<PD_i]\\cdot LGD_i\\cdot EAD_i',
       f.params     = ['U_i','PD_i','LGD_i','EAD_i'],
       f.output     = 'simulated_portfolio_loss';
 
@@ -6430,31 +6417,30 @@ MERGE (c:Concept {name: 'CausalNex'})
 MERGE (f:Formula {id: 'f_marcenko_pastur'})
   SET f.name       = 'Marcenko-Pastur Upper Edge',
       f.expression = 'λ_max = σ² · (1 + √(T/N))²  ;  λ_min = σ² · (1 − √(T/N))²',
-      f.latex      = '\lambda_{\max/\min}=\sigma^2\!\left(1\pm\sqrt{T/N}\right)^2',
+      f.`latex`     = '\\lambda_{\\max/\\min}=\\sigma^2\\!\\left(1\\pm\\sqrt{T/N}\\right)^2',
       f.params     = ['sigma_sq','T','N'],
       f.output     = 'eigenvalue_noise_boundary';
 
 MERGE (f:Formula {id: 'f_standardized_log_return'})
   SET f.name       = 'Standardized Log Return',
       f.expression = 'r*_t = (log(P_t / P_{t-1}) − μ) / σ',
-      f.latex      = 'r^*_t = \frac{\ln(P_t/P_{t-1})-\mu}{\sigma}',
+      f.`latex`     = 'r^*_t = \\frac{\\ln(P_t/P_{t-1})-\\mu}{\\sigma}',
       f.params     = ['P_t','P_{t-1}','mu','sigma'],
       f.output     = 'standardized_return';
 
 MERGE (f:Formula {id: 'f_var1_dynamic_bn'})
   SET f.name       = 'VAR(1) Dynamic BN Structural Equation',
       f.expression = 'X_t = B · X_t + A · X_{t-1} + ε_t',
-      f.latex      = '\mathbf{X}_t = B\mathbf{X}_t + A\mathbf{X}_{t-1} + \boldsymbol{\varepsilon}_t',
+      f.`latex`     = '\\mathbf{X}_t = B\\mathbf{X}_t + A\\mathbf{X}_{t-1} + \\boldsymbol{\\varepsilon}_t',
       f.params     = ['B_intra','A_lag','X_t','epsilon_t'],
       f.output     = 'causal_time_series_decomposition';
 
 MERGE (f:Formula {id: 'f_bayesian_pd_update'})
   SET f.name       = 'Bayesian PD Posterior Update',
       f.expression = 'P(D=1 | X=x) = P(X=x | D=1) · P(D=1) / P(X=x)',
-      f.latex      = 'P(D\!=\!1|\mathbf{X}\!=\!\mathbf{x})=\frac{P(\mathbf{X}\!=\!\mathbf{x}|D\!=\!1)\,P(D\!=\!1)}{P(\mathbf{X}\!=\!\mathbf{x})}',
+      f.`latex`     = 'P(D\\!=\\!1|\\mathbf{X}\\!=\\!\\mathbf{x})=\\frac{P(\\mathbf{X}\\!=\\!\\mathbf{x}|D\\!=\\!1)\\,P(D\\!=\\!1)}{P(\\mathbf{X}\\!=\\!\\mathbf{x})}',
       f.params     = ['prior_PD','likelihood_X_given_D','evidence_X'],
       f.output     = 'posterior_probability_of_default';
-
 // ── BELONGS_TO ────────────────────────────────────────────────────────────────
 MATCH (c:Concept {name:'Reichenbach Common Cause Principle'}), (cat:Category {name:'causal_inference'}) MERGE (c)-[:BELONGS_TO]->(cat);
 MATCH (c:Concept {name:'Common Cause'}), (cat:Category {name:'causal_inference'}) MERGE (c)-[:BELONGS_TO]->(cat);

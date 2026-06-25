@@ -10,22 +10,21 @@
 namespace graphalpha {
 
 class ExecutionEngine {
- public:
-  ExecutionEngine(double fee_pct = 0.0026, double slip_pct = 0.0005)
-      : fee_pct_(fee_pct), slip_pct_(slip_pct) {}
+  public:
+   ExecutionEngine() = default;
 
-  void set_fee_slippage(double fee_pct, double slip_pct) {
-    fee_pct_ = fee_pct;
-    slip_pct_ = slip_pct;
-  }
+   void set_fee_slippage(double fee_pct, double slip_pct) {
+     fee_pct_ = fee_pct;
+     slip_pct_ = slip_pct;
+   }
 
-  FillResult execute(const risk::ApprovedOrder& order,
-                     double current_price,
-                     const std::string& timestamp);
+   FillResult execute(const risk::ApprovedOrder& order,
+                      double current_price,
+                      const std::string& timestamp);
 
- private:
-  double fee_pct_;
-  double slip_pct_;
+  private:
+   double fee_pct_ = 0.0026;  // crypto default
+   double slip_pct_ = 0.0005;
 };
 
 }  // namespace graphalpha

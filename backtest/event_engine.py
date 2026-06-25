@@ -98,14 +98,6 @@ class EventEngine:
         if not self.use_graph:
             return
 
-    def _strategy_ticker(self, strategy_name: str, bar: dict[str, Any]) -> str:
-        if strategy_name == "CrisisAlpha":
-            return "SPY"
-        for ticker in bar:
-            if ticker not in ("vix", "_ticker", "ticker"):
-                return ticker
-        return "SPY"
-
     def _get_env(self, key: str, default: str) -> str:
         import os
         return os.getenv(key, default)
@@ -168,6 +160,15 @@ class EventEngine:
         concept = ticker
         return any(concept in pair for pair in self._contradiction_cache)
 
+    def _safe_lookup(self, ticker: str) -> UniverseEntry | None:
+        try:
+            return lookup(ticker)
+        except KeyError:
+            return None
+
+    def _detect_asset_class(self, ticker: str) -> str:
+        return "crypto" if "-USD" in ticker.upper() else "equity_xstock"
+
     # ------------------------------------------------------------------
     # Position lifecycle
     # ------------------------------------------------------------------
@@ -175,6 +176,12 @@ class EventEngine:
     def _open_position(self, ticker: str, direction: str, quantity: float, price: float, ts: datetime, regime: str, asset_class: str) -> dict[str, Any]:
         pid = f"{ticker}:{ts.isoformat()}"
         notional = quantity * price
+        sector = "other"
+        try:
+            from .universe import lookup
+            sector = lookup(ticker).sector
+        except KeyError:
+            pass
         pos = {
             "position_id": pid,
             "ticker": ticker,
@@ -192,7 +199,7 @@ class EventEngine:
             "hold_days": None,
             "closed": False,
             "asset_class": asset_class,
-            "sector": lookup(ticker).sector if ticker in [u.ticker for u in get_universe()] else "other",
+            "sector": sector,
         }
         self._open_positions[pid] = pos
         return pos
@@ -271,8 +278,11 @@ class EventEngine:
             self._current_regime = self._classify(prices, idx)
             active_strategies = self._get_active_strategies(self._current_regime)
             bar = self._build_bar(prices, idx)
-            for strategy_name in active_strategies:
-                self._process_strategy(strategy_name, bar, prices, idx, self._current_regime, dt)
+            for ticker in self.tickers:
+                if ticker not in bar:
+                    continue
+                for strategy_name in active_strategies:
+                    self._process_strategy_for_ticker(strategy_name, ticker, bar, prices, idx, self._current_regime, dt)
 
             self.equity_curve.append({
                 "timestamp": dt.isoformat(),
@@ -329,10 +339,7 @@ class EventEngine:
     # Strategy processing with risk gate
     # ------------------------------------------------------------------
 
-    def _process_strategy(self, strategy_name: str, bar: dict[str, Any], prices: pd.DataFrame, idx: int, regime: str, dt: datetime) -> None:
-        ticker = self._strategy_ticker(strategy_name, bar)
-        if ticker not in [u.ticker for u in get_universe()]:
-            return
+    def _process_strategy_for_ticker(self, strategy_name: str, ticker: str, bar: dict[str, Any], prices: pd.DataFrame, idx: int, regime: str, dt: datetime) -> None:
         try:
             strategy = get_strategy(strategy_name)
         except KeyError:
@@ -356,13 +363,14 @@ class EventEngine:
 
         kg = 0.0
         if self.use_graph:
-            kg = 0.0  # placeholder — KG evaluator removed for deterministic backtest
+            kg = 0.0
 
         final_score = float(np.clip(score_raw + kg, -1.0, 1.0))
         if direction != "hold" and abs(final_score) < cfg.trade_threshold:
             direction = "hold"
         blocked = self._contradiction_blocked(ticker)
 
+        entry = self._safe_lookup(ticker)
         sig = Signal(
             schema_version=cfg.schema_version,
             cycle_id=str(uuid.uuid4()),
@@ -370,9 +378,9 @@ class EventEngine:
             regime=regime,
             strategy=strategy_name,
             ticker=ticker,
-            venue=lookup(ticker).venue,
-            venue_symbol=lookup(ticker).venue_symbol,
-            asset_class=lookup(ticker).asset_class,
+            venue=entry.venue if entry else "ibkr",
+            venue_symbol=entry.venue_symbol if entry else ticker.upper(),
+            asset_class=entry.asset_class if entry else self._detect_asset_class(ticker),
             direction=direction,
             score=final_score,
             quant_score=quant,
@@ -397,7 +405,6 @@ class EventEngine:
             self.rejected_signals.append({"signal": sig.__dict__, "reason": "no_price", "timestamp": dt.isoformat()})
             return
 
-        # Simple deterministic sizing for backtest (avoids external risk_sim dependency in test env)
         size_fraction = min(abs(sig.score) * 0.15, 0.20)
         target_notional = self.nav * size_fraction
         quantity = target_notional / price

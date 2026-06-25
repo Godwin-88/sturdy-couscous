@@ -44,13 +44,17 @@ struct ApprovedOrder {
   std::string mode = "paper";
   RiskChecks risk_checks;
 
-  // Internal fields (not in schema)
-  bool risk_checks_all_passed = false;
-  std::string rejection_reason;
-  std::string signal_timestamp; // needed for parity/audit but not in schema v1?
-  std::string order_timestamp;
+// Internal fields (not in schema)
+   bool risk_checks_all_passed = false;
+   std::string rejection_reason;
+   std::string signal_timestamp;
+   std::string order_timestamp;
 
-  // Factory: only creates a real order when checks pass (mirrors P0)
+   // Convenience accessors matching test expectations
+   bool sector_pct_ok() const { return risk_checks.sector_pct_ok; }
+   bool position_pct_ok() const { return risk_checks.position_pct_ok; }
+
+   // Factory: only creates a real order when checks pass (mirrors P0)
   static ApprovedOrder create(const Signal& signal, double quantity, double notional,
                                double kelly, bool pos_ok, bool sec_ok,
                                bool var_ok_val, double var_pct,

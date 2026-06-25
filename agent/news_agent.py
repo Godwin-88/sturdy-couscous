@@ -22,9 +22,9 @@ import numpy as np
 from gqlalchemy import Memgraph
 from loguru import logger
 
-FEATHERLESS_URL   = os.getenv("FEATHERLESS_BASE_URL", "https://api.featherless.ai/v1")
-FEATHERLESS_KEY   = os.getenv("FEATHERLESS_API_KEY", "")
-FEATHERLESS_MODEL = os.getenv("FEATHERLESS_MODEL", "")
+LLM_URL = os.getenv("GROQ_BASE_URL", os.getenv("FEATHERLESS_BASE_URL", "https://api.groq.com/openai/v1"))
+LLM_KEY = os.getenv("GROQ_API_KEY", os.getenv("FEATHERLESS_API_KEY", ""))
+LLM_MODEL = os.getenv("GROQ_MODEL", os.getenv("FEATHERLESS_MODEL", "llama-3.3-70b-versatile"))
 
 # ── RSS feed registry ─────────────────────────────────────────────────────────
 RSS_FEEDS = {
@@ -110,7 +110,7 @@ class NewsAgent:
             return {"ticker_sentiment": {}, "concept_sentiment": {}, "articles": 0}
 
         # Optional: enrich with LLM for top 5 articles
-        if FEATHERLESS_KEY and articles:
+        if LLM_KEY and articles:
             top = sorted(articles, key=lambda a: abs(a["score"]), reverse=True)[:5]
             for art in top:
                 art["llm_score"] = await self._llm_score(art["title"] + " " + art.get("summary", ""))
@@ -210,11 +210,11 @@ class NewsAgent:
         try:
             async with httpx.AsyncClient(timeout=8.0) as client:
                 r = await client.post(
-                    f"{FEATHERLESS_URL}/chat/completions",
-                    json={"model": FEATHERLESS_MODEL,
+                    f"{LLM_URL}/chat/completions",
+                    json={"model": LLM_MODEL,
                           "messages": [{"role": "user", "content": prompt}],
                           "max_tokens": 8, "temperature": 0.0},
-                    headers={"Authorization": f"Bearer {FEATHERLESS_KEY}"},
+                    headers={"Authorization": f"Bearer {LLM_KEY}"},
                 )
                 return float(np.clip(float(r.json()["choices"][0]["message"]["content"].strip()), -1, 1))
         except Exception:

@@ -15,9 +15,9 @@ from arch import arch_model
 from gqlalchemy import Memgraph
 from loguru import logger
 
-FEATHERLESS_URL = os.getenv("FEATHERLESS_BASE_URL", "https://api.featherless.ai/v1")
-FEATHERLESS_KEY = os.getenv("FEATHERLESS_API_KEY", "")
-FEATHERLESS_MODEL = os.getenv("FEATHERLESS_MODEL", "")
+LLM_URL = os.getenv("GROQ_BASE_URL", os.getenv("FEATHERLESS_BASE_URL", "https://api.groq.com/openai/v1"))
+LLM_KEY = os.getenv("GROQ_API_KEY", os.getenv("FEATHERLESS_API_KEY", ""))
+LLM_MODEL = os.getenv("GROQ_MODEL", os.getenv("FEATHERLESS_MODEL", "llama-3.3-70b-versatile"))
 
 # xStocks available on Kraken — extend as needed
 TICKER_MAP = {
@@ -205,10 +205,10 @@ class SignalAgent:
             "reasoning": f"Momentum 12-1: {mom_12_1:.1%}"
         }
 
-    # ── Featherless LLM sentiment ─────────────────────────────────────────────
+    # ── LLM sentiment (Groq primary, Featherless fallback) ───────────────────
     async def _get_sentiment(self, strategy_name: str, regime: str) -> dict:
-        if not FEATHERLESS_KEY:
-            return {"score": 0.0, "reasoning": "Featherless key not set"}
+        if not LLM_KEY:
+            return {"score": 0.0, "reasoning": "LLM key not set"}
         prompt = (
             f"Current market regime: {regime}. "
             f"Active trading strategy: {strategy_name}. "
@@ -220,18 +220,18 @@ class SignalAgent:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 r = await client.post(
-                    f"{FEATHERLESS_URL}/chat/completions",
+                    f"{LLM_URL}/chat/completions",
                     json={
-                        "model": FEATHERLESS_MODEL,
+                        "model": LLM_MODEL,
                         "messages": [{"role": "user", "content": prompt}],
                         "max_tokens": 8,
                         "temperature": 0.1,
                     },
-                    headers={"Authorization": f"Bearer {FEATHERLESS_KEY}"},
+                    headers={"Authorization": f"Bearer {LLM_KEY}"},
                 )
                 raw = r.json()["choices"][0]["message"]["content"].strip()
                 score = float(raw)
                 return {"score": float(np.clip(score, -1, 1)), "reasoning": raw}
         except Exception as e:
-            logger.warning(f"Featherless sentiment error: {e}")
+            logger.warning(f"LLM sentiment error: {e}")
             return {"score": 0.0, "reasoning": f"error: {e}"}

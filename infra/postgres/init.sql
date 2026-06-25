@@ -3,11 +3,13 @@
 CREATE TABLE IF NOT EXISTS positions (
     id               SERIAL PRIMARY KEY,
     ticker           VARCHAR(20) NOT NULL,
-    direction        VARCHAR(10) NOT NULL,   -- buy | sell
+    direction        VARCHAR(10) NOT NULL,
     quantity         NUMERIC(18,6) NOT NULL,
     avg_entry_price  NUMERIC(18,6) NOT NULL,
     current_price    NUMERIC(18,6) NOT NULL DEFAULT 0,
-    status           VARCHAR(10) NOT NULL DEFAULT 'open',  -- open | closed
+    venue            VARCHAR(20) NOT NULL DEFAULT 'ibkr',
+    asset_class      VARCHAR(30) NOT NULL DEFAULT 'equity_xstock',
+    status           VARCHAR(10) NOT NULL DEFAULT 'open',
     opened_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     closed_at        TIMESTAMPTZ
 );
