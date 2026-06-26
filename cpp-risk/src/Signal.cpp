@@ -41,6 +41,11 @@ std::optional<Signal> Signal::from_json(const nlohmann::json& j) {
   sig.kg_formula_contribution = j.value("kg_formula_contribution", 0.0);
   validate_range("kg_formula_contribution", sig.kg_formula_contribution, -1.0, 1.0);
   sig.contradiction_blocked = j.value("contradiction_blocked", false);
+  if (j.contains("graph_path") && j["graph_path"].is_array()) {
+    for (const auto& item : j["graph_path"]) {
+      sig.graph_path.push_back(item.get<std::string>());
+    }
+  }
   return sig;
 }
 
@@ -63,6 +68,12 @@ nlohmann::json Signal::to_json() const {
   j["macro_overlay"] = macro_overlay;
   j["kg_formula_contribution"] = kg_formula_contribution;
   j["contradiction_blocked"] = contradiction_blocked;
+  if (!graph_path.empty()) {
+    j["graph_path"] = nlohmann::json::array();
+    for (const auto& p : graph_path) {
+      j["graph_path"].push_back(p);
+    }
+  }
   return j;
 }
 

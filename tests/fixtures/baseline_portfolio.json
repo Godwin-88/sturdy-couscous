@@ -1,6 +1,6 @@
 {
   "signal": {
-    "schema_version": "1",
+    "schema_version": 1,
     "cycle_id": "11111111-1111-1111-1111-111111111111",
     "timestamp": "2023-01-15T00:00:00Z",
     "regime": "Trending",

@@ -30,14 +30,24 @@ bool RiskEngine::_check_position_cap(const PortfolioState& pf, const Signal& sig
   return (existing + target_notional) / pf.nav <= cfg_.max_position_pct + 1e-12;
 }
 
+static std::string ticker_to_sector(const std::string& ticker) {
+  std::string t = ticker;
+  for (char& c : t) c = std::toupper(c);
+  if (t == "QQQ") return "equity_tech";
+  if (t == "SPY") return "equity_broad";
+  if (t == "XLF") return "equity_financials";
+  if (t == "XLE") return "equity_energy";
+  if (t.find("-USD") != std::string::npos) return "";
+  return "equity_broad";
+}
+
 bool RiskEngine::_check_sector_cap(const PortfolioState& pf, const Signal& sig, double target_notional) const {
-   static const std::unordered_set<std::string> sectored = {
-     "equity_xstock", "macro_proxy", "equity_broad", "equity_tech", "equity_financials", "equity_energy", "commodities"
-   };
-   if (!sectored.contains(sig.asset_class)) return true;
+   std::string sector = ticker_to_sector(sig.ticker);
+   if (sector.empty()) return true;
    double existing = 0.0;
    for (const auto& p : pf.positions) {
-     if (p.sector == sig.asset_class) existing += p.notional;
+     std::string pos_sector = p.sector.empty() ? ticker_to_sector(p.ticker) : p.sector;
+     if (pos_sector == sector) existing += p.notional;
    }
    return (existing + target_notional) / pf.nav <= cfg_.max_sector_pct + 1e-12;
  }

@@ -1,21 +1,17 @@
-.PHONY: up down logs load-graph verify shell-memgraph shell-api test backtest deploy up-risk-engine
+.PHONY: up down logs load-graph verify shell-memgraph shell-api test backtest deploy up-risk-engine test-cpp build-cpp
 
 # ── Local development ─────────────────────────────────────────────────────────
 up:
 	@echo "Building and starting all services..."
-	docker compose up -d --build memgraph postgres redis api agent-worker frontend
+	docker compose up -d --build memgraph postgres redis api agent-worker risk-engine frontend
 	@echo "Waiting for graph loader..."
 	@docker compose run --rm graph-loader
 	@echo ""
 	@echo "GraphAlpha is running:"
-	@echo "  Frontend : http://localhost:5173"
-	@echo "  API      : http://localhost:8000/docs"
-	@echo "  Memgraph : http://localhost:3000"
-
-up-risk-engine:
-	@echo "Starting risk-engine service..."
-	docker compose --profile cpp up -d --build risk-engine
-	@echo "risk-engine started. Logs: docker compose logs risk-engine"
+	@echo "  Frontend     : http://localhost:5173"
+	@echo "  API          : http://localhost:8000/docs"
+	@echo "  Memgraph     : http://localhost:3000"
+	@echo "  RiskEngine   : see docker compose logs risk-engine"
 
 up-all:
 	@echo "Building and starting all services..."
@@ -32,6 +28,16 @@ up-all:
 up-monitoring:
 	docker compose --profile monitoring up -d --build
 	@echo "Prometheus: http://localhost:9090  Grafana: http://localhost:3001"
+
+# ── C++ risk-engine build & test ───────────────────────────────────────────────
+build-cpp:
+	cd cpp-risk && mkdir -p build && cd build && cmake .. && cmake --build . --clean-first
+
+test-cpp:
+	cd cpp-risk && mkdir -p build && cd build && cmake .. && cmake --build . && ctest --output-on-failure
+
+up-risk-engine:
+	docker compose up -d --build risk-engine
 
 down:
 	docker compose down

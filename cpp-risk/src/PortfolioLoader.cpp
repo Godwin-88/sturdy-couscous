@@ -12,18 +12,21 @@ namespace risk {
 
 static std::string infer_asset_class(const std::string& ticker) {
   if (ticker.find("-USD") != std::string::npos || 
-      ticker == "BTC" || ticker == "ETH" || ticker == "XBT" || ticker == "ETH") {
+      ticker == "BTC" || ticker == "ETH" || ticker == "XBT") {
     return "crypto";
   }
   return "equity_xstock";
 }
 
-static std::string infer_venue(const std::string& ticker) {
-  if (ticker.find("-USD") != std::string::npos || 
-      ticker == "BTC" || ticker == "ETH" || ticker == "XBT" || ticker == "ETH") {
-    return "kraken";
-  }
-  return "ibkr";
+static std::string infer_sector(const std::string& ticker) {
+  std::string t = ticker;
+  for (char& c : t) c = std::toupper(c);
+  if (t == "SPY") return "equity_broad";
+  if (t == "QQQ") return "equity_tech";
+  if (t == "XLF") return "equity_financials";
+  if (t == "XLE") return "equity_energy";
+  if (t.find("-USD") != std::string::npos) return "";
+  return "equity_broad";
 }
 
 std::optional<PortfolioState> PortfolioLoader::load_from_postgres(const std::string& conn_str) {
@@ -53,7 +56,7 @@ PGresult* res = PQexec(conn,
     p.ticker = PQgetvalue(res, i, 0);
     p.venue = (PQgetisnull(res, i, 6) ? infer_venue(p.ticker) : PQgetvalue(res, i, 6));
     p.asset_class = (PQgetisnull(res, i, 7) ? infer_asset_class(p.ticker) : PQgetvalue(res, i, 7));
-    p.sector = p.asset_class;
+    p.sector = infer_sector(p.ticker);
     p.quantity = std::stod(PQgetvalue(res, i, 2));
     p.notional = std::stod(PQgetvalue(res, i, 5));
     pf.positions.push_back(p);

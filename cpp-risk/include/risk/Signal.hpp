@@ -1,4 +1,4 @@
-#pragma once
+  #pragma once
 
 #include <string>
 #include <optional>
@@ -46,6 +46,7 @@ struct Signal {
   double macro_overlay = 0.0;
   double kg_formula_contribution = 0.0;
   bool contradiction_blocked = false;
+  std::vector<std::string> graph_path;
 
   static std::optional<Signal> from_json(const nlohmann::json& j);
   nlohmann::json to_json() const;

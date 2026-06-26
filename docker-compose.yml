@@ -128,7 +128,34 @@ services:
       - backtest_results:/app/backtest/results
     profiles: ["backtest"]          # only starts with: docker compose --profile backtest up
 
-  # ── C++ Risk & Execution Engine ──────────────────────────────────────────────
+  # ── Interactive Brokers Gateway (paper trading) ────────────────────────────
+  # Community headless IB Gateway with IBC for auto-login.
+  # Connects to IBKR's paper trading environment on port 4002.
+  # risk-engine connects over the internal Compose network.
+  ib-gateway:
+    image: ghcr.io/unusualalpha/ib-gateway-docker:latest
+    container_name: graphalpha-ib-gateway
+    env_file: .env
+    environment:
+      TWS_USERNAME: ${IBKR_USERNAME}
+      TWS_PASSWORD: ${IBKR_PASSWORD}
+      TRADING_MODE: ${IBKR_TRADING_MODE:-paper}
+      READ_ONLY_API: "true"
+    ports:
+      - "4002:4002"     # Paper trading port (host access for debugging)
+      - "4001:4001"     # Live trading port (mapped but unused in paper mode)
+    volumes:
+      - ibgateway_data:/home/ibgateway/ibc
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4002/health || nc -z localhost 4002"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    profiles: ["ibkr"]  # Only started when IBKR credentials are configured
+
+  # ── C++ Risk & Execution Engine (subscribes to Redis, processes live signals) ─
   risk-engine:
     build:
       context: .
@@ -139,6 +166,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # ib-gateway is conditional via profiles: ["ibkr"]
+      # When ibkr profile is active, docker compose ensures startup ordering
     env_file: .env
     environment:
       POSTGRES_HOST: postgres
@@ -150,10 +179,11 @@ services:
       REDIS_SUBSCRIBE: "1"
       REDIS_SIGNALS_CHANNEL: "graphalpha:signals:v1"
       SHADOW_COMPARE: ${SHADOW_MODE:-false}
+      IBKR_HOST: ib-gateway
+      IBKR_PORT: 4002
+      IBKR_CLIENT_ID: ${IBKR_CLIENT_ID:-1}
     volumes:
       - ./tests/fixtures:/workspace/tests/fixtures:ro
-    profiles: ["cpp"]
-    command: /workspace/cpp-risk/build/risk-engine /workspace/tests/fixtures/baseline_portfolio.json
 
   # ── Monitoring ────────────────────────────────────────────────────────────────
   prometheus:
@@ -205,3 +235,4 @@ volumes:
   prometheus_data:
   grafana_data:
   backtest_results:
+  ibgateway_data:

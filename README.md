@@ -441,9 +441,14 @@ The orchestrator runs every 300 seconds by default. The frontend dashboard updat
 
 ```bash
 make up                  # Build + start all services + load KG
+make up-risk-engine      # Start risk-engine (P5) alongside other services  
+make up-all              # Build + start all services including risk-engine
 make down                # Stop and remove containers
 make logs                # Follow API + agent logs
 make logs-agent          # Follow agent worker only
+make test                # Run API tests
+make test-cpp            # Run C++ parity tests
+make build-cpp           # Build C++ risk-engine locally
 make load-graph          # Reload master.cypher into running Memgraph
 make verify-graph        # Print node/edge counts from Memgraph
 make shell-memgraph      # Open mgconsole Cypher shell

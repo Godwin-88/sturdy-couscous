@@ -15,8 +15,8 @@ struct Position {
   std::string venue;
   std::string asset_class;
   std::string sector;
-  double notional = 0.0;
   double quantity = 0.0;
+  double notional = 0.0;
 };
 
 struct PortfolioState {

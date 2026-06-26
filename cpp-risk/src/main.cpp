@@ -2,6 +2,8 @@
 #include "risk/Config.hpp"
 #include "risk/PortfolioLoader.hpp"
 #include "graphalpha/execution_engine.hpp"
+#include "graphalpha/kraken_adapter.hpp"
+#include "graphalpha/ibkr_adapter.hpp"
 #include "graphalpha/portfolio_state.hpp"
 #include "graphalpha/audit_log.hpp"
 #include "graphalpha/event_publisher.hpp"
@@ -108,13 +110,13 @@ bool run_file_mode(const std::vector<Signal>& signals,
     std::string order_id = PortfolioLoader::make_order_id();
 
     if (order.risk_checks_all_passed) {
-      double price = 100.0;
-      if (!sig.ticker.empty() && price_map.count(sig.ticker)) {
-        const auto& s = price_map.at(sig.ticker);
-        if (!s.empty()) price = s.back();
-      }
       std::string ts = now_iso();
-      auto fill = exec_engine.execute(order, price, ts);
+      auto fill_opt = exec_engine.execute(order, ts);
+      if (!fill_opt) {
+        std::cerr << "[file] execute failed for " << order.ticker << " at venue " << order.venue << "\n";
+        continue;
+      }
+      auto fill = *fill_opt;
 
       update_position(pf, order, fill.fill_price, fill.fee_usd, fill.slippage_usd);
       double old_nav = pf.nav;
@@ -177,9 +179,16 @@ int run_subscriber_mode(const std::string& redis_host, int redis_port, EventPubl
    std::signal(SIGINT, signal_handler);
    std::signal(SIGTERM, signal_handler);
 
-   Config cfg;
-   RiskEngine risk_engine(cfg);
-   ExecutionEngine exec_engine;
+    Config cfg;
+    RiskEngine risk_engine(cfg);
+    ExecutionEngine exec_engine;
+
+    // P6: Register venue adapters
+    std::string ibkr_host = std::getenv("IBKR_HOST") ? std::getenv("IBKR_HOST") : "ib-gateway";
+    int ibkr_port = std::getenv("IBKR_PORT") ? std::stoi(std::getenv("IBKR_PORT")) : 4002;
+    int ibkr_client_id = std::getenv("IBKR_CLIENT_ID") ? std::stoi(std::getenv("IBKR_CLIENT_ID")) : 1;
+    exec_engine.register_adapter(std::make_unique<KrakenAdapter>());
+    exec_engine.register_adapter(std::make_unique<IBKRAdapter>(ibkr_host, ibkr_port, ibkr_client_id));
 
   std::string conn_str = build_conn_str();
   AuditLog audit(conn_str);
@@ -236,28 +245,32 @@ int run_subscriber_mode(const std::string& redis_host, int redis_port, EventPubl
           std::string payload = reply->element[2]->str;
           std::cerr << "[subscriber] received payload len=" << payload.size() << "\n";
           double t0 = now_epoch_ms();
+          std::optional<Signal> sig_opt;
+          ApprovedOrder order;
+          std::string outcome = "error";
           try {
             auto j = nlohmann::json::parse(payload);
-            auto sig = Signal::from_json(j);
-            if (!sig) {
+            sig_opt = Signal::from_json(j);
+            if (!sig_opt) {
               std::cerr << "[subscriber] invalid signal schema\n";
               freeReplyObject(reply);
               continue;
             }
 
-            auto order = risk_engine.evaluate(
-                *sig, pf,
+            order = risk_engine.evaluate(
+                *sig_opt, pf,
                 std::optional<std::map<std::string, std::vector<double>>>(price_map));
 
             std::string order_id = PortfolioLoader::make_order_id();
 
             if (order.risk_checks_all_passed) {
-              double price = 100.0;
-              if (!sig->ticker.empty() && price_map.count(sig->ticker)) {
-                const auto& s = price_map.at(sig->ticker);
-                if (!s.empty()) price = s.back();
+              outcome = "approve";
+              auto fill_opt = exec_engine.execute(order, now_iso());
+              if (!fill_opt) {
+                std::cerr << "[subscriber] execute failed for " << order.ticker << " at venue " << order.venue << "\n";
+                continue;
               }
-              auto fill = exec_engine.execute(order, price, now_iso());
+              auto fill = *fill_opt;
 
               update_position(pf, order, fill.fill_price, fill.fee_usd, fill.slippage_usd);
               double old_nav = pf.nav;
@@ -270,7 +283,7 @@ int run_subscriber_mode(const std::string& redis_host, int redis_port, EventPubl
               publisher.publish_order_filled(fill);
 
               if (should_shadow_compare()) {
-                nlohmann::json sig_j = sig->to_json();
+                nlohmann::json sig_j = sig_opt->to_json();
                 nlohmann::json dec_j = nlohmann::json{
                     {"action", "approve"},
                     {"quantity", order.quantity},
@@ -278,23 +291,24 @@ int run_subscriber_mode(const std::string& redis_host, int redis_port, EventPubl
                     {"kelly_fraction", order.kelly_fraction},
                     {"var_contribution_pct", order.var_contribution_pct},
                 };
-                audit.write_shadow_comparison(sig->cycle_id, sig->ticker, sig->strategy, sig_j, dec_j);
+                audit.write_shadow_comparison(sig_opt->cycle_id, sig_opt->ticker, sig_opt->strategy, sig_j, dec_j);
               }
 
               if (risk_engine.is_halted()) {
                 publisher.publish_halt(true);
               }
             } else {
-              publisher.publish_order_rejected(sig->cycle_id, sig->ticker, order.rejection_reason);
-              audit.write_rejection(sig->cycle_id, sig->strategy, sig->ticker, order.rejection_reason);
+              outcome = "reject";
+              publisher.publish_order_rejected(sig_opt->cycle_id, sig_opt->ticker, order.rejection_reason);
+              audit.write_rejection(sig_opt->cycle_id, sig_opt->strategy, sig_opt->ticker, order.rejection_reason);
 
               if (should_shadow_compare()) {
-                nlohmann::json sig_j = sig->to_json();
+                nlohmann::json sig_j = sig_opt->to_json();
                 nlohmann::json dec_j = nlohmann::json{
                     {"action", "reject"},
                     {"reason", order.rejection_reason},
                 };
-                audit.write_shadow_comparison(sig->cycle_id, sig->ticker, sig->strategy, sig_j, dec_j);
+                audit.write_shadow_comparison(sig_opt->cycle_id, sig_opt->ticker, sig_opt->strategy, sig_j, dec_j);
               }
             }
             // P5: Persist portfolio state after each signal
@@ -302,10 +316,16 @@ int run_subscriber_mode(const std::string& redis_host, int redis_port, EventPubl
           } catch (const std::exception& e) {
             std::cerr << "[subscriber] process error: " << e.what() << "\n";
           }
+          // P5: Per-signal latency baseline (Feature 3 AC)
           double t1 = now_epoch_ms();
-          if ((t1 - t0) > 100.0) {
-            std::cerr << "[latency] engine_ms=" << std::fixed << std::setprecision(1) << (t1 - t0) << "\n";
-          }
+          double latency_ms = t1 - t0;
+          std::cerr << "[latency]"
+                    << " ticker=" << (sig_opt ? sig_opt->ticker : "???")
+                    << " strategy=" << (sig_opt ? sig_opt->strategy : "???")
+                    << " direction=" << (sig_opt ? direction_to_string(sig_opt->direction) : "???")
+                    << " engine_ms=" << std::fixed << std::setprecision(1) << latency_ms
+                    << " outcome=" << outcome
+                    << "\n";
         }
       }
       freeReplyObject(reply);

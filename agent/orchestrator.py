@@ -27,13 +27,13 @@ from prometheus_client import Counter, Gauge, start_http_server
 
 from regime_agent import RegimeAgent
 from signal_agent import SignalAgent
-from risk_agent import RiskAgent
 from execution_agent import ExecutionAgent
 from research_agent import ResearchAgent
 from news_agent import NewsAgent
 from macro_calendar import MacroCalendarAgent
 from kg_signal_generator import KGSignalGenerator
 from common.schema_validator import validate_signal
+from jsonschema import ValidationError as SchemaValidationError
 from common.versioning import validate_schema_version
 from common.redis_publisher import publish_signal_batch, publish_heartbeat
 
@@ -66,7 +66,6 @@ class Orchestrator:
     def __init__(self):
         self.regime_agent    = RegimeAgent()
         self.signal_agent    = SignalAgent()
-        self.risk_agent      = RiskAgent()
         self.execution_agent = ExecutionAgent(mode=TRADING_MODE)
         self.research_agent  = ResearchAgent()
         self.news_agent      = NewsAgent()
@@ -75,6 +74,45 @@ class Orchestrator:
         self.portfolio_peak  = 0.0
         self.halted          = False
         self._tick           = 0
+
+    async def _get_portfolio_state(self) -> dict:
+        """Read portfolio state from PostgreSQL (simplified, no RiskAgent dependency)."""
+        try:
+            import psycopg2
+            conn_str = (
+                f"host={os.getenv('POSTGRES_HOST', 'postgres')} "
+                f"dbname={os.getenv('POSTGRES_DB', 'graphalpha')} "
+                f"user={os.getenv('POSTGRES_USER', 'graphalpha')} "
+                f"password={os.getenv('POSTGRES_PASSWORD', '')}"
+            )
+            with psycopg2.connect(conn_str) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT ticker, direction, quantity, avg_entry_price,
+                               current_price, (quantity * current_price) AS notional
+                        FROM positions WHERE status = 'open'
+                    """)
+                    rows = cur.fetchall()
+                    cols = ["ticker", "direction", "quantity",
+                            "avg_entry_price", "current_price", "notional"]
+                    positions = {r[0]: dict(zip(cols, r)) for r in rows}
+                    total_notional = sum(p["notional"] for p in positions.values())
+
+                    cur.execute("SELECT cash_balance FROM portfolio_state ORDER BY id DESC LIMIT 1")
+                    row = cur.fetchone()
+                    cash = row[0] if row else float(os.getenv("INITIAL_CAPITAL_USD", 10000))
+
+                    nav = cash + total_notional
+                    pnl = sum(
+                        p["quantity"] * (p["current_price"] - p["avg_entry_price"])
+                        * (1 if p["direction"] == "buy" else -1)
+                        for p in positions.values()
+                    )
+                    return {"nav": nav, "cash": cash, "positions": positions, "unrealised_pnl_usd": pnl}
+        except Exception as e:
+            logger.error(f"Portfolio state error: {e}")
+            nav = float(os.getenv("INITIAL_CAPITAL_USD", 10000))
+            return {"nav": nav, "cash": nav, "positions": {}, "unrealised_pnl_usd": 0.0}
 
     async def run_cycle(self) -> dict:
         """One full agent cycle. Returns a structured audit record."""
@@ -149,7 +187,7 @@ class Orchestrator:
             if macro_result.get("pre_event_signals"):
                 signals = self._apply_macro_overlay(signals, macro_result["pre_event_signals"])
 
-            # Schema v1 injection (final): stamp canonical fields before RiskAgent
+            # Schema v1 injection (final): stamp canonical fields before publishing
             signals = self._inject_schema_v1(signals, cycle_id, timestamp)
 
             audit["signals"] = signals
@@ -161,16 +199,26 @@ class Orchestrator:
             # Cache signals for the API WebSocket
             await self._cache_signals(signals)
 
-            # P5: publish signals to C++ risk-engine (fire-and-forget, additive)
+            # P5: publish signals to C++ risk-engine (fire-and-forget)
             publish_task = asyncio.create_task(self._publish_signals(signals, cycle_id))
 
-            # ── Step 4: Risk validation (Python path, remains default) ────────────
-            approved_orders = await self.risk_agent.run(signals=signals, cycle_id=cycle_id)
-            audit["approved_orders"] = approved_orders
-            audit["steps"].append({"agent": "RiskAgent", "status": "ok",
-                                   "approved": len(approved_orders),
-                                   "rejected": len(signals) - len(approved_orders)})
-            logger.info(f"Risk: {len(approved_orders)}/{len(signals)} signals approved")
+            # ── Step 4: Risk validation ────────────────────────────────────────
+            # In P5 normal mode, risk lives in the C++ risk-engine via Redis.
+            # In SHADOW_MODE, we also call the old Python RiskAgent path for comparison.
+            approved_orders = []
+            if SHADOW_MODE:
+                from risk_agent import RiskAgent
+                shadow_risk = RiskAgent()
+                approved_orders = await shadow_risk.run(signals=signals, cycle_id=cycle_id)
+                audit["shadow_approved_orders"] = approved_orders
+                audit["steps"].append({"agent": "RiskAgent", "status": "ok",
+                                       "approved": len(approved_orders),
+                                       "rejected": len(signals) - len(approved_orders)})
+                logger.info(f"Shadow Risk: {len(approved_orders)}/{len(signals)} signals approved")
+            else:
+                audit["steps"].append({"agent": "RiskAgent", "status": "delegated",
+                                       "note": "risk-engine via Redis pub/sub"})
+                logger.info("Risk delegated to C++ risk-engine via Redis pub/sub")
 
             # Persist cycle status for the /agent/status API endpoint
             await self._write_status(
@@ -184,8 +232,8 @@ class Orchestrator:
                 f"cycle_complete:{len(signals)}_signals:{len(approved_orders)}_orders"
             ))
 
-            # ── Step 5: Execution ──────────────────────────────────────────────
-            if not self.halted and approved_orders:
+            # ── Step 5: Execution (only in shadow mode; C++ handles in normal mode) ──
+            if SHADOW_MODE and not self.halted and approved_orders:
                 executed = await self.execution_agent.run(orders=approved_orders)
                 audit["executed"] = executed
                 audit["steps"].append({"agent": "ExecutionAgent", "status": "ok",
@@ -193,11 +241,14 @@ class Orchestrator:
                 logger.info(f"Executed {len(executed)} orders [{TRADING_MODE} mode]")
             else:
                 audit["executed"] = []
+                if not SHADOW_MODE:
+                    audit["steps"].append({"agent": "ExecutionAgent", "status": "delegated",
+                                           "note": "execution handled by C++ risk-engine"})
                 if self.halted:
                     logger.warning("Agent HALTED — drawdown limit exceeded")
 
             # ── Step 6: Circuit breaker check ─────────────────────────────────
-            portfolio = await self.risk_agent.get_portfolio_state()
+            portfolio = await self._get_portfolio_state()
             pnl       = portfolio.get("unrealised_pnl_usd", 0.0)
             PNL_GAUGE.set(pnl)
 
@@ -252,10 +303,9 @@ class Orchestrator:
             }
             try:
                 validate_signal(payload)
-            except ValueError:
-                payload["score"] = 0.0
-                payload["direction"] = "hold"
-                payload["contradiction_blocked"] = True
+            except (ValueError, SchemaValidationError) as exc:
+                logger.error(f"Signal validation failed for {ticker}: {exc} — skipping publish")
+                continue
             out.append(payload)
         return out
 
