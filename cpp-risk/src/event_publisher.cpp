@@ -7,6 +7,16 @@
 #include <chrono>
 #include <ctime>
 
+namespace {
+std::string now_iso() {
+   auto now = std::chrono::system_clock::now();
+   std::time_t t = std::chrono::system_clock::to_time_t(now);
+   char buf[32];
+   std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&t));
+   return buf;
+}
+}  // anonymous namespace
+
 namespace graphalpha {
 
 EventPublisher::EventPublisher(const std::string& redis_host,
@@ -86,8 +96,17 @@ bool EventPublisher::publish_order_rejected(const std::string& cycle_id,
 }
 
 bool EventPublisher::publish_halt(bool halted) {
-  return publish("circuit_breaker", halted ? "HALTED" : "RECOVERED",
-                 halted ? "Drawdown limit exceeded" : "Drawdown recovered");
+   return publish("circuit_breaker", halted ? "HALTED" : "RECOVERED",
+                  halted ? "Drawdown limit exceeded" : "Drawdown recovered");
+}
+
+bool EventPublisher::publish_kraken_halt(const std::string& reason) {
+   nlohmann::json j;
+   j["event"] = "kraken_live_halt";
+   j["venue"] = "kraken";
+   j["reason"] = reason;
+   j["timestamp"] = now_iso();
+   return _publish_json(j.dump());
 }
 
 }  // namespace graphalpha

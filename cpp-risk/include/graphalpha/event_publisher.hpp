@@ -25,16 +25,17 @@ class EventPublisher {
   bool publish_order_rejected(const std::string& cycle_id,
                                const std::string& ticker,
                                const std::string& reason);
-  bool publish_halt(bool halted);
-  bool subscribe(const std::string& channel);
+bool publish_halt(bool halted);
+   bool publish_kraken_halt(const std::string& reason);
+   bool subscribe(const std::string& channel);
   void set_subscriber_callback(std::function<void(const std::string&)> cb);
   bool publish_portfolio_state(const std::string& nav_json);
 
- private:
-  bool _publish_json(const std::string& message);
-  std::string redis_host_;
-  int redis_port_;
-  std::string channel_;
+private:
+   bool _publish_json(const std::string& message);
+   std::string redis_host_;
+   int redis_port_;
+   std::string channel_;
 };
 
 }  // namespace graphalpha

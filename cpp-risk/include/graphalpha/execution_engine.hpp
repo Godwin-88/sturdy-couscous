@@ -22,7 +22,7 @@ class ExecutionEngine {
    /// Route an approved order to the correct venue adapter based on order.venue
    /// Returns a FillResult on success, std::nullopt on rejection/failure
    std::optional<FillResult> execute(const risk::ApprovedOrder& order,
-                                     const std::string& timestamp);
+                                      const std::string& timestamp);
 
    /// Get aggregated positions from all registered adapters
    std::vector<risk::Position> get_all_positions();
@@ -32,6 +32,9 @@ class ExecutionEngine {
 
    /// Attempt to reconnect all adapters
    void reconnect_all();
+
+   /// Get adapter by venue_id (for P7 kill switch/reconciliation checks)
+   VenueAdapter* get_adapter(const std::string& venue_id);
 
   private:
    std::map<std::string, std::unique_ptr<VenueAdapter>> adapters_;

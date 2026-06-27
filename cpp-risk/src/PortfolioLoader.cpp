@@ -29,6 +29,14 @@ static std::string infer_sector(const std::string& ticker) {
   return "equity_broad";
 }
 
+static std::string infer_venue(const std::string& ticker) {
+  if (ticker.find("-USD") != std::string::npos || 
+      ticker == "BTC" || ticker == "ETH" || ticker == "XBT") {
+    return "kraken";
+  }
+  return "ibkr";
+}
+
 std::optional<PortfolioState> PortfolioLoader::load_from_postgres(const std::string& conn_str) {
   PGconn* conn = PQconnectdb(conn_str.c_str());
   if (PQstatus(conn) != CONNECTION_OK) {

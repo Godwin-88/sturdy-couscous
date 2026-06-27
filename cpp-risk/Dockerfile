@@ -4,7 +4,7 @@ FROM ubuntu:22.04 AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake git curl ca-certificates \
-    libhiredis-dev libpq-dev \
+    libhiredis-dev libpq-dev libssl-dev libcurl4-openssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace

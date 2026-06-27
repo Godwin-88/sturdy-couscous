@@ -114,3 +114,23 @@ CREATE TABLE IF NOT EXISTS shadow_comparison (
 
 CREATE INDEX IF NOT EXISTS idx_shadow_cycle ON shadow_comparison(cycle_id);
 CREATE INDEX IF NOT EXISTS idx_shadow_discrepancy ON shadow_comparison(discrepancy) WHERE discrepancy = false;
+
+-- P7 live validation discrepancy log
+CREATE TABLE IF NOT EXISTS live_validation_discrepancy (
+    id              SERIAL PRIMARY KEY,
+    cycle_id        UUID NOT NULL,
+    ticker          VARCHAR(20) NOT NULL,
+    strategy        VARCHAR(255),
+    paper_price     NUMERIC(18,8),
+    live_price      NUMERIC(18,8),
+    paper_fee       NUMERIC(12,4),
+    live_fee        NUMERIC(12,4),
+    paper_slippage  NUMERIC(12,4),
+    live_slippage   NUMERIC(12,4),
+    discrepancy_type VARCHAR(50),
+    detail          JSONB,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_live_val_cycle ON live_validation_discrepancy(cycle_id);
+CREATE INDEX IF NOT EXISTS idx_live_val_ticker ON live_validation_discrepancy(ticker);

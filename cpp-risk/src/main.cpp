@@ -26,6 +26,7 @@ using namespace graphalpha;
 
 namespace {
 std::atomic<bool> g_running{true};
+std::atomic<bool> g_kill_switch_active{false};
 
 void signal_handler(int) { g_running = false; }
 
@@ -54,10 +55,29 @@ std::string build_conn_str() {
 }
 
 bool should_shadow_compare() {
-  const char* v = std::getenv("SHADOW_COMPARE");
-  return v && std::string(v) == "1";
+   const char* v = std::getenv("SHADOW_COMPARE");
+   return v && std::string(v) == "1";
 }
 
+bool check_kill_switch() {
+   const char* v = std::getenv("KILL_SWITCH");
+   return v && std::string(v) == "1";
+}
+
+bool check_live_validation_scale() {
+   const char* v = std::getenv("LIVE_VALIDATION_SCALE_PCT");
+   return v != nullptr;
+}
+
+double get_live_validation_scale() {
+   const char* v = std::getenv("LIVE_VALIDATION_SCALE_PCT");
+   if (!v) return 1.0;
+   try {
+      return std::stod(v) / 100.0;
+   } catch (...) {
+      return 1.0;
+   }
+}
 }  // anonymous namespace
 
 std::vector<Signal> load_signals(const std::string& path) {
@@ -263,9 +283,10 @@ int run_subscriber_mode(const std::string& redis_host, int redis_port, EventPubl
 
             std::string order_id = PortfolioLoader::make_order_id();
 
-            if (order.risk_checks_all_passed) {
-              outcome = "approve";
-              auto fill_opt = exec_engine.execute(order, now_iso());
+if (order.risk_checks_all_passed) {
+               outcome = "approve";
+
+                auto fill_opt = exec_engine.execute(order, now_iso());
               if (!fill_opt) {
                 std::cerr << "[subscriber] execute failed for " << order.ticker << " at venue " << order.venue << "\n";
                 continue;

@@ -28,7 +28,7 @@ add_subdirectory(src)
 add_subdirectory(tests)
 
 add_executable(risk-engine src/main.cpp)
-target_link_libraries(risk-engine PRIVATE riskengine hiredis pq)
+target_link_libraries(risk-engine PRIVATE riskengine hiredis pq ssl crypto curl)
 target_include_directories(risk-engine PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
 # Postgres headers
