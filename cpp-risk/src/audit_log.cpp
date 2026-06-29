@@ -133,3 +133,47 @@ bool AuditLog::write_shadow_comparison(const std::string& cycle_id,
 }
 
 }  // namespace graphalpha
+
+bool AuditLog::write_live_validation_discrepancy(const std::string& cycle_id,
+                                                const std::string& ticker,
+                                                const std::string& strategy,
+                                                double paper_price,
+                                                double live_price,
+                                                double paper_fee,
+                                                double live_fee,
+                                                double paper_slippage,
+                                                double live_slippage,
+                                                const std::string& discrepancy_type,
+                                                const nlohmann::json& detail) {
+  PGconn* conn = PQconnectdb(conn_str_.c_str());
+  if (PQstatus(conn) != CONNECTION_OK) {
+    PQfinish(conn);
+    return false;
+  }
+
+  std::string detail_str = detail.dump();
+  const char* paramValues[10] = {
+      cycle_id.c_str(),
+      ticker.c_str(),
+      strategy.c_str(),
+      std::to_string(paper_price).c_str(),
+      std::to_string(live_price).c_str(),
+      std::to_string(paper_fee).c_str(),
+      std::to_string(live_fee).c_str(),
+      std::to_string(paper_slippage).c_str(),
+      std::to_string(live_slippage).c_str(),
+      detail_str.c_str()};
+
+  const char* sql =
+      "INSERT INTO live_validation_discrepancy "
+      "(cycle_id, ticker, strategy, paper_price, live_price, "
+      "paper_fee, live_fee, paper_slippage, live_slippage, discrepancy_type, detail) "
+      "VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)";
+
+  PGresult* res = PQexecParams(conn, sql, 11, NULL, paramValues, NULL, NULL, 0);
+  bool ok = (PQresultStatus(res) == PGRES_COMMAND_OK);
+  PQclear(res);
+  PQfinish(conn);
+  return ok;
+}
+

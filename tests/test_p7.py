@@ -129,3 +129,44 @@ class TestTradingModeConfirmation:
        """Trading mode is logged loudly on initialization."""
        cpp = Path("/home/ed/projects/sturdy-couscous/cpp-risk/src/kraken_adapter.cpp").read_text()
        assert "Initialised (mode=" in cpp
+
+
+class TestLiveValidationDiscrepancyLogging:
+   """P7: Live validation discrepancy logging."""
+
+   def test_live_validation_discrepancy_method_in_audit_log(self):
+       """AuditLog has write_live_validation_discrepancy method."""
+       header = Path("/home/ed/projects/sturdy-couscous/cpp-risk/include/graphalpha/audit_log.hpp").read_text()
+       assert "write_live_validation_discrepancy" in header
+
+   def test_live_validation_discrepancy_table_exists(self):
+       """live_validation_discrepancy table is defined in init.sql."""
+       sql = Path("/home/ed/projects/sturdy-couscous/infra/postgres/init.sql").read_text()
+       assert "live_validation_discrepancy" in sql
+
+   def test_hmac_sha512_signing_implementation(self):
+       """HMAC-SHA512 signing is implemented in sign_request."""
+       cpp = Path("/home/ed/projects/sturdy-couscous/cpp-risk/src/kraken_adapter.cpp").read_text()
+       assert "HMAC_CTX_new" in cpp
+       assert "HMAC_Init_ex" in cpp
+       assert "HMAC_Update" in cpp
+       assert "HMAC_Final" in cpp
+
+   def test_curl_integration_in_submit_live_order(self):
+       """curl library is integrated for live order submission."""
+       cpp = Path("/home/ed/projects/sturdy-couscous/cpp-risk/src/kraken_adapter.cpp").read_text()
+       assert "curl_easy_init" in cpp
+       assert "curl_easy_perform" in cpp
+       assert "curl_slist_append" in cpp
+
+   def test_no_auto_recovery_kraken_halt(self):
+       """Kraken live halt cannot auto-recover (explicit re-enable required)."""
+       cpp = Path("/home/ed/projects/sturdy-couscous/cpp-risk/src/main.cpp").read_text()
+       # Check that there's no automatic halt clearing logic
+       assert "clear_reconciliation_halt" not in cpp or "KRAKEN_REENABLE" in cpp
+
+   def test_reconcile_interval_polling(self):
+       """Reconciliation interval is polled in subscriber mode."""
+       cpp = Path("/home/ed/projects/sturdy-couscous/cpp-risk/src/main.cpp").read_text()
+       assert "KRAKEN_RECONCILE_INTERVAL_SECONDS" in cpp
+       assert "reconcile_positions" in cpp

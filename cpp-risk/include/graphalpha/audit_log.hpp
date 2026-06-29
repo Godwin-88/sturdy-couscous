@@ -25,6 +25,17 @@ class AuditLog {
                                const nlohmann::json& signal,
                                const nlohmann::json& decision);
   bool write_fill(const std::string& order_id, const FillResult& fill);
+  bool write_live_validation_discrepancy(const std::string& cycle_id,
+                                          const std::string& ticker,
+                                          const std::string& strategy,
+                                          double paper_price,
+                                          double live_price,
+                                          double paper_fee,
+                                          double live_fee,
+                                          double paper_slippage,
+                                          double live_slippage,
+                                          const std::string& discrepancy_type,
+                                          const nlohmann::json& detail);
 
  private:
   std::string conn_str_;

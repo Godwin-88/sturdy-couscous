@@ -31,15 +31,12 @@ def _parse_args(argv=None):
     p.add_argument("--disable-macro-overlay", action="store_true")
     p.add_argument("--interval", default="1d")
     p.add_argument("--output", default=None)
-    p.add_argument("--universe", choices=["default", "crypto", "equity", "macro"], default="default",
-                   help="Universe preset to use")
-    p.add_argument("--tickers", nargs="+", default=None,
-                   help="Custom ticker list (overrides --universe)")
-    p.add_argument("--ablate-overlays", action="store_true",
-                   help="Run 4 configs (baseline, news-off, macro-off, both-off) and emit combined JSON")
-    p.add_argument("--granularity", default="portfolio",
-                    choices=["portfolio", "asset_class", "strategy"],
-                    help="Select which breakdowns to include")
+    p.add_argument("--universe", choices=["default", "crypto", "equity", "macro"], default="default")
+    p.add_argument("--tickers", nargs="+", default=None)
+    p.add_argument("--ablate-overlays", action="store_true")
+    p.add_argument("--ablate-full", action="store_true")
+    p.add_argument("--benchmark-data-path", default=None)
+    p.add_argument("--granularity", default="portfolio", choices=["portfolio", "asset_class", "strategy"])
     return p.parse_args(argv)
 
 
@@ -161,6 +158,8 @@ def main(argv=None) -> int:
     elif args.universe:
         use_preset(args.universe)
 
+    if args.ablate_full:
+        return _run_full_ablation(args)
     if args.ablate_overlays:
         configs = {
             "baseline":  (False, False),
@@ -175,7 +174,6 @@ def main(argv=None) -> int:
                 args.rebal_freq, args.use_graph, dn, dm,
                 args.fee_pct, args.slip_pct, args.interval,
             )
-        # Combined overlays breakdown
         trade_by_config = {
             k: v["trade_log"] for k, v in ablated.items()
         }
@@ -186,13 +184,68 @@ def main(argv=None) -> int:
             "ablation": ablated,
             "metrics_by_overlay_config": overlay_breakdown,
         }
+        output_text = json.dumps(result, indent=2, default=str)
+        if args.output:
+            Path(args.output).write_text(output_text)
+        else:
+            print(output_text)
+        return 0
+
+    result = _run_one(
+        args.start, args.end, args.capital,
+        args.rebal_freq, args.use_graph,
+        args.disable_news_overlay, args.disable_macro_overlay,
+        args.fee_pct, args.slip_pct, args.interval,
+    )
+
+    output_text = json.dumps(result, indent=2, default=str)
+    if args.output:
+        Path(args.output).write_text(output_text)
     else:
-        result = _run_one(
+        print(output_text)
+    return 0
+
+
+def _run_full_ablation(args) -> int:
+    """Run full ablation matrix: grounded/ungrounded × 4 overlay configs = 8 runs."""
+    fee_pct = args.fee_pct
+    slip_pct = args.slip_pct
+
+    configs = {
+        "grounded_baseline":  (True,  False, False),
+        "grounded_news_off":  (True,  True,  False),
+        "grounded_macro_off": (True,  False, True),
+        "grounded_both_off":  (True,  True,  True),
+        "ungrounded_baseline": (False, False, False),
+        "ungrounded_news_off": (False, True,  False),
+        "ungrounded_macro_off": (False, False, True),
+        "ungrounded_both_off":  (False, True,  True),
+    }
+
+    ablated = {}
+    all_trade_logs = {}
+    for key, (use_graph, dn, dm) in configs.items():
+        ablated[key] = _run_one(
             args.start, args.end, args.capital,
-            args.rebal_freq, args.use_graph,
-            args.disable_news_overlay, args.disable_macro_overlay,
-            args.fee_pct, args.slip_pct, args.interval,
+            args.rebal_freq, use_graph, dn, dm,
+            fee_pct, slip_pct, args.interval,
         )
+        all_trade_logs[key] = ablated[key].get("trade_log", [])
+
+    overlay_breakdown = breakdown_by_overlay_config(all_trade_logs)
+
+    result = {
+        "meta": {
+            "start": args.start,
+            "end": args.end,
+            "capital": args.capital,
+            "rebal_freq": args.rebal_freq,
+            "ablation_type": "full_matrix",
+            "configurations": {k: {"use_graph": v[0], "news_disabled": v[1], "macro_disabled": v[2]} for k, v in configs.items()},
+        },
+        "ablation": ablated,
+        "metrics_by_config": overlay_breakdown,
+    }
 
     output_text = json.dumps(result, indent=2, default=str)
     if args.output:

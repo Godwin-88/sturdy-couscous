@@ -1,0 +1,12 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/ed/projects/sturdy-couscous/build/cmake_install.cmake",
+		"/home/ed/projects/sturdy-couscous/build/_deps/nlohmann_json-build/cmake_install.cmake",
+		"/home/ed/projects/sturdy-couscous/build/_deps/catch2-build/cmake_install.cmake",
+		"/home/ed/projects/sturdy-couscous/build/_deps/catch2-build/src/cmake_install.cmake",
+		"/home/ed/projects/sturdy-couscous/build/src/cmake_install.cmake",
+		"/home/ed/projects/sturdy-couscous/build/tests/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

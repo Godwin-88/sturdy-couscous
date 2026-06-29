@@ -78,6 +78,11 @@ double get_live_validation_scale() {
       return 1.0;
    }
 }
+
+int get_reconcile_interval_seconds() {
+   const char* v = std::getenv("KRAKEN_RECONCILE_INTERVAL_SECONDS");
+   return v ? std::stoi(v) : 300;
+}
 }  // anonymous namespace
 
 std::vector<Signal> load_signals(const std::string& path) {
@@ -125,7 +130,7 @@ bool run_file_mode(const std::vector<Signal>& signals,
   for (const auto& sig : signals) {
     double t0 = now_epoch_ms();
     auto order = risk_engine.evaluate(sig, pf,
-                                      std::optional<std::map<std::string, std::vector<double>>>(price_map));
+                                        std::optional<std::map<std::string, std::vector<double>>>(price_map));
 
     std::string order_id = PortfolioLoader::make_order_id();
 
@@ -229,6 +234,9 @@ int run_subscriber_mode(const std::string& redis_host, int redis_port, EventPubl
   price_map["QQQ"] = {300.0, 301.0, 302.0, 303.0, 304.0};
   price_map["BTC-USD"] = {20000.0, 20200.0, 20500.0, 20800.0, 21000.0};
 
+  int reconcile_interval = get_reconcile_interval_seconds();
+  double last_reconcile = now_epoch_ms();
+
   std::cerr << "[subscriber] Connecting Redis subscribe on " << redis_host << ":" << redis_port
             << " channel=" << channel << "\n";
 
@@ -251,6 +259,27 @@ int run_subscriber_mode(const std::string& redis_host, int redis_port, EventPubl
     std::cerr << "[subscriber] Subscribed. Waiting for signals...\n";
 
     while (g_running) {
+      // P7 Feature 4: Kill switch check - halts Kraken live orders
+      if (check_kill_switch()) {
+        std::cerr << "[subscriber] KILL_SWITCH active - halting Kraken live orders\n";
+        g_kill_switch_active = true;
+        publisher.publish_halt(true);
+        // Continue processing but Kraken live orders should be blocked
+      }
+
+      // P7 Feature 2: Reconciliation interval polling
+      double now = now_epoch_ms();
+      if ((now - last_reconcile) / 1000.0 >= reconcile_interval) {
+        if (auto* kraken = dynamic_cast<KrakenAdapter*>(exec_engine.get_adapter("kraken"))) {
+          std::string mismatch;
+          if (!kraken->reconcile_positions(0.01, mismatch)) {
+            std::cerr << "[subscriber] Kraken reconciliation mismatch: " << mismatch << "\n";
+            publisher.publish_kraken_halt(mismatch);
+          }
+        }
+        last_reconcile = now;
+      }
+
       redisReply* reply = nullptr;
       int rc = redisGetReply(ctx, (void**)&reply);
       if (rc != REDIS_OK || reply == nullptr) {
@@ -283,55 +312,84 @@ int run_subscriber_mode(const std::string& redis_host, int redis_port, EventPubl
 
             std::string order_id = PortfolioLoader::make_order_id();
 
-if (order.risk_checks_all_passed) {
+// P7 Feature 2: Check if Kraken live trading is halted due to reconciliation or kill switch
+             bool kraken_halted = false;
+             if (order.venue == "kraken") {
+               const char* reenable = std::getenv("KRAKEN_REENABLE");
+               if (reenable && std::string(reenable) == "1") {
+                 if (auto* kraken = dynamic_cast<KrakenAdapter*>(exec_engine.get_adapter("kraken"))) {
+                   kraken->clear_reconciliation_halt();
+                   std::cerr << "[subscriber] KRAKEN_REENABLE=1 - clearing halt\n";
+                 }
+               } else if (auto* kraken = dynamic_cast<KrakenAdapter*>(exec_engine.get_adapter("kraken"))) {
+                 kraken_halted = kraken->is_kraken_live_halted() || g_kill_switch_active;
+               }
+               if (kraken_halted) {
+                 std::cerr << "[subscriber] Skipping order - Kraken halted\n";
+                 outcome = "skipped_kraken_halt";
+                 freeReplyObject(reply);
+                 continue;
+               }
+             }
+
+            // P7 Feature 3: Live validation scaling
+            if (order.venue == "kraken" && check_live_validation_scale()) {
+               double scale = get_live_validation_scale();
+               if (scale > 0.0 && scale < 1.0) {
+                  order.notional_usd *= scale;
+                  order.quantity = order.notional_usd / (price_map.count(order.ticker) ? price_map.at(order.ticker).back() : 100.0);
+               }
+            }
+
+            if (order.risk_checks_all_passed) {
                outcome = "approve";
 
-                auto fill_opt = exec_engine.execute(order, now_iso());
-              if (!fill_opt) {
-                std::cerr << "[subscriber] execute failed for " << order.ticker << " at venue " << order.venue << "\n";
-                continue;
-              }
-              auto fill = *fill_opt;
+               auto fill_opt = exec_engine.execute(order, now_iso());
+             if (!fill_opt) {
+               std::cerr << "[subscriber] execute failed for " << order.ticker << " at venue " << order.venue << "\n";
+               continue;
+             }
+             auto fill = *fill_opt;
 
-              update_position(pf, order, fill.fill_price, fill.fee_usd, fill.slippage_usd);
-              double old_nav = pf.nav;
-              pf.nav = update_nav(old_nav, order, fill.fill_price, fill.fee_usd, fill.slippage_usd);
-              if (pf.nav > peak) peak = pf.nav;
-              pf.drawdown_from_peak = compute_drawdown(pf.nav, peak);
+             update_position(pf, order, fill.fill_price, fill.fee_usd, fill.slippage_usd);
+             double old_nav = pf.nav;
+             pf.nav = update_nav(old_nav, order, fill.fill_price, fill.fee_usd, fill.slippage_usd);
+             if (pf.nav > peak) peak = pf.nav;
+             pf.drawdown_from_peak = compute_drawdown(pf.nav, peak);
 
-              audit.write_order(order_id, order, fill);
-              publisher.publish_order_approved(order);
-              publisher.publish_order_filled(fill);
+             audit.write_order(order_id, order, fill);
+             publisher.publish_order_approved(order);
+             publisher.publish_order_filled(fill);
 
-              if (should_shadow_compare()) {
-                nlohmann::json sig_j = sig_opt->to_json();
-                nlohmann::json dec_j = nlohmann::json{
-                    {"action", "approve"},
-                    {"quantity", order.quantity},
-                    {"notional_usd", order.notional_usd},
-                    {"kelly_fraction", order.kelly_fraction},
-                    {"var_contribution_pct", order.var_contribution_pct},
-                };
-                audit.write_shadow_comparison(sig_opt->cycle_id, sig_opt->ticker, sig_opt->strategy, sig_j, dec_j);
-              }
+             if (should_shadow_compare()) {
+               nlohmann::json sig_j = sig_opt->to_json();
+               nlohmann::json dec_j = nlohmann::json{
+                   {"action", "approve"},
+                   {"quantity", order.quantity},
+                   {"notional_usd", order.notional_usd},
+                   {"kelly_fraction", order.kelly_fraction},
+                   {"var_contribution_pct", order.var_contribution_pct},
+               };
+               audit.write_shadow_comparison(sig_opt->cycle_id, sig_opt->ticker, sig_opt->strategy, sig_j, dec_j);
+             }
 
-              if (risk_engine.is_halted()) {
-                publisher.publish_halt(true);
-              }
-            } else {
-              outcome = "reject";
-              publisher.publish_order_rejected(sig_opt->cycle_id, sig_opt->ticker, order.rejection_reason);
-              audit.write_rejection(sig_opt->cycle_id, sig_opt->strategy, sig_opt->ticker, order.rejection_reason);
+             if (risk_engine.is_halted()) {
+               publisher.publish_halt(true);
+             }
+           } else {
+             outcome = "reject";
+             publisher.publish_order_rejected(sig_opt->cycle_id, sig_opt->ticker, order.rejection_reason);
+             audit.write_rejection(sig_opt->cycle_id, sig_opt->strategy, sig_opt->ticker, order.rejection_reason);
 
-              if (should_shadow_compare()) {
-                nlohmann::json sig_j = sig_opt->to_json();
-                nlohmann::json dec_j = nlohmann::json{
-                    {"action", "reject"},
-                    {"reason", order.rejection_reason},
-                };
-                audit.write_shadow_comparison(sig_opt->cycle_id, sig_opt->ticker, sig_opt->strategy, sig_j, dec_j);
-              }
-            }
+             if (should_shadow_compare()) {
+               nlohmann::json sig_j = sig_opt->to_json();
+               nlohmann::json dec_j = nlohmann::json{
+                   {"action", "reject"},
+                   {"reason", order.rejection_reason},
+               };
+               audit.write_shadow_comparison(sig_opt->cycle_id, sig_opt->ticker, sig_opt->strategy, sig_j, dec_j);
+             }
+           }
             // P5: Persist portfolio state after each signal
             PortfolioLoader::persist_portfolio(conn_str, pf);
           } catch (const std::exception& e) {
