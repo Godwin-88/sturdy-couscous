@@ -15,4 +15,7 @@ yfinance
 arch
 jsonschema
 scipy
+statsmodels
+scikit-learn
+openai
 pytest

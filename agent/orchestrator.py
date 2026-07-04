@@ -19,7 +19,10 @@ import os
 import time
 import uuid
 from datetime import datetime
+from typing import Any
 
+import psycopg2
+import psycopg2.extras
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
 from loguru import logger
@@ -268,6 +271,12 @@ class Orchestrator:
 
         audit["cycle_duration_s"] = round(time.time() - cycle_start, 2)
         LOOP_COUNTER.inc()
+
+        # Persist to Postgres for research endpoints
+        asyncio.create_task(self._persist_cycle_audit(audit, cycle_id))
+        asyncio.create_task(self._persist_signal_archive(signals, cycle_id))
+        asyncio.create_task(self._persist_kg_edge_snapshots(audit))
+
         return audit
 
     def _inject_schema_v1(self, signals, cycle_id, timestamp):
@@ -423,6 +432,115 @@ class Orchestrator:
         r = aioredis.from_url(self._redis_url())
         await r.publish("graphalpha:events", f"HALT:drawdown={drawdown:.3f}")
         await r.aclose()
+
+    # ── Postgres persistence ──────────────────────────────────────────────────
+
+    async def _persist_cycle_audit(self, audit: dict, cycle_id: str):
+        """Persist structured cycle audit to agent_cycle_audit table."""
+        try:
+            conn_str = (
+                f"host={os.getenv('POSTGRES_HOST', 'postgres')} "
+                f"dbname={os.getenv('POSTGRES_DB', 'graphalpha')} "
+                f"user={os.getenv('POSTGRES_USER', 'graphalpha')} "
+                f"password={os.getenv('POSTGRES_PASSWORD', '')}"
+            )
+            with psycopg2.connect(conn_str) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO agent_cycle_audit
+                            (cycle_id, duration_s, regime, regime_confidence, sub_agents, signals, rejections)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        cycle_id,
+                        audit.get("cycle_duration_s", 0.0),
+                        audit.get("regime", "Unknown"),
+                        audit.get("regime_confidence", 0.0),
+                        json.dumps(audit.get("steps", [])),
+                        json.dumps(audit.get("signals", [])),
+                        json.dumps(audit.get("rejections", [])),
+                    ))
+            logger.debug(f"Persisted agent_cycle_audit cycle_id={cycle_id}")
+        except Exception as e:
+            logger.warning(f"Failed to persist agent_cycle_audit: {e}")
+
+    async def _persist_signal_archive(self, signals: list[dict], cycle_id: str):
+        """Persist signals to signal_archive for durable storage and export."""
+        if not signals:
+            return
+        try:
+            conn_str = (
+                f"host={os.getenv('POSTGRES_HOST', 'postgres')} "
+                f"dbname={os.getenv('POSTGRES_DB', 'graphalpha')} "
+                f"user={os.getenv('POSTGRES_USER', 'graphalpha')} "
+                f"password={os.getenv('POSTGRES_PASSWORD', '')}"
+            )
+            with psycopg2.connect(conn_str) as conn:
+                with conn.cursor() as cur:
+                    for sig in signals:
+                        cur.execute("""
+                            INSERT INTO signal_archive
+                                (signal_id, cycle_id, timestamp, strategy, ticker, venue,
+                                 direction, score, quant_score, sentiment_score, news_overlay,
+                                 macro_overlay, kg_formula_contribution, contradiction_blocked,
+                                 kelly_fraction, var_contribution_pct)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT DO NOTHING
+                        """, (
+                            sig.get("signal_id", str(uuid.uuid4())),
+                            cycle_id,
+                            sig.get("timestamp", datetime.utcnow().isoformat()),
+                            sig.get("strategy", ""),
+                            sig.get("ticker", ""),
+                            sig.get("venue", ""),
+                            sig.get("direction", ""),
+                            float(sig.get("score", 0.0)),
+                            float(sig.get("quant_score", 0.0)),
+                            float(sig.get("sentiment_score", 0.0)),
+                            float(sig.get("news_overlay", 0.0)),
+                            float(sig.get("macro_overlay", 0.0)),
+                            float(sig.get("kg_formula_contribution", 0.0)),
+                            bool(sig.get("contradiction_blocked", False)),
+                            float(sig.get("kelly_fraction", 0.0)) if sig.get("kelly_fraction") else None,
+                            float(sig.get("var_contribution_pct", 0.0)) if sig.get("var_contribution_pct") else None,
+                        ))
+            logger.debug(f"Persisted {len(signals)} signals to signal_archive")
+        except Exception as e:
+            logger.warning(f"Failed to persist signal_archive: {e}")
+
+    async def _persist_kg_edge_snapshots(self, audit: dict):
+        """Persist edge weight changes from ResearchAgent cycle to kg_edge_snapshots."""
+        try:
+            # Extract edge weights from research agent results if available
+            steps = audit.get("steps", [])
+            for step in steps:
+                if step.get("agent") == "ResearchAgent":
+                    result = step.get("result", {})
+                    edges = result.get("edges_updated", [])
+                    if not edges:
+                        continue
+                    conn_str = (
+                        f"host={os.getenv('POSTGRES_HOST', 'postgres')} "
+                        f"dbname={os.getenv('POSTGRES_DB', 'graphalpha')} "
+                        f"user={os.getenv('POSTGRES_USER', 'graphalpha')} "
+                        f"password={os.getenv('POSTGRES_PASSWORD', '')}"
+                    )
+                    with psycopg2.connect(conn_str) as conn:
+                        with conn.cursor() as cur:
+                            for edge in edges:
+                                cur.execute("""
+                                    INSERT INTO kg_edge_snapshots
+                                        (source, target, rel_type, weight, agent_run)
+                                    VALUES (%s, %s, %s, %s, %s)
+                                """, (
+                                    edge.get("source", ""),
+                                    edge.get("target", ""),
+                                    edge.get("rel_type", "TRANSMITS_TO"),
+                                    float(edge.get("weight", 0.0)) if edge.get("weight") else None,
+                                    edge.get("agent_run", "research"),
+                                ))
+                    logger.debug(f"Persisted {len(edges)} edge snapshots")
+        except Exception as e:
+            logger.warning(f"Failed to persist kg_edge_snapshots: {e}")
 
     async def main_loop(self):
         logger.info(f"Orchestrator starting | mode={TRADING_MODE} | "

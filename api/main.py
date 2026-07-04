@@ -22,6 +22,8 @@ from routes.graph     import router as graph_router
 from routes.backtest  import router as backtest_router
 from routes.market        import router as market_router
 from routes.intelligence  import router as intelligence_router
+from routes.research      import router as research_router
+from routes.analytics     import router as analytics_router
 
 load_dotenv()
 
@@ -64,6 +66,8 @@ app.include_router(graph_router)
 app.include_router(backtest_router)
 app.include_router(market_router)
 app.include_router(intelligence_router)
+app.include_router(research_router)
+app.include_router(analytics_router)
 
 
 @app.get("/health")

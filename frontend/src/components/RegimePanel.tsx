@@ -1,5 +1,5 @@
-import { Activity, TrendingUp, CheckCircle, XCircle } from "lucide-react";
-import { agentApi, AgentStatus, EligibleStrategy } from "@/lib/api";
+import { Activity, TrendingUp, CheckCircle, XCircle, Lightbulb } from "lucide-react";
+import { agentApi, researchApi, AgentStatus, EligibleStrategy, GraphRecommendation } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
 import { REGIME_META, relTime, fmtPct } from "@/lib/utils";
 import clsx from "clsx";
@@ -10,6 +10,10 @@ export default function RegimePanel() {
     () => agentApi.eligibleStrategies(data?.regime ?? ""),
     30_000,
     [data?.regime]
+  );
+  const { data: recommendations } = usePolling<GraphRecommendation[]>(
+    () => researchApi.graphRecommendations(),
+    120_000,
   );
 
   if (loading) return <Skeleton />;
@@ -123,6 +127,23 @@ export default function RegimePanel() {
         <Stat label="Approved" value={String(data.orders_approved)} />
         <Stat label="Cycle" value={`${data.cycle_duration_s.toFixed(1)}s`} />
       </div>
+
+      {/* KG Recommendations */}
+      {recommendations && recommendations.length > 0 && (
+        <div className="pt-1 border-t border-slate-700 space-y-1.5">
+          <div className="flex items-center gap-1">
+            <Lightbulb size={11} className="text-amber-400" />
+            <span className="text-[10px] text-amber-400 uppercase tracking-wider">KG Suggestions</span>
+          </div>
+          {recommendations.slice(0, 3).map((r, i) => (
+            <div key={i} className="text-[10px] font-mono leading-relaxed text-slate-400 border-l-2 border-amber-700/50 pl-2">
+              <span className={clsx(
+                r.priority === "high" ? "text-red-400" : r.priority === "medium" ? "text-amber-400" : "text-slate-500"
+              )}>[{r.priority.toUpperCase()}]</span> {r.suggestion}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

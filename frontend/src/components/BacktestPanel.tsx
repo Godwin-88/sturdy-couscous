@@ -5,28 +5,33 @@ import {
   ReferenceLine, Cell, Legend,
 } from "recharts";
 import {
-  agentApi, BacktestResult, TradeSuggestion,
+  agentApi, researchApi, BacktestResult, TradeSuggestion,
   TradeLogEntry, StrategyBreakdown, WalkForwardWindow,
+  BacktestOptimizeResult, BacktestCompareResult,
 } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
 import { fmtPct, fmtN, fmt$, relTime } from "@/lib/utils";
 import {
   Play, BarChart2, CheckCircle, XCircle, ChevronDown,
   ChevronRight, TrendingUp, TrendingDown, AlertTriangle, BookOpen,
+  Sliders, GitCompare, Layers,
 } from "lucide-react";
 import clsx from "clsx";
 
 type RunMode = "grounded" | "ungrounded" | "both";
-type ResultTab = "summary" | "equity" | "drawdown" | "trades" | "strategies" | "wf" | "suggestions";
+type ResultTab = "summary" | "equity" | "drawdown" | "trades" | "strategies" | "wf" | "suggestions" | "optimize" | "compare" | "ablation";
 
-const RESULT_TABS: { id: ResultTab; label: string }[] = [
-  { id: "summary",     label: "Summary"     },
-  { id: "equity",      label: "Equity Curve"},
-  { id: "drawdown",    label: "Drawdown"    },
-  { id: "trades",      label: "Trade Log"   },
-  { id: "strategies",  label: "Strategies"  },
-  { id: "wf",          label: "Walk-Fwd"    },
-  { id: "suggestions", label: "Suggestions" },
+const RESULT_TABS: { id: ResultTab; label: string; icon?: React.ReactNode }[] = [
+  { id: "summary",     label: "Summary"      },
+  { id: "equity",      label: "Equity Curve" },
+  { id: "drawdown",    label: "Drawdown"     },
+  { id: "trades",      label: "Trade Log"    },
+  { id: "strategies",  label: "Strategies"   },
+  { id: "wf",          label: "Walk-Fwd"     },
+  { id: "suggestions", label: "Suggestions"  },
+  { id: "optimize",    label: "Optimize",    icon: <Sliders size={11} /> },
+  { id: "compare",     label: "Compare",     icon: <GitCompare size={11} /> },
+  { id: "ablation",    label: "Ablation",    icon: <Layers size={11} /> },
 ];
 
 export default function BacktestPanel() {
@@ -184,6 +189,9 @@ export default function BacktestPanel() {
                 }}
               />
             )}
+            {resultTab === "optimize" && <OptimizeTab runId={primary?.start ?? null} />}
+            {resultTab === "compare"  && <CompareTab  runId={primary?.start ?? null} />}
+            {resultTab === "ablation" && <AblationTab runId={primary?.start ?? null} />}
           </div>
         </>
       )}
@@ -601,6 +609,213 @@ function SuggestionsTab({
               </span>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Optimize tab ──────────────────────────────────────────────────────────────
+function OptimizeTab({ runId }: { runId: string | null }) {
+  const [strategy, setStrategy] = useState("");
+  const [paramSpec, setParamSpec] = useState('{"lookback": [10, 20, 30], "threshold": [0.5, 0.7]}');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<BacktestOptimizeResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async () => {
+    if (!strategy.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const params = JSON.parse(paramSpec);
+      const res = await researchApi.backtestOptimize(strategy, params);
+      setResult(res);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Sliders size={13} className="text-indigo-400" />
+        <span className="text-xs text-slate-300 font-semibold">Parameter Grid Search Optimization</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-[10px] text-slate-500 uppercase tracking-wider">Strategy Name</label>
+          <input value={strategy} onChange={e => setStrategy(e.target.value)}
+            placeholder="e.g. MomentumXLE"
+            className="w-full mt-1 bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5" />
+        </div>
+        <div>
+          <label className="text-[10px] text-slate-500 uppercase tracking-wider">Parameter Grid (JSON)</label>
+          <textarea value={paramSpec} onChange={e => setParamSpec(e.target.value)} rows={3}
+            className="w-full mt-1 bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5 font-mono" />
+        </div>
+      </div>
+      <button onClick={run} disabled={loading || !strategy.trim()}
+        className={clsx("flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium",
+          loading ? "bg-slate-700 text-slate-500" : "bg-indigo-600 hover:bg-indigo-500 text-white")}>
+        <Sliders size={12} /> {loading ? "Optimizing..." : "Run Grid Search"}
+      </button>
+      {error && <div className="text-xs text-red-400 font-mono">{error}</div>}
+      {result && (
+        <div className="space-y-3">
+          <div className="rounded-lg bg-emerald-950/40 border border-emerald-800/60 p-3">
+            <span className="text-xs text-emerald-300 font-bold">Optimal Params</span>
+            <div className="text-xs font-mono text-emerald-200 mt-1">{JSON.stringify(result.optimal)}</div>
+          </div>
+          {result.heatmap.length > 0 && (
+            <div className="overflow-auto max-h-48">
+              <table className="w-full text-xs font-mono">
+                <thead className="sticky top-0 bg-slate-800">
+                  <tr className="text-slate-400">
+                    {Object.keys(result.heatmap[0]).map(k => (
+                      <th key={k} className="text-left py-1 px-2 text-[10px] uppercase">{k}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.heatmap.map((row, i) => (
+                    <tr key={i} className="border-t border-slate-800">
+                      {Object.values(row).map((v, j) => (
+                        <td key={j} className={clsx("py-1 px-2",
+                          typeof v === "number" && v > 1.5 ? "text-emerald-400 font-bold" : "text-slate-400")}>
+                          {typeof v === "number" ? (v > 10 ? v : v.toFixed(4)) : String(v)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Compare tab ───────────────────────────────────────────────────────────────
+function CompareTab({ runId }: { runId: string | null }) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<BacktestCompareResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!runId) return;
+    setLoading(true);
+    researchApi.backtestCompare(runId).then(setResult).catch(e => setError(String(e))).finally(() => setLoading(false));
+  }, [runId]);
+
+  if (loading) return <div className="text-xs text-slate-500 animate-pulse">Loading comparison...</div>;
+  if (error) return <div className="text-xs text-red-400">{error}</div>;
+  if (!result) return <Empty msg="Run a backtest first to enable comparison" />;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <GitCompare size={13} className="text-indigo-400" />
+        <span className="text-xs text-slate-300 font-semibold">KG-Grounded vs Baseline Comparison</span>
+      </div>
+
+      {result.delta && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-lg bg-slate-800 border border-slate-700 p-3 text-center">
+            <div className="text-[10px] text-slate-500 uppercase">Sharpe Δ</div>
+            <div className={clsx("text-lg font-bold font-mono", result.delta.sharpe_delta >= 0 ? "text-emerald-400" : "text-red-400")}>
+              {result.delta.sharpe_delta >= 0 ? "+" : ""}{result.delta.sharpe_delta.toFixed(4)}
+            </div>
+          </div>
+          <div className="rounded-lg bg-slate-800 border border-slate-700 p-3 text-center">
+            <div className="text-[10px] text-slate-500 uppercase">Return Δ</div>
+            <div className={clsx("text-lg font-bold font-mono", result.delta.return_delta >= 0 ? "text-emerald-400" : "text-red-400")}>
+              {result.delta.return_delta >= 0 ? "+" : ""}{fmtPct(result.delta.return_delta)}
+            </div>
+          </div>
+          <div className="rounded-lg bg-slate-800 border border-slate-700 p-3 text-center">
+            <div className="text-[10px] text-slate-500 uppercase">Drawdown Δ</div>
+            <div className={clsx("text-lg font-bold font-mono", result.delta.drawdown_delta <= 0 ? "text-emerald-400" : "text-red-400")}>
+              {result.delta.drawdown_delta >= 0 ? "+" : ""}{fmtPct(result.delta.drawdown_delta)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {result.comparison && (
+        <div className="overflow-auto">
+          <table className="w-full text-xs font-mono">
+            <thead className="bg-slate-800">
+              <tr className="text-slate-400">
+                <th className="text-left py-1.5 px-2">Metric</th>
+                <th className="text-right py-1.5 px-2 text-indigo-400">Grounded</th>
+                <th className="text-right py-1.5 px-2 text-slate-400">Baseline</th>
+              </tr>
+            </thead>
+            <tbody>
+              {["sharpe_ratio","total_return","max_drawdown","calmar_ratio"].map(k => (
+                <tr key={k} className="border-t border-slate-800">
+                  <td className="py-1 px-2 text-slate-400">{k.replace(/_/g, " ")}</td>
+                  <td className="py-1 px-2 text-right text-indigo-300">{String(result.primary[k] ?? "—")}</td>
+                  <td className="py-1 px-2 text-right text-slate-400">{String(result.comparison![k] ?? "—")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Ablation tab ──────────────────────────────────────────────────────────────
+function AblationTab({ runId }: { runId: string | null }) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ primary: Record<string, unknown>; ablation_matrix: unknown[]; configs_compared: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!runId) return;
+    setLoading(true);
+    researchApi.backtestAblation(runId).then(setResult).catch(e => setError(String(e))).finally(() => setLoading(false));
+  }, [runId]);
+
+  if (loading) return <div className="text-xs text-slate-500 animate-pulse">Loading ablation matrix...</div>;
+  if (error) return <div className="text-xs text-red-400">{error}</div>;
+  if (!result) return <Empty msg="No ablation data available" />;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Layers size={13} className="text-indigo-400" />
+        <span className="text-xs text-slate-300 font-semibold">Ablation Matrix ({result.configs_compared} configs)</span>
+      </div>
+      {result.ablation_matrix.length > 0 && (
+        <div className="overflow-auto max-h-64">
+          <table className="w-full text-xs font-mono">
+            <thead className="sticky top-0 bg-slate-800">
+              <tr className="text-slate-400">
+                {Object.keys((result.ablation_matrix as Record<string, unknown>[])[0]).map(k => (
+                  <th key={k} className="text-left py-1 px-2 text-[10px] uppercase">{k.replace(/_/g, " ")}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(result.ablation_matrix as Record<string, unknown>[]).map((row, i) => (
+                <tr key={i} className="border-t border-slate-800">
+                  {Object.values(row).map((v, j) => (
+                    <td key={j} className="py-1 px-2 text-slate-300">
+                      {typeof v === "number" ? v.toFixed(4) : String(v ?? "")}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

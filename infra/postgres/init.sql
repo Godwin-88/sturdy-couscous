@@ -134,3 +134,165 @@ CREATE TABLE IF NOT EXISTS live_validation_discrepancy (
 
 CREATE INDEX IF NOT EXISTS idx_live_val_cycle ON live_validation_discrepancy(cycle_id);
 CREATE INDEX IF NOT EXISTS idx_live_val_ticker ON live_validation_discrepancy(ticker);
+
+-- ResearchAgent edge weight history
+CREATE TABLE IF NOT EXISTS kg_edge_snapshots (
+    id               SERIAL PRIMARY KEY,
+    source           TEXT NOT NULL,
+    target           TEXT NOT NULL,
+    rel_type         TEXT NOT NULL,
+    weight           FLOAT,
+    agent_run        TEXT,
+    recorded_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_kg_edge_snapshots_recorded ON kg_edge_snapshots(recorded_at);
+
+-- KG edit audit trail
+CREATE TABLE IF NOT EXISTS kg_edit_log (
+    id                 SERIAL PRIMARY KEY,
+    operation          TEXT NOT NULL,
+    source             TEXT,
+    target             TEXT,
+    rel_type           TEXT,
+    properties         JSONB,
+    validation_passed  BOOLEAN,
+    affected_strategies TEXT[],
+    created_at         TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Cypher query log
+CREATE TABLE IF NOT EXISTS kg_query_log (
+    id               SERIAL PRIMARY KEY,
+    query_hash       TEXT NOT NULL,
+    params           JSONB,
+    execution_time_ms INT,
+    result_count     INT,
+    created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Structured agent cycle audit
+CREATE TABLE IF NOT EXISTS agent_cycle_audit (
+    id               SERIAL PRIMARY KEY,
+    cycle_id         UUID NOT NULL,
+    timestamp        TIMESTAMPTZ DEFAULT NOW(),
+    duration_s       FLOAT,
+    regime           TEXT,
+    regime_confidence FLOAT,
+    sub_agents       JSONB,
+    signals          JSONB,
+    rejections       JSONB
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_cycle_audit_cycle ON agent_cycle_audit(cycle_id);
+CREATE INDEX IF NOT EXISTS idx_agent_cycle_audit_timestamp ON agent_cycle_audit(timestamp DESC);
+
+-- Backtest config templates
+CREATE TABLE IF NOT EXISTS backtest_templates (
+    id         SERIAL PRIMARY KEY,
+    name       TEXT NOT NULL,
+    params     JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Durable signal archive for export
+CREATE TABLE IF NOT EXISTS signal_archive (
+    id                       SERIAL PRIMARY KEY,
+    signal_id                UUID NOT NULL,
+    cycle_id                 UUID,
+    timestamp                TIMESTAMPTZ,
+    strategy                 TEXT,
+    ticker                   TEXT,
+    venue                    TEXT,
+    direction                TEXT,
+    score                    FLOAT,
+    quant_score              FLOAT,
+    sentiment_score          FLOAT,
+    news_overlay             FLOAT,
+    macro_overlay            FLOAT,
+    kg_formula_contribution  FLOAT,
+    contradiction_blocked    BOOLEAN,
+    kelly_fraction           FLOAT,
+    var_contribution_pct     FLOAT,
+    fill_price               FLOAT,
+    fill_timestamp           TIMESTAMPTZ,
+    slippage_bps             FLOAT,
+    created_at               TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_signal_archive_ticker ON signal_archive(ticker);
+CREATE INDEX IF NOT EXISTS idx_signal_archive_strategy ON signal_archive(strategy);
+CREATE INDEX IF NOT EXISTS idx_signal_archive_timestamp ON signal_archive(timestamp DESC);
+
+-- KG version snapshots
+CREATE TABLE IF NOT EXISTS kg_versions (
+    id           SERIAL PRIMARY KEY,
+    version_tag  TEXT,
+    node_count   INT,
+    edge_count   INT,
+    source_agent TEXT,
+    recorded_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_kg_versions_recorded ON kg_versions(recorded_at DESC);
+
+-- Hypothesis Board: quant hypotheses with full lifecycle tracking
+CREATE TABLE IF NOT EXISTS hypotheses (
+    id                SERIAL PRIMARY KEY,
+    hypothesis_id     UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    title             TEXT NOT NULL,
+    description       TEXT,
+    primary_series    TEXT NOT NULL,
+    benchmark_series  TEXT,
+    regime_filter     TEXT,
+    test_window_start DATE,
+    test_window_end   DATE,
+    status            TEXT NOT NULL DEFAULT 'IDEA',
+    status_path       TEXT[] NOT NULL DEFAULT ARRAY['IDEA'],
+    evidence          JSONB DEFAULT '[]'::jsonb,
+    ic_comparison     JSONB,
+    jobson_korkie     JSONB,
+    regime_conditional JSONB,
+    ai_synthesis      TEXT,
+    backtest_run_id   UUID,
+    paper_signal_weights JSONB,
+    created_at        TIMESTAMPTZ DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ DEFAULT NOW(),
+    created_by        TEXT DEFAULT 'analytics-workspace'
+);
+
+CREATE INDEX IF NOT EXISTS idx_hypotheses_status ON hypotheses(status);
+CREATE INDEX IF NOT EXISTS idx_hypotheses_primary ON hypotheses(primary_series);
+CREATE INDEX IF NOT EXISTS idx_hypotheses_created ON hypotheses(created_at DESC);
+
+-- Hypothesis evidence attachments: pinned charts, test results, snapshots
+CREATE TABLE IF NOT EXISTS hypothesis_evidence (
+    id                SERIAL PRIMARY KEY,
+    hypothesis_id     UUID NOT NULL REFERENCES hypotheses(hypothesis_id) ON DELETE CASCADE,
+    evidence_type     TEXT NOT NULL,  -- 'chart', 'test_result', 'interpretation', 'csv_export'
+    tier              TEXT NOT NULL,  -- 'descriptive', 'diagnostic', 'predictive', 'prescriptive', 'cognitive'
+    series_id         TEXT,
+    label             TEXT,
+    data              JSONB NOT NULL,
+    attached_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_hypothesis_evidence_hid ON hypothesis_evidence(hypothesis_id);
+
+-- Multiple testing correction tracking
+CREATE TABLE IF NOT EXISTS hypothesis_test_log (
+    id                SERIAL PRIMARY KEY,
+    hypothesis_id     UUID NOT NULL REFERENCES hypotheses(hypothesis_id) ON DELETE CASCADE,
+    test_type         TEXT NOT NULL,   -- 'ic_t_test', 'jobson_korkie', 'granger_causality'
+    raw_p_value       NUMERIC(10,6),
+    bonferroni_p      NUMERIC(10,6),
+    bh_corrected_p    NUMERIC(10,6),
+    tests_in_family   INT NOT NULL DEFAULT 1,
+    significant_raw   BOOLEAN,
+    significant_bonf  BOOLEAN,
+    significant_bh    BOOLEAN,
+    test_detail       JSONB,
+    created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_hypothesis_test_log_hid ON hypothesis_test_log(hypothesis_id);

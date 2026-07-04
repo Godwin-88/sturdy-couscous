@@ -1,5 +1,6 @@
+import clsx from "clsx";
 import { usePolling } from "../hooks/usePolling";
-import { agentApi, type NewsResult, type MacroResult, type MacroEvent } from "../lib/api";
+import { agentApi, researchApi, type NewsResult, type MacroResult, type MacroEvent, type RegimeForecast } from "../lib/api";
 
 const IMPACT_COLOR: Record<string, string> = {
   HIGH:   "bg-red-900/60 text-red-300 border border-red-700",
@@ -154,31 +155,87 @@ function MacroSection({ data }: { data: MacroResult | null | undefined }) {
   );
 }
 
+function RegimeForecastSection() {
+  const { data } = usePolling<RegimeForecast>(() => researchApi.regimeForecast(90), 300_000);
+
+  if (!data) return null;
+
+  const regimes = data.regimes;
+  const matrix = data.transition_matrix;
+
+  return (
+    <div className="bg-slate-800/60 rounded-xl border border-slate-700/60 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🔮</span>
+        <h2 className="text-base font-semibold text-slate-100">Regime Transition Forecast</h2>
+        <span className="ml-auto text-xs text-slate-500">{data.observation_period_days}d lookback</span>
+      </div>
+      <div className="text-[10px] text-slate-500">Markov-style transition probabilities</div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs font-mono">
+          <thead>
+            <tr className="text-slate-400">
+              <th className="text-left py-1 pr-2 text-[10px]">From \ To</th>
+              {regimes.map(r => (
+                <th key={r} className="text-right py-1 px-1.5 text-[10px] max-w-[80px] truncate" title={r}>{r}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {regimes.map(from => (
+              <tr key={from} className="border-t border-slate-800">
+                <td className="py-1 pr-2 text-slate-300 font-semibold text-[10px] max-w-[80px] truncate" title={from}>{from}</td>
+                {regimes.map(to => {
+                  const prob = matrix[from]?.[to] ?? 0;
+                  return (
+                    <td key={to} className={clsx("py-1 px-1.5 text-right",
+                      prob > 0.5 ? "text-emerald-400 font-bold" :
+                      prob > 0.2 ? "text-slate-300" :
+                      prob > 0.05 ? "text-slate-500" : "text-slate-700"
+                    )}>
+                      {(prob * 100).toFixed(0)}%
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function IntelligencePanel() {
   const { data: news }  = usePolling<NewsResult>(() => agentApi.newsLatest(), 60_000);
   const { data: macro } = usePolling<MacroResult>(() => agentApi.macroLatest(), 300_000);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-4">
-      {/* News Sentiment */}
-      <div className="bg-slate-800/60 rounded-xl border border-slate-700/60 p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📰</span>
-          <h2 className="text-base font-semibold text-slate-100">News Sentiment</h2>
-          <span className="ml-auto text-xs text-slate-500">refreshes every 60 s</span>
+    <div className="space-y-6 p-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* News Sentiment */}
+        <div className="bg-slate-800/60 rounded-xl border border-slate-700/60 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">📰</span>
+            <h2 className="text-base font-semibold text-slate-100">News Sentiment</h2>
+            <span className="ml-auto text-xs text-slate-500">refreshes every 60 s</span>
+          </div>
+          <NewsSection data={news} />
         </div>
-        <NewsSection data={news} />
+
+        {/* Macro Calendar */}
+        <div className="bg-slate-800/60 rounded-xl border border-slate-700/60 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">📅</span>
+            <h2 className="text-base font-semibold text-slate-100">Macro Calendar</h2>
+            <span className="ml-auto text-xs text-slate-500">refreshes every 5 min</span>
+          </div>
+          <MacroSection data={macro} />
+        </div>
       </div>
 
-      {/* Macro Calendar */}
-      <div className="bg-slate-800/60 rounded-xl border border-slate-700/60 p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📅</span>
-          <h2 className="text-base font-semibold text-slate-100">Macro Calendar</h2>
-          <span className="ml-auto text-xs text-slate-500">refreshes every 5 min</span>
-        </div>
-        <MacroSection data={macro} />
-      </div>
+      {/* Regime Forecast - full width */}
+      <RegimeForecastSection />
     </div>
   );
 }
