@@ -626,7 +626,7 @@ def get_rejected_signals(
 
 
 @router.get("/strategies/{name}/activation-history")
-def get_strategy_activation_history(name: str, limit: int = Query(50, ge=1, ge=500)):
+def get_strategy_activation_history(name: str, limit: int = Query(50, ge=1, le=500)):
     """Timestamped activation/inactivation log with regime and reason."""
     try:
         with _conn() as conn:

@@ -48,6 +48,8 @@ def _redis():
         host=os.getenv("REDIS_HOST", "redis"),
         port=int(os.getenv("REDIS_PORT", 6379)),
         decode_responses=True,
+        socket_timeout=5,
+        socket_connect_timeout=5,
     )
 
 
@@ -57,6 +59,8 @@ def _conn():
         dbname=os.getenv("POSTGRES_DB", "graphalpha"),
         user=os.getenv("POSTGRES_USER", "graphalpha"),
         password=os.getenv("POSTGRES_PASSWORD", ""),
+        connect_timeout=5,
+        options="-c statement_timeout=10000",
     )
 
 
@@ -92,7 +96,7 @@ def _fetch_yfinance(
     r = _redis()
     cached = r.get(cache_key)
     if cached:
-        return pd.read_json(cached)
+        return pd.read_json(pd.io.common.StringIO(cached))
 
     try:
         t = yf.Ticker(ticker)
@@ -332,19 +336,17 @@ def get_available_series():
     return _sanitize(result)
 
 
-@router.get("/data")
-def get_series_data(
-    series_id: str = Query(..., description="Series ID from /analytics/series"),
-    start_date: str = Query("2024-01-01"),
-    end_date: str = Query(None),
-    granularity: str = Query("1d", regex="^(1d|1wk|1h)$"),
-    limit: int = Query(5000, ge=1, le=50000),
-):
-    """Returns requested series data in a consistent format."""
+def fetch_series_data(
+    series_id: str,
+    start_date: str = "2024-01-01",
+    end_date: Optional[str] = None,
+    granularity: str = "1d",
+    limit: int = 5000,
+) -> dict[str, Any]:
+    """Core data fetcher - called by the HTTP endpoint and internal analytics functions."""
     if end_date is None:
         end_date = datetime.utcnow().strftime("%Y-%m-%d")
 
-    # Parse series_id: source:type:metric
     parts = series_id.split(":", 2)
     if len(parts) < 3:
         raise HTTPException(status_code=400, detail=f"Invalid series_id: {series_id}")
@@ -353,10 +355,8 @@ def get_series_data(
     series_type = parts[1]
     metric = parts[2]
 
-    # ── yfinance data ───────────────────────────────────────────────────────
     if source == "yf":
         data_points: list[dict[str, Any]] = []
-        # Fetch in chunks to avoid date range issues
         df = _fetch_yfinance(series_type, start_date, end_date, granularity)
         if df is None or df.empty:
             return {"series_id": series_id, "data": [], "count": 0, "missing_gaps": []}
@@ -380,9 +380,7 @@ def get_series_data(
         else:
             return {"series_id": series_id, "data": [], "count": 0, "missing_gaps": [], "error": f"Metric {metric} not found"}
 
-        # Detect missing gaps
         missing = _detect_gaps(data_points)
-
         return _sanitize({
             "series_id": series_id,
             "data": data_points,
@@ -398,7 +396,6 @@ def get_series_data(
             },
         })
 
-    # ── System signal data ──────────────────────────────────────────────────
     elif source == "system":
         if series_type == "signal":
             df = _fetch_system_series(metric, start_date=start_date, end_date=end_date, limit=limit)
@@ -440,6 +437,24 @@ def get_series_data(
     raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
 
 
+@router.get("/data")
+def get_series_data(
+    series_id: str = Query(..., description="Series ID from /analytics/series"),
+    start_date: str = Query("2024-01-01"),
+    end_date: str = Query(None),
+    granularity: str = Query("1d", regex="^(1d|1wk|1h)$"),
+    limit: int = Query(5000, ge=1, le=50000),
+):
+    """Returns requested series data in a consistent format."""
+    return fetch_series_data(
+        series_id=series_id,
+        start_date=start_date,
+        end_date=end_date,
+        granularity=granularity,
+        limit=limit,
+    )
+
+
 def _detect_gaps(data: list[dict]) -> list[dict]:
     """Detect missing date gaps in a time series."""
     if len(data) < 2:
@@ -474,7 +489,7 @@ def get_descriptive_statistics(
 ):
     """Full distributional statistics, normality tests, and rolling stats."""
     # Fetch the raw data
-    data_resp = get_series_data(series_id, start_date, end_date, limit=10000)
+    data_resp = fetch_series_data(series_id, start_date, end_date, limit=10000)
     raw = data_resp.get("data", [])
     if not raw:
         raise HTTPException(status_code=404, detail="No data available for this series")
@@ -512,7 +527,6 @@ def get_descriptive_statistics(
     # ── Normality tests ─────────────────────────────────────────────────────
     jb_stat, jb_p = sp_stats.jarque_bera(values)
     sw_stat, sw_p = sp_stats.shapiro(values) if n < 5000 else (None, None)
-    ad_stat = float(sp_stats.anderson(values, dist="norm").statistic[0])
 
     # ── Stationarity tests ──────────────────────────────────────────────────
     from statsmodels.tsa.stattools import adfuller, kpss
@@ -522,6 +536,13 @@ def get_descriptive_statistics(
     except Exception:
         adf_stat = adf_p = adf_crit = None
         kpss_stat = kpss_p = None
+
+    # ── Anderson-Darling test ───────────────────────────────────────────────────
+    try:
+        ad_result = sp_stats.anderson(values, dist="norm", method="interpolate")
+        ad_stat = float(ad_result.statistic)
+    except Exception:
+        ad_stat = None
 
     # ── Rolling statistics ──────────────────────────────────────────────────
     rolling = pd.Series(values)
@@ -663,7 +684,7 @@ def get_autocorrelation(
     from statsmodels.tsa.stattools import acf, pacf, q_stat, acovf
     from statsmodels.stats.diagnostic import acorr_ljungbox
 
-    data_resp = get_series_data(series_id, start_date, end_date, limit=10000)
+    data_resp = fetch_series_data(series_id, start_date, end_date, limit=10000)
     raw = data_resp.get("data", [])
     if not raw:
         raise HTTPException(status_code=404, detail="No data available")
@@ -730,7 +751,7 @@ def get_volatility_analysis(
     end_date: str = Query(None),
 ):
     """Rolling volatility, GARCH(1,1), volatility clustering test."""
-    data_resp = get_series_data(series_id, start_date, end_date, limit=10000)
+    data_resp = fetch_series_data(series_id, start_date, end_date, limit=10000)
     raw = data_resp.get("data", [])
     if not raw:
         raise HTTPException(status_code=404, detail="No data available")
@@ -979,7 +1000,7 @@ def get_factor_exposure(
     end_date: str = Query(None),
 ):
     """Fama-French 3-factor + Momentum regression for equity strategies."""
-    data_resp = get_series_data(series_id, start_date, end_date, limit=10000)
+    data_resp = fetch_series_data(series_id, start_date, end_date, limit=10000)
     raw = data_resp.get("data", [])
     if not raw:
         raise HTTPException(status_code=404, detail="No data available")
@@ -1243,32 +1264,49 @@ def post_forecast(req: ForecastRequest):
 
     if req.model == "arima":
         try:
+            import warnings
             from statsmodels.tsa.arima.model import ARIMA
 
-            # Auto-select d via ADF test if max_d > 0
-            d = req.max_d
-            if d > 0:
-                from statsmodels.tsa.stattools import adfuller
-                adf_stat, adf_p, *_ = adfuller(values)
-                d = 0 if adf_p < 0.05 else min(1, req.max_d)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
 
-            # Auto-select p, q via AIC grid search
-            best_aic = float("inf")
-            best_order = (req.max_p or 1, d, req.max_q or 1)
-            for p in range(0, min(req.max_p + 1, 6)):
-                for q in range(0, min(req.max_q + 1, 6)):
+                # Auto-select d via ADF test if max_d > 0
+                d = req.max_d
+                if d > 0:
+                    from statsmodels.tsa.stattools import adfuller
+                    adf_stat, adf_p, *_ = adfuller(values)
+                    d = 0 if adf_p < 0.05 else min(1, req.max_d)
+
+                # Try a small set of orders to avoid repeated fit crashes
+                candidate_orders = []
+                for p in range(0, min(req.max_p + 1, 3)):
+                    for q in range(0, min(req.max_q + 1, 3)):
+                        candidate_orders.append((p, d, q))
+                # Ensure fallbacks are present
+                for order in [(1, d, 1), (0, d, 0), (1, d, 0), (0, d, 1)]:
+                    if order not in candidate_orders:
+                        candidate_orders.append(order)
+
+                best_order = None
+                best_aic = float("inf")
+                failures = 0
+                fitted = None
+                for order in candidate_orders:
                     try:
-                        model = ARIMA(values, order=(p, d, q))
+                        model = ARIMA(values, order=order)
                         fitted = model.fit()
                         if fitted.aic < best_aic:
                             best_aic = fitted.aic
-                            best_order = (p, d, q)
+                            best_order = order
+                        failures = 0
                     except Exception:
+                        failures += 1
+                        if failures >= 4:
+                            break
                         continue
 
-            # Fit best model
-            model = ARIMA(values, order=best_order)
-            fitted = model.fit()
+                if best_order is None or fitted is None:
+                    raise ValueError("No viable ARIMA order found for this series")
 
             # Forecast
             forecast_result = fitted.get_forecast(steps=req.horizon)
@@ -1285,8 +1323,8 @@ def post_forecast(req: ForecastRequest):
                 "aic": float(fitted.aic),
                 "bic": float(fitted.bic),
                 "forecast": [float(v) for v in forecast_values],
-                "conf_int_lower": [float(v) for v in conf_int.iloc[:, 0]],
-                "conf_int_upper": [float(v) for v in conf_int.iloc[:, 1]],
+                "conf_int_lower": [float(v) for v in conf_int[:, 0]] if hasattr(conf_int, "shape") else [float(v) for v in conf_int.iloc[:, 0]],
+                "conf_int_upper": [float(v) for v in conf_int[:, 1]] if hasattr(conf_int, "shape") else [float(v) for v in conf_int.iloc[:, 1]],
                 "residuals": [float(v) for v in residuals[-min(100, len(residuals)):]],
                 "residual_std": float(np.std(residuals)),
                 "ljung_box_p": float(ljung_p),
@@ -1740,7 +1778,7 @@ def get_anomalies(
     method: str = Query("isolation_forest", regex="^(isolation_forest|lof|cusum)$"),
 ):
     """Statistical anomaly detection on time series."""
-    data_resp = get_series_data(series_id, start_date, end_date, limit=10000)
+    data_resp = fetch_series_data(series_id, start_date, end_date, limit=10000)
     raw = data_resp.get("data", [])
     if not raw:
         raise HTTPException(status_code=404, detail="No data available")

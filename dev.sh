@@ -74,7 +74,7 @@ wait_healthy graphalpha-redis
 VENV="$REPO/api/.venv"
 PYTHON="$VENV/bin/python"
 
-if [[ ! -f "$VENV/bin/python" ]]; then
+if [[ ! -f "$VENV/bin/python" ]] || ! "$VENV/bin/python" --version >/dev/null 2>&1; then
   log "Creating Python virtualenv at api/.venv…"
   python3 -m venv "$VENV"
   ok "Virtualenv created"
@@ -85,8 +85,13 @@ if ! "$VENV/bin/python" -c "import uvicorn" 2>/dev/null; then
   log "Installing API dependencies (api/requirements.txt)…"
   "$VENV/bin/pip" install --quiet --upgrade pip \
     || warn "pip upgrade failed — continuing with existing pip"
-  "$VENV/bin/pip" install --quiet -r "$REPO/api/requirements.txt" \
-    || die "Failed to install API requirements — check network and try again"
+  # psycopg2-binary may need libpq-dev on Python 3.14+ (no pre-built wheel)
+  if ! "$VENV/bin/pip" install --quiet -r "$REPO/api/requirements.txt" 2>/dev/null; then
+    warn "pip install failed — trying with libpq-dev (may need sudo)"
+    sudo apt-get install -y libpq-dev 2>/dev/null || true
+    "$VENV/bin/pip" install --quiet -r "$REPO/api/requirements.txt" \
+      || die "Failed to install API requirements — check network and try again"
+  fi
   ok "API dependencies installed"
 else
   ok "API dependencies already installed — skipping pip"
