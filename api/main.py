@@ -26,6 +26,7 @@ from routes.intelligence  import router as intelligence_router
 from routes.research      import router as research_router
 from routes.analytics     import router as analytics_router
 from routes.alpaca        import router as alpaca_router
+from routes.options       import router as options_router
 
 load_dotenv()
 
@@ -71,6 +72,7 @@ app.include_router(intelligence_router)
 app.include_router(research_router)
 app.include_router(analytics_router)
 app.include_router(alpaca_router)
+app.include_router(options_router)
 
 
 # ── Global exception handler: ensures CORS headers on all error responses ─────

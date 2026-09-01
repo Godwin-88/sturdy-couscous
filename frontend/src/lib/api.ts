@@ -270,6 +270,77 @@ export const alpacaApi = {
   bars:        (symbol: string) => apiFetch<{ t: string; o: number; h: number; l: number; c: number; v: number }[]>(`/alpaca/bars/${encodeURIComponent(symbol)}`),
 };
 
+// ── Options trading (Alpaca) ──────────────────────────────────────────────────
+
+export interface OptionGreeks {
+  delta: number | null; gamma: number | null; theta: number | null;
+  vega: number | null; rho: number | null;
+}
+
+export interface OptionContractRow {
+  symbol:             string;
+  underlying_symbol:  string;
+  root_symbol:        string;
+  expiration_date:    string;
+  contract_type:      "call" | "put";
+  strike_price:       number;
+  multiplier:         number;
+  style:              string;
+  tradable:           boolean;
+  bid?:                number | null;
+  ask?:                number | null;
+  last?:               number | null;
+  volume?:             number | null;
+  open_interest?:      number | null;
+  implied_volatility?: number | null;
+  greeks?:             OptionGreeks | null;
+  spread_pct?:         number | null;
+}
+
+export interface AlpacaAsset {
+  symbol: string; name: string | null; asset_class: string | null; tradable: boolean;
+}
+
+export interface OptionPlaceRequest {
+  contract_symbol: string;
+  qty: number;
+  side: "buy" | "sell";
+  position_intent: "buy_to_open" | "sell_to_open" | "buy_to_close" | "sell_to_close";
+  order_type?: "market" | "limit";
+  limit_price?: number | null;
+  label?: string;
+}
+
+export interface OptionPlaceResult {
+  order_id: string; alpaca_order_id: string; contract_symbol: string;
+  underlying_symbol: string; expiration_date: string; contract_type: string;
+  strike_price: number; side: string; position_intent: string;
+  quantity: number; status: string; filled_avg_price: number | null;
+  mode: string; created_at: string;
+}
+
+export const optionsApi = {
+  underlyings: (q = "") => apiFetch<{ assets: AlpacaAsset[] }>(`/options/underlyings?q=${encodeURIComponent(q)}`),
+  expirations: (underlying: string) => apiFetch<{ underlying: string; expirations: string[] }>(`/options/expirations?underlying=${encodeURIComponent(underlying)}`),
+  strikes:     (underlying: string, expiration?: string, contract_type?: string) => {
+    const p = new URLSearchParams({ underlying: underlying.toUpperCase() });
+    if (expiration) p.set("expiration", expiration);
+    if (contract_type) p.set("contract_type", contract_type);
+    return apiFetch<{ underlying: string; strikes: number[] }>(`/options/strikes?${p.toString()}`);
+  },
+  chain:       (underlying: string, opts?: { expiration?: string; contract_type?: string; strike_gte?: number; strike_lte?: number }) => {
+    const p = new URLSearchParams({ underlying: underlying.toUpperCase() });
+    if (opts?.expiration) p.set("expiration", opts.expiration);
+    if (opts?.contract_type) p.set("contract_type", opts.contract_type);
+    if (opts?.strike_gte != null) p.set("strike_gte", String(opts.strike_gte));
+    if (opts?.strike_lte != null) p.set("strike_lte", String(opts.strike_lte));
+    return apiFetch<{ underlying: string; rows: OptionContractRow[] }>(`/options/chain?${p.toString()}`);
+  },
+  snapshot:    (contract: string) => apiFetch<OptionContractRow>(`/options/snapshot?contract=${encodeURIComponent(contract)}`),
+  place:       (req: OptionPlaceRequest) =>
+    apiFetch<OptionPlaceResult>("/options/place", { method: "POST", body: JSON.stringify(req) }),
+};
+
 export const marketApi = {
   downloadData: (req: { tickers: string[]; start: string; end: string; interval?: string; fred_series?: string[]; combine?: boolean }) =>
     apiFetch<{ prices?: Record<string, unknown>[]; prices_by_ticker?: Record<string, unknown[]>; fred?: Record<string, unknown>; tickers: string[]; rows: number; start: string; end: string; interval: string }>("/market/data", { method: "POST", body: JSON.stringify(req) }),

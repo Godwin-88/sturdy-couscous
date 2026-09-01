@@ -18,5 +18,6 @@ scipy
 statsmodels
 scikit-learn
 openai
+alpaca-py==0.44.0
 pytest
 pytest-asyncio

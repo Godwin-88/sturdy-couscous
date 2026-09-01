@@ -165,5 +165,124 @@ class AlpacaClient:
             logger.warning(f"Alpaca get_bars failed for {symbol}: {e}")
             return []
 
+# ── Options ────────────────────────────────────────────────────────────────
+    async def get_option_contracts(self, underlying: str, expiration: str | None = None,
+                             contract_type: str | None = None,
+                             strike_gte: float | None = None,
+                             strike_lte: float | None = None,
+                             limit: int = 1000) -> list[dict]:
+        """Look up option contracts via the Alpaca contract master."""
+        if not self.is_configured():
+            return []
+        try:
+            from alpaca.trading.requests import GetOptionContractsRequest
+            from alpaca.trading.enums import ContractType
+            t = None
+            if contract_type:
+                tl = str(contract_type).lower()
+                if tl.startswith("c"):
+                    t = ContractType.CALL
+                elif tl.startswith("p"):
+                    t = ContractType.PUT
+            req = GetOptionContractsRequest(
+                underlying_symbols=[underlying.upper()],
+                status="active",
+                expiration_date=expiration,
+                type=t,
+                strike_price_gte=str(strike_gte) if strike_gte is not None else None,
+                strike_price_lte=str(strike_lte) if strike_lte is not None else None,
+                limit=limit,
+            )
+            resp = self.client.get_option_contracts(req)
+            return [c.model_dump() for c in resp.option_contracts] if hasattr(resp, "option_contracts") else []
+        except Exception as e:
+            logger.error(f"Alpaca get_option_contracts failed for {underlying}: {e}")
+            return []
+
+    def search_assets(self, query: str, asset_class: str | None = None) -> list[dict]:
+        """Search Alpaca tradable assets (stocks, ETFs) for option underlyings."""
+        if not self.is_configured():
+            return []
+        try:
+            from alpaca.trading.requests import GetAssetsRequest
+            from alpaca.trading.enums import AssetClass
+            req = GetAssetsRequest(asset_class=asset_class)
+            assets = self.client.get_all_assets(req)
+            q = query.upper().strip()
+            out = []
+            for a in assets:
+                sym = a.symbol
+                if not q or q in sym or (a.name and q in (a.name or "").upper()):
+                    out.append({
+                        "symbol": sym,
+                        "name": a.name,
+                        "asset_class": a.class_ if hasattr(a, "class_") else None,
+                        "tradable": a.tradable,
+                    })
+            return out[:100]
+        except Exception as e:
+            logger.error(f"search_assets failed: {e}")
+            return []
+
+    async def place_option_order(self, contract_symbol: str, qty: int, side: str,
+                                 position_intent: str = "buy_to_open",
+                                 order_type: str = "market",
+                                 limit_price: float | None = None,
+                                 order_class: str = "simple",
+                                 legs: list[dict] | None = None) -> AlpacaOrderResult:
+        """Place an options order (single contract or multi-leg spread)."""
+        if not self.is_configured():
+            return AlpacaOrderResult(
+                order_id="simulated", symbol=contract_symbol or "OPT", side=side, qty=qty,
+                filled_qty=qty, filled_avg_price=0.0, status="simulated", raw={}
+            )
+        try:
+            from alpaca.trading.requests import (MarketOrderRequest, LimitOrderRequest,
+                                                 OrderRequest, OptionLegRequest)
+            from alpaca.trading.enums import (OrderSide, OrderType, TimeInForce,
+                                              OrderClass, PositionIntent)
+            side_enum = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
+            pi = PositionIntent(position_intent)
+            common = dict(
+                qty=qty, side=side_enum, time_in_force=TimeInForce.DAY,
+                position_intent=pi, order_class=OrderClass(order_class),
+            )
+            if order_class == "simple":
+                if order_type == "limit" and limit_price is not None:
+                    req = LimitOrderRequest(symbol=contract_symbol, limit_price=limit_price, **common)
+                else:
+                    req = MarketOrderRequest(symbol=contract_symbol, **common)
+            else:
+                leg_objs = [
+                    OptionLegRequest(
+                        symbol=str(l["symbol"]),
+                        ratio_qty=int(l.get("qty", 1)),
+                        side=OrderSide.BUY if str(l.get("side", "buy")).lower() == "buy" else OrderSide.SELL,
+                        position_intent=PositionIntent(l.get("position_intent", "buy_to_open")),
+                    ) for l in (legs or [])
+                ]
+                req = OrderRequest(
+                    symbol=leg_objs[0].symbol if leg_objs else contract_symbol,
+                    qty=qty, side=side_enum, time_in_force=TimeInForce.DAY,
+                    order_class=OrderClass.MLEG, legs=leg_objs or None,
+                )
+            order = self.client.submit_order(req)
+            return AlpacaOrderResult(
+                order_id=order.id or "",
+                symbol=contract_symbol,
+                side=side,
+                qty=float(getattr(order, "qty", qty) or qty),
+                filled_qty=float(getattr(order, "filled_qty", 0) or 0),
+                filled_avg_price=float(getattr(order, "filled_avg_price", 0) or 0),
+                status=order.status.value if getattr(order, "status", None) else "unknown",
+                raw=order.model_dump() if hasattr(order, "model_dump") else {},
+            )
+        except Exception as e:
+            logger.error(f"Alpaca option order failed for {contract_symbol}: {e}")
+            return AlpacaOrderResult(
+                order_id="error", symbol=contract_symbol, side=side, qty=qty,
+                filled_qty=0, filled_avg_price=0.0, status="error", raw={"error": str(e)}
+            )
+
 
 alpaca = AlpacaClient()

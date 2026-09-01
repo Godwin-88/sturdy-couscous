@@ -20,6 +20,7 @@ import ContradictionsPanel from "@/components/ContradictionsPanel";
 import RiskWorkspace       from "@/components/RiskWorkspace";
 import IntelligencePanel   from "@/components/IntelligencePanel";
   import AlpacaPanel         from "@/components/AlpacaPanel";
+import OptionsPanel         from "@/components/OptionsPanel";
 import AnalyticsPanel      from "@/components/AnalyticsPanel";
 import ContextMenu, { type ContextMenuSeries } from "@/components/ContextMenu";
 import HypothesisBoard     from "@/components/HypothesisBoard";
@@ -32,11 +33,12 @@ import RecommendationsPanel from "@/components/RecommendationsPanel";
 import { agentApi, researchApi, hypothesisApi } from "@/lib/api";
 import { LABEL_COLOR } from "@/lib/utils";
 
-type Tab = "dashboard" | "graph" | "signals" | "backtest" | "risk" | "intelligence";
+type Tab = "dashboard" | "graph" | "signals" | "backtest" | "risk" | "intelligence" | "options";
 
 const OP_TABS: { id: Tab; label: string; icon: React.ReactNode; stage: string }[] = [
   { id: "backtest",    label: "Backtest",      icon: <BarChart2       size={14} />, stage: "TESTING" },
   { id: "signals",     label: "Signals",       icon: <Table2          size={14} />, stage: "DEPLOYED" },
+  { id: "options",     label: "Options",       icon: <Activity        size={14} />, stage: "DEPLOYED" },
   { id: "risk",        label: "Risk",          icon: <ShieldAlert     size={14} />, stage: "DEPLOYED" },
   { id: "dashboard",   label: "Dashboard",     icon: <LayoutDashboard size={14} />, stage: "MONITORING" },
   { id: "intelligence",label: "Intelligence",  icon: <Brain           size={14} />, stage: "MONITORING" },
@@ -172,6 +174,7 @@ function OperationsShell({ opTab }: { opTab: string }) {
       {opTab === "dashboard" && <DashboardTab />}
       {opTab === "graph"     && <GraphTab />}
       {opTab === "signals"   && <SignalsTab />}
+      {opTab === "options"   && <OptionsTab />}
       {opTab === "risk"      && <RiskWorkspaceTab />}
       {opTab === "backtest"  && <BacktestWorkspaceTab />}
       {opTab === "intelligence" && <IntelligenceTab />}
@@ -425,6 +428,10 @@ function StatBox({ label, value, color }: { label: string; value: string; color?
 
 function SignalsTab() {
   return <div className="h-full p-3" data-series-id="signals-tab" data-series-name="Signals" data-series-source="postgres"><SignalsTable /></div>;
+}
+
+function OptionsTab() {
+  return <OptionsPanel />;
 }
 
 function RiskWorkspaceTab() {
