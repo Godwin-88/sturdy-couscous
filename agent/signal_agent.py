@@ -10,7 +10,7 @@ from typing import Any
 import httpx
 import numpy as np
 import pandas as pd
-import yfinance as yf
+from alpaca_data import provider
 from arch import arch_model
 from common.graph import get_db
 from loguru import logger
@@ -82,14 +82,7 @@ class SignalAgent:
 
     # ── Market data ───────────────────────────────────────────────────────────
     def _fetch_prices(self, tickers: list[str]) -> pd.DataFrame:
-        try:
-            raw = yf.download(tickers, period="2y", auto_adjust=True, progress=False)
-            if raw is None or raw.empty:
-                return pd.DataFrame()
-            return raw["Close"].dropna()
-        except Exception as e:
-            logger.warning(f"SignalAgent _fetch_prices failed: {e}")
-            return pd.DataFrame()
+        return provider.get_close_series_many(tickers, days=500)
 
     # ── Graph: get formula for strategy ──────────────────────────────────────
     def _get_strategy_formula(self, strategy_name: str) -> dict:
@@ -128,7 +121,28 @@ class SignalAgent:
         name = strategy["name"]
         ticker = strategy.get("ticker", "SPY")
         sell_threshold = strategy.get("sell_threshold") or 0.35
+        signal_method = str(strategy.get("signal_method", "")).lower()
 
+        # New dispatch contract: route on the graph signal_method (single source
+        # of truth in Neo4j). Legacy name-based fallback kept for robustness.
+        if signal_method == "momentum":
+            return self._momentum_signal(prices, ticker, sell_threshold)
+        if signal_method == "vol_zscore":
+            return self._vol_zscore_signal(prices, ticker, sell_threshold)
+        if signal_method == "value_mr":
+            return self._value_mr_signal(prices, ticker, sell_threshold)
+        if signal_method == "crisis_hedge":
+            return self._crisis_hedge_signal(prices, ticker, sell_threshold)
+        if signal_method == "contagion":
+            return self._contagion_signal(prices, ticker, sell_threshold)
+        if signal_method == "bn_macro":
+            return self._bn_signal(prices, ticker, sell_threshold)
+        if signal_method == "climate":
+            return self._climate_signal(prices, ticker, sell_threshold)
+        if signal_method == "garch_vol":
+            return self._garch_signal(prices, ticker, sell_threshold)
+
+        # Legacy name-based fallback (pre-migration nodes / unknown methods)
         if "GARCH" in name or "Vol" in name:
             return self._garch_signal(prices, ticker, sell_threshold)
         if "Bayesian" in name or "BN" in name:
@@ -162,8 +176,8 @@ class SignalAgent:
         asset = prices.get(ticker)
         if asset is None or asset.empty:
             return {"ticker": ticker, "score": 0.0, "reasoning": f"No {ticker} data"}
-        vix_data = yf.download("^VIX", period="1mo", progress=False)["Close"]
-        vix_now  = vix_data.iloc[-1] if not vix_data.empty else 20.0
+        vix_series = provider.get_vix_proxy(days=60)
+        vix_now = float(vix_series.iloc[-1]) if not vix_series.empty else 20.0
         p_ir_high = min(0.95, 0.30 + vix_now / 100)
         p_sp_low  = 0.626 * p_ir_high
         score     = -(p_sp_low - threshold) / (1 - threshold)
@@ -176,9 +190,8 @@ class SignalAgent:
     def _contagion_signal(self, prices: pd.DataFrame, ticker: str, threshold: float) -> dict:
         if ticker == "XLF":
             fin_tickers = ["JPM", "BAC", "GS", "MS", "C"]
-            fin_data = yf.download(fin_tickers, period="3mo",
-                                   auto_adjust=True, progress=False)["Close"]
-            if fin_data.empty:
+            fin_data = provider.get_close_series_many(fin_tickers, days=90)
+            if fin_data.empty or len(fin_data.columns) < 2:
                 return {"ticker": ticker, "score": 0.0, "reasoning": "No data"}
             avg_corr = fin_data.pct_change().corr().values
             np.fill_diagonal(avg_corr, np.nan)
@@ -193,9 +206,8 @@ class SignalAgent:
 
     def _climate_signal(self, prices: pd.DataFrame, ticker: str, threshold: float) -> dict:
         if ticker == "XLE":
-            data = yf.download(["XLE", "SPY"], period="3mo",
-                               auto_adjust=True, progress=False)["Close"]
-            if data.empty:
+            data = provider.get_close_series_many(["XLE", "SPY"], days=90)
+            if data.empty or "XLE" not in data.columns or "SPY" not in data.columns:
                 return {"ticker": ticker, "score": 0.0, "reasoning": "No data"}
             rel_perf = (data["XLE"] / data["SPY"]).pct_change(63).iloc[-1]
             score    = float(np.clip(rel_perf * 5, -1, 1))
@@ -205,6 +217,78 @@ class SignalAgent:
                 "reasoning": f"Climate overlay: XLE vs SPY 3m rel perf={rel_perf:.1%}"
             }
         return self._momentum_signal(prices, ticker, threshold)
+
+    def _vol_zscore_signal(self, prices: pd.DataFrame, ticker: str, threshold: float) -> dict:
+        """Vol mean-reversion: z-score of short vol vs 130d long vol.
+        Elevated vol z -> negative score (de-risk); compressed -> positive."""
+        asset = prices.get(ticker)
+        if asset is None or asset.empty:
+            return {"ticker": ticker, "score": 0.0, "reasoning": f"No {ticker} data"}
+        rets = asset.pct_change().dropna()
+        if len(rets) < 130:
+            return {"ticker": ticker, "score": 0.0, "reasoning": "insufficient data"}
+        short_vol = rets.rolling(10).std() * np.sqrt(252)
+        long_vol = rets.rolling(130).std() * np.sqrt(252)
+        if long_vol.std() < 1e-12:
+            return {"ticker": ticker, "score": 0.0, "reasoning": "flat vol history"}
+        z = (short_vol.iloc[-1] - long_vol.iloc[-1]) / long_vol.std()
+        score = float(np.clip(-z / 2.0, -1, 1))
+        return {
+            "ticker": ticker,
+            "score": score,
+            "reasoning": f"Vol z-score {z:.2f} on {ticker} (10d vs 130d)",
+        }
+
+    def _value_mr_signal(self, prices: pd.DataFrame, ticker: str, threshold: float) -> dict:
+        """Value/mean-reversion: distance from 200d MA, gated by VR(21)<1 so we
+        only fade when the tape actually mean-reverts (REF variance-ratio rule)."""
+        asset = prices.get(ticker)
+        if asset is None or asset.empty:
+            return {"ticker": ticker, "score": 0.0, "reasoning": f"No {ticker} data"}
+        closes = asset.dropna()
+        if len(closes) < 220:
+            return {"ticker": ticker, "score": 0.0, "reasoning": "insufficient data"}
+        ma200 = closes.rolling(200).mean().iloc[-1]
+        if np.isnan(ma200) or ma200 <= 0:
+            return {"ticker": ticker, "score": 0.0, "reasoning": "no 200d MA"}
+        dist = closes.iloc[-1] / ma200 - 1.0
+        logc = np.log(closes.replace(0.0, np.nan).dropna())
+        r1 = logc.diff().iloc[-105:]
+        rk = logc.diff(21).iloc[-105:]
+        var1 = float(r1.var())
+        vr = float(rk.var() / (21 * var1)) if var1 > 1e-12 else 1.0
+        if vr >= 0.9:
+            return {"ticker": ticker, "score": 0.0,
+                    "reasoning": f"VR={vr:.2f}>=0.9 (not mean-reverting) — skip MR"}
+        score = float(np.clip(-dist / 0.10, -1, 1))
+        return {
+            "ticker": ticker,
+            "score": score,
+            "reasoning": f"Value MR on {ticker}: dist-from-200MA={dist:.1%}, VR={vr:.2f}",
+        }
+
+    def _crisis_hedge_signal(self, prices: pd.DataFrame, ticker: str, threshold: float) -> dict:
+        """Crisis hedge (GLD): gold relative strength vs SPY, amplified when
+        equity is falling (the whole point — long gold as portfolio insurance)."""
+        if ticker != "GLD":
+            return self._momentum_signal(prices, ticker, threshold)
+        data = provider.get_close_series_many(["GLD", "SPY"], days=130)
+        if data.empty or "GLD" not in data.columns or "SPY" not in data.columns:
+            return {"ticker": ticker, "score": 0.0, "reasoning": "No data"}
+        gld = data["GLD"].dropna()
+        spy = data["SPY"].dropna()
+        if len(gld) < 64 or len(spy) < 64:
+            return {"ticker": ticker, "score": 0.0, "reasoning": "insufficient data"}
+        gld_ret_63 = gld.iloc[-1] / gld.iloc[-64] - 1.0
+        spy_ret_63 = spy.iloc[-1] / spy.iloc[-64] - 1.0
+        rel = gld_ret_63 - spy_ret_63
+        spy_dn = -min(spy_ret_63, 0.0)
+        score = float(np.clip(rel * 3 + spy_dn * 3, -1, 1))
+        return {
+            "ticker": ticker,
+            "score": score,
+            "reasoning": f"Crisis hedge GLD: 3m GLD={gld_ret_63:.1%} vs SPY={spy_ret_63:.1%}",
+        }
 
     def _momentum_signal(self, prices: pd.DataFrame, ticker: str, threshold: float) -> dict:
         asset = prices.get(ticker)
@@ -242,7 +326,12 @@ class SignalAgent:
                     },
                     headers={"Authorization": f"Bearer {LLM_KEY}"},
                 )
-                raw = r.json()["choices"][0]["message"]["content"].strip()
+                payload = r.json()
+                choices = payload.get("choices") if isinstance(payload, dict) else None
+                if not choices:
+                    msg = payload.get("error", {}).get("message") if isinstance(payload, dict) else ""
+                    raise ValueError(f"no choices in LLM response: {msg or payload}")
+                raw = choices[0]["message"]["content"].strip()
                 score = float(raw)
                 return {"score": float(np.clip(score, -1, 1)), "reasoning": raw}
         except Exception as e:

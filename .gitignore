@@ -12,6 +12,8 @@ ENV/
 backend/venv/
 backend/venv311/
 backend/env/
+# Local virtualenvs (host dev, never committed)
+api/.venv/
 # Environment variables — never commit secrets
 .env
 .env.local
@@ -122,6 +124,7 @@ site/
 
 # C++ / CMake
 cpp-risk/build/
+build/
 *.o
 *.a
 *.so

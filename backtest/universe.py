@@ -61,9 +61,19 @@ _DEFAULTS: tuple[UniverseEntry, ...] = (
     _create_universe_entry("XLF"),
     _create_universe_entry("XLE"),
     _create_universe_entry("GLD", "macro_proxy"),
+    # Crypto is in the *resolvable* universe (routing/symbol map validated here)
+    # but NOT in the active BT_TICKERS / AGENT_TICKERS — the live loop runs the
+    # 5-asset equity+gold universe until a crypto strategy is shipped (P2 gateway).
+    _create_universe_entry("BTC-USD"),
+    _create_universe_entry("ETH-USD"),
 )
 
 _entries: Dict[str, UniverseEntry] = {e.ticker: e for e in _DEFAULTS}
+
+# Immutable canonical universe: lookup() falls back here even when the active
+# universe has been narrowed via set_universe()/use_preset() so routing never
+# regresses (e.g. BTC-USD must always resolve to alpaca "BTC/USD").
+_CANONICAL: Dict[str, UniverseEntry] = {e.ticker: e for e in _DEFAULTS}
 
 _UNIVERSE_PRESETS: Dict[str, List[str]] = {
     "default": ["SPY", "QQQ", "XLF", "XLE", "GLD"],
@@ -79,9 +89,15 @@ def get_universe() -> List[UniverseEntry]:
 
 def lookup(ticker: str) -> UniverseEntry:
     ticker = ticker.upper()
-    if ticker not in _entries:
-        raise KeyError(f"Ticker {ticker!r} not in universe")
-    return _entries[ticker]
+    if ticker in _entries:
+        return _entries[ticker]
+    if ticker in _CANONICAL:
+        return _CANONICAL[ticker]
+    # Resolvable but non-canonical symbol (e.g. SOL-USD/KILL handled via rules).
+    if ticker in _GICS_SECTORS:
+        is_crypto = "-USD" in ticker
+        return _create_universe_entry(ticker, "crypto" if is_crypto else "equity_xstock")
+    raise KeyError(f"Ticker {ticker!r} not in universe")
 
 
 def add(ticker: str, asset_class: str, venue: str, venue_symbol: str, sector: str = "") -> None:

@@ -68,13 +68,13 @@
     },
     "venue": {
       "type": "string",
-      "enum": ["kraken", "ibkr"],
-      "description": "Execution venue. Must be consistent with asset_class per cross-check rules."
+      "enum": ["alpaca", "kraken", "ibkr"],
+      "description": "Execution venue. Alpaca is the primary venue (paper/live); kraken/ibkr retained for legacy back-compat."
     },
     "venue_symbol": {
       "type": "string",
       "minLength": 1,
-      "description": "Venue-specific symbol (Kraken pair like 'XLEUSD' or IBKR contract like 'XLE/SMART/USD')."
+      "description": "Venue-specific symbol (Alpaca equity symbol like 'SPY', Alpaca crypto pair like 'BTC/USD', or legacy Kraken/IBKR identifier)."
     },
     "asset_class": {
       "type": "string",

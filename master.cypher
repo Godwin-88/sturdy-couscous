@@ -1223,14 +1223,12 @@ MERGE (:Category {name: 'macro_indicators',     display: 'Macroeconomic Indicato
 // Extends the regime taxonomy with a crisis-precursor state distinct from Crisis
 // -----------------------------------------------------------------------------
 
-MERGE (:Regime {
-  name:             'SystemicStress',
-  description:      'Densifying interbank network, rising contagion probability, shadow banking expansion, pre-crisis liquidity pressure',
-  momentum_score:   0.15,
-  vol_level:        'extreme',
-  network_density:  'high',
-  shadow_share:     'elevated'
-});
+MERGE (r:Regime {name: 'SystemicStress'})
+  SET r.description =      'Densifying interbank network, rising contagion probability, shadow banking expansion, pre-crisis liquidity pressure',
+      r.momentum_score =   0.15,
+      r.vol_level =        'extreme',
+      r.network_density =  'high',
+      r.shadow_share =     'elevated';
 
 
 // -----------------------------------------------------------------------------
@@ -3531,8 +3529,8 @@ MATCH (a:Concept {name:'Feed-Forward Network (FFN)'}),            (b:Concept {na
 MATCH (a:Concept {name:'Positional Encoding'}),                   (b:Concept {name:'Transformer Architecture'})             MERGE (a)-[:PREREQ_OF]->(b);
 MATCH (a:Concept {name:'Encoder-Decoder Model'}),                 (b:Concept {name:'Transformer Architecture'})             MERGE (a)-[:PREREQ_OF]->(b);
 MATCH (a:Concept {name:'Recurrent Neural Network (RNN)'}),        (b:Concept {name:'Encoder-Decoder Model'})                MERGE (a)-[:PREREQ_OF]->(b);
-MATCH (a:Concept {name:'Transformer Architecture'}),              (b:Concept {name:'Encoder-Only Transformer (Time Series)'}) MERGE (a)-[:PREREQ_OF]->(b);
-MATCH (a:Concept {name:'Encoder-Only Transformer (Time Series)')},(b:Concept {name:'Multi-Transformer (Ramos-Perez)'})      MERGE (a)-[:PREREQ_OF]->(b);
+MATCH (a:Concept {name:'Encoder-Only Transformer (Time Series)'}),(b:Concept {name:'Multi-Transformer (Ramos-Perez)'})      MERGE (a)-[:PREREQ_OF]->(b);
+MATCH (a:Concept {name:'Encoder-Only Transformer (Time Series)'}),(b:Concept {name:'Multi-Transformer (Ramos-Perez)'})      MERGE (a)-[:PREREQ_OF]->(b);
 
 // -- Cross-domain: deep learning → risk management --
 MATCH (a:Concept {name:'DeepVaR'}),                               (b:Concept {name:'Systemic Risk Measurement'})            MERGE (a)-[:PREREQ_OF]->(b);
@@ -7050,3 +7048,70 @@ MATCH (q:QuizQuestion {id:'Q-M8-16'}), (c:Concept {name:'Reichenbach Common Caus
 //   TESTS relationships: 54  (new rel type)
 //   All other node/edge counts unchanged from v0.10.0
 // =============================================================================
+
+// =============================================================================
+// 25. NEUTRAL-REGIME ACTIVATION (calm-market strategies) — Alpaca submission
+//     Neutral fires these active, ticker-mapped strategies so the live paper loop
+//     still trades (and demos) in calm markets where the regime threshold sit at Neutral.
+// =============================================================================
+MATCH (s:Strategy {name:'Multi-Factor Long-Short'}), (r:Regime {name:'Neutral'}) MERGE (s)-[:ACTIVATED_BY {weight:0.55}]->(r);
+MATCH (s:Strategy {name:'Smart Beta Tilt'}),          (r:Regime {name:'Neutral'}) MERGE (s)-[:ACTIVATED_BY {weight:0.50}]->(r);
+MATCH (s:Strategy {name:'Momentum Breakout'}),        (r:Regime {name:'Neutral'}) MERGE (s)-[:ACTIVATED_BY {weight:0.45}]->(r);
+// =============================================================================
+// 26. STRATEGY SIGNAL-METHOD + TRADEABILITY (Alpaca submission) — idempotent
+//     Adds the dispatch contract (signal_method) and marks options/derivatives
+//     heritage strategies inactive so the live Alpaca equity/ETF paper loop only
+//     trades what it can actually execute.
+// =============================================================================
+MERGE (s:Strategy {name: 'Momentum Breakout'})
+  SET s.signal_method = 'momentum', s.tradeable_venue = 'alpaca_equity', s.status = 'active';
+MERGE (s:Strategy {name: 'Volatility Mean Reversion'})
+  SET s.signal_method = 'vol_zscore', s.tradeable_venue = 'alpaca_equity', s.status = 'active';
+MERGE (s:Strategy {name: 'Factor Momentum Rotation'})
+  SET s.signal_method = 'momentum', s.tradeable_venue = 'alpaca_equity', s.status = 'active';
+MERGE (s:Strategy {name: 'Multi-Factor Long-Short'})
+  SET s.signal_method = 'momentum', s.tradeable_venue = 'alpaca_equity', s.status = 'active';
+MERGE (s:Strategy {name: 'Smart Beta Tilt'})
+  SET s.signal_method = 'value_mr', s.tradeable_venue = 'alpaca_equity', s.status = 'active';
+MERGE (s:Strategy {name: 'Systemic Risk Hedge'})
+  SET s.signal_method = 'crisis_hedge', s.tradeable_venue = 'alpaca_equity', s.status = 'active';
+MERGE (s:Strategy {name: 'Contagion Path Avoidance'})
+  SET s.signal_method = 'contagion', s.tradeable_venue = 'alpaca_equity', s.status = 'active';
+MERGE (s:Strategy {name: 'DYNOTEARS Contagion Signal'})
+  SET s.signal_method = 'contagion', s.tradeable_venue = 'alpaca_equity', s.status = 'active';
+MERGE (s:Strategy {name: 'Bayesian Macro Risk Signal'})
+  SET s.signal_method = 'bn_macro', s.tradeable_venue = 'alpaca_equity', s.status = 'active';
+MERGE (s:Strategy {name: 'Bayesian Credit Signal'})
+  SET s.signal_method = 'value_mr', s.tradeable_venue = 'alpaca_equity', s.status = 'active';
+MERGE (s:Strategy {name: 'Climate Credit Risk Overlay'})
+  SET s.signal_method = 'climate', s.tradeable_venue = 'alpaca_equity', s.status = 'active';
+MERGE (s:Strategy {name: 'BN Physical Risk Signal'})
+  SET s.signal_method = 'climate', s.tradeable_venue = 'alpaca_equity', s.status = 'active';
+MERGE (s:Strategy {name: 'BN Oil Price Signal'})
+  SET s.signal_method = 'momentum', s.tradeable_venue = 'alpaca_equity', s.status = 'active';
+// ── Mark options/derivatives/VaR/monitor heritage strategies INACTIVE for the
+//    Alpaca equity/ETF paper universe (kept research_only so KG Q&A still works)
+MERGE (s:Strategy {name: 'Delta-Neutral Carry'})
+  SET s.signal_method = 'vol_trading', s.tradeable_venue = 'options_only', s.status = 'inactive';
+MERGE (s:Strategy {name: 'Gamma Scalp'})
+  SET s.signal_method = 'vol_trading', s.tradeable_venue = 'options_only', s.status = 'inactive';
+MERGE (s:Strategy {name: 'Vol Surface Arb'})
+  SET s.signal_method = 'vol_trading', s.tradeable_venue = 'options_only', s.status = 'inactive';
+MERGE (s:Strategy {name: 'Long Variance Swap'})
+  SET s.signal_method = 'vol_trading', s.tradeable_venue = 'options_only', s.status = 'inactive';
+MERGE (s:Strategy {name: 'Short Variance Swap (Vol Premium Harvest)'})
+  SET s.signal_method = 'vol_trading', s.tradeable_venue = 'options_only', s.status = 'inactive';
+MERGE (s:Strategy {name: 'Jump-Filtered Vol Trading'})
+  SET s.signal_method = 'vol_trading', s.tradeable_venue = 'options_only', s.status = 'inactive';
+MERGE (s:Strategy {name: 'Transformer Vol Forecast'})
+  SET s.signal_method = 'vol_trading', s.tradeable_venue = 'options_only', s.status = 'inactive';
+MERGE (s:Strategy {name: 'GARCH-EVT VaR Overlay'})
+  SET s.signal_method = 'garch_vol', s.tradeable_venue = 'options_only', s.status = 'inactive';
+MERGE (s:Strategy {name: 'Asymmetric Vol Regime Signal'})
+  SET s.signal_method = 'garch_vol', s.tradeable_venue = 'options_only', s.status = 'inactive';
+MERGE (s:Strategy {name: 'Learned BN Macro Regime Signal'})
+  SET s.signal_method = 'bn_macro', s.tradeable_venue = 'research_only', s.status = 'inactive';
+MERGE (s:Strategy {name: 'DeepVaR Risk Overlay'})
+  SET s.signal_method = 'risk', s.tradeable_venue = 'research_only', s.status = 'inactive';
+MERGE (s:Strategy {name: 'Granger Contagion Monitor'})
+  SET s.signal_method = 'contagion', s.tradeable_venue = 'research_only', s.status = 'inactive';

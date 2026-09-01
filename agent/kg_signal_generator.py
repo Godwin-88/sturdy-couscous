@@ -19,7 +19,8 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import numpy as np
-import yfinance as yf
+import pandas as pd
+from alpaca_data import provider
 from common.graph import get_db
 from loguru import logger
 
@@ -88,7 +89,7 @@ def _compute_features(closes: np.ndarray, highs: np.ndarray, lows: np.ndarray) -
     # ATR
     if n >= 15 and len(highs) >= 15 and len(lows) >= 15:
         h, l, c = highs[-15:], lows[-15:], closes[-15:]
-        prev_c  = closes[-16:-1] if n >= 16 else c[:-1]
+        prev_c  = c[:-1]  # previous close of the 14 inter-bar moves (AVOIDS shape mismatch)
         tr      = np.maximum(h[1:] - l[1:],
                   np.maximum(np.abs(h[1:] - prev_c),
                              np.abs(l[1:] - prev_c)))
@@ -138,7 +139,7 @@ class KGSignalGenerator:
         """
         formulas = self._fetch_active_formulas(regime)
         if not formulas:
-            logger.debug("KGSignalGenerator: no active formulas for regime=%s", regime)
+            logger.debug(f"KGSignalGenerator: no active formulas for regime={regime}")
             return []
 
         signals: list[dict] = []
@@ -150,8 +151,15 @@ class KGSignalGenerator:
                     continue
                 closes, highs, lows = price_data[ticker]
                 features  = _compute_features(closes, highs, lows)
-                raw_score = _evaluate_expression(formula["expression"], features)
-                norm      = _normalise_score(raw_score)
+                try:
+                    raw_score = _evaluate_expression(formula["expression"], features)
+                    norm      = _normalise_score(raw_score)
+                except Exception as e:
+                    logger.debug(
+                        f"KG formula eval skipped: {formula.get('formula_id')} "
+                        f"on {ticker}: {e}"
+                    )
+                    continue
 
                 if abs(norm) < 0.15:    # dead-band: ignore weak signals
                     continue
@@ -207,13 +215,13 @@ class KGSignalGenerator:
                 out[ticker] = self._price_cache[ticker]
                 continue
             try:
-                df = yf.download(
-                    ticker, start=start.strftime("%Y-%m-%d"),
-                    end=end.strftime("%Y-%m-%d"),
-                    progress=False, auto_adjust=True,
-                )
+                df = provider.get_ohlcv(ticker, days=LOOKBACK_DAYS)
                 if df.empty or len(df) < 30:
                     continue
+                # Guard: if the provider fell back to yfinance and returned
+                # MultiIndex columns, unwrap to the top level.
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.get_level_values(0)
                 closes = df["Close"].values.astype(float)
                 highs  = df["High"].values.astype(float)
                 lows   = df["Low"].values.astype(float)

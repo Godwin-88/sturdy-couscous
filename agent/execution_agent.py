@@ -22,6 +22,9 @@ from alpaca_client import alpaca
 TRADING_MODE = os.getenv("TRADING_MODE", os.getenv("KRAKEN_TRADING_MODE", "paper"))
 DEFAULT_VENUE = os.getenv("DEFAULT_VENUE", "alpaca")
 
+# Real Alpaca paper fills when configured/filled-on; otherwise simulated.
+PAPER_REAL_FILLS = os.getenv("ALPACA_PAPER_REAL_FILLS", "0").lower() in ("1", "true", "yes")
+
 PAPER_FEE_PCT = 0.0026
 PAPER_SLIP_PCT = 0.0005
 
@@ -71,7 +74,7 @@ class ExecutionAgent:
 
     async def _alpaca_order(self, order_id: str, symbol: str, side: str,
                             qty: float, price_est: float) -> dict:
-        if self.mode == "paper":
+        if self.mode == "paper" and not PAPER_REAL_FILLS:
             return self._paper_fill(order_id, symbol, side, qty, price_est)
         result = await alpaca.place_order(symbol, side, qty)
         return {
@@ -82,7 +85,7 @@ class ExecutionAgent:
             "quantity":    qty,
             "fill_price":  result.filled_avg_price or price_est,
             "fee_usd":     0.0,
-            "mode":        "live",
+            "mode":        "paper" if self.mode == "paper" else "live",
             "venue":       "alpaca",
             "timestamp":   datetime.utcnow().isoformat(),
             "status":      result.status,

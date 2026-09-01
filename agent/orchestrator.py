@@ -30,6 +30,7 @@ from prometheus_client import Counter, Gauge, start_http_server
 
 from regime_agent import RegimeAgent
 from signal_agent import SignalAgent
+from alpaca_data import provider
 from execution_agent import ExecutionAgent
 from research_agent import ResearchAgent
 from news_agent import NewsAgent
@@ -47,6 +48,10 @@ LOOP_COUNTER    = Counter("agent_loop_total", "Number of completed agent loops")
 SIGNAL_GAUGE    = Gauge("active_signals", "Number of active signals this cycle")
 PNL_GAUGE       = Gauge("portfolio_pnl_usd", "Current unrealised PnL in USD")
 DRAWDOWN_GAUGE  = Gauge("portfolio_drawdown_pct", "Current drawdown from peak")
+DATA_SOURCE_GAUGE = Gauge(
+    "market_data_source",
+    "Market data source in use (1=alpaca, 0=yfinance)",
+)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 LOOP_INTERVAL   = int(os.getenv("AGENT_LOOP_INTERVAL_SECONDS", 300))
@@ -59,6 +64,12 @@ SHADOW_MODE     = os.getenv("SHADOW_MODE", "false").lower() == "true"
 NEWS_EVERY      = int(os.getenv("NEWS_CYCLE_TICKS", 1))       # every tick (~5 min)
 MACRO_EVERY     = int(os.getenv("MACRO_CYCLE_TICKS", 12))     # every ~1 hour
 RESEARCH_EVERY  = int(os.getenv("RESEARCH_CYCLE_TICKS", 12))  # every ~1 hour
+
+DATA_SOURCE_GAUGE.set(1 if provider.is_enabled() else 0)
+logger.info(
+    f"Market data source: {provider.source_name()} "
+    f"(Alpaca enabled={provider.is_enabled()})"
+)
 
 # Tickers that KGSignalGenerator evaluates formulas against
 KG_SIGNAL_TICKERS = os.getenv(
@@ -134,7 +145,14 @@ class Orchestrator:
             audit["regime_confidence"] = regime_result["confidence"]
             audit["steps"].append({"agent": "RegimeAgent", "status": "ok",
                                    "result": regime_result})
-            logger.info(f"Regime: {regime} (confidence={regime_result['confidence']:.2f})")
+            provider_data = {
+                "source": provider.source_name(),
+                "alpaca_enabled": provider.is_enabled(),
+                "vix_proxy": "realized_vol(SPY)",
+            }
+            audit["market_data"] = provider_data
+            logger.info(f"Regime: {regime} (confidence={regime_result['confidence']:.2f}) "
+                        f"data={provider.source_name()}")
 
             # ── Step 2a: News sentiment ────────────────────────────────────────
             news_result: dict = {}

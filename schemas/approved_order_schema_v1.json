@@ -44,8 +44,8 @@
     },
     "venue": {
       "type": "string",
-      "enum": ["kraken", "ibkr"],
-      "description": "Execution venue."
+      "enum": ["alpaca", "kraken", "ibkr"],
+      "description": "Execution venue. Alpaca is the primary venue; kraken/ibkr retained for legacy back-compat."
     },
     "venue_symbol": {
       "type": "string",

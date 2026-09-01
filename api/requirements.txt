@@ -19,3 +19,4 @@ statsmodels
 scikit-learn
 openai
 pytest
+pytest-asyncio

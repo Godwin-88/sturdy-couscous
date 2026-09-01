@@ -1,2 +1,0 @@
-/usr/bin/ar qc libriskengine.a CMakeFiles/riskengine.dir/Config.cpp.o CMakeFiles/riskengine.dir/Signal.cpp.o CMakeFiles/riskengine.dir/ApprovedOrder.cpp.o CMakeFiles/riskengine.dir/RiskEngine.cpp.o CMakeFiles/riskengine.dir/PortfolioLoader.cpp.o CMakeFiles/riskengine.dir/execution_engine.cpp.o CMakeFiles/riskengine.dir/audit_log.cpp.o CMakeFiles/riskengine.dir/event_publisher.cpp.o CMakeFiles/riskengine.dir/kraken_adapter.cpp.o CMakeFiles/riskengine.dir/ibkr_adapter.cpp.o
-/usr/bin/ranlib libriskengine.a

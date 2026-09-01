@@ -19,7 +19,7 @@ services:
       NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-graphalpha}
       NEO4J_PLUGINS: '["apoc"]'
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD:-graphalpha} 'RETURN 1'"]
+      test: ["CMD-SHELL", "cypher-shell --fail-at-end -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD:-graphalpha} 'RETURN 1'"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -37,7 +37,7 @@ services:
         condition: service_healthy
     volumes:
       - ./master.cypher:/graph/master.cypher:ro
-    entrypoint: ["/bin/sh", "-c", "cat /graph/master.cypher | cypher-shell -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD:-graphalpha} -a bolt://neo4j:7687 && echo 'Graph loaded successfully'"]
+    entrypoint: ["/bin/sh", "-c", "cat /graph/master.cypher | cypher-shell --fail-at-end -u \"${NEO4J_USER:-neo4j}\" -p \"${NEO4J_PASSWORD:-graphalpha}\" -a bolt://neo4j:7687 && echo 'Graph loaded successfully'"]
     restart: "no"
 
   # ── Audit & portfolio state DB ───────────────────────────────────────────────
@@ -88,6 +88,13 @@ services:
       - ./agent:/app/agent          # agents importable from api
       - ./backtest:/app/backtest    # backtest engine accessible from api
       - ./common:/app/common        # shared graph helper
+      - ./tests:/app/tests          # pytest runs inside the container
+      - ./schemas:/app/schemas      # JSON schema contracts (signal/order v1)
+      - ./cpp-risk:/app/cpp-risk    # C++ adapters (tests + provenance)
+      - ./infra:/app/infra          # infra fixtures (postgres init, prometheus)
+      - ./docs:/app/docs            # P8 architecture/parity/runbook docs
+      - ./docker-compose.yml:/app/docker-compose.yml
+      - ./.env.example:/app/.env.example
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
@@ -106,6 +113,7 @@ services:
       - ./agent:/app
       - ./common:/app/common
       - ./backtest:/app/backtest
+      - ./schemas:/app/schemas      # validate_signal / validate_order contracts
     command: python3 orchestrator.py
     restart: unless-stopped
 

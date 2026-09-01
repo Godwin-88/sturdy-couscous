@@ -11,8 +11,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 import psycopg2
+from alpaca_data import provider
 from loguru import logger
 
 
@@ -34,6 +34,16 @@ SECTOR_MAP = {
     "ETH-USD": "crypto",
 }
 
+# Correlation-breakdown universe (REF: cross-asset correlations -> 1 in stress).
+CORR_UNIVERSE = ["SPY", "QQQ", "XLF", "XLE", "GLD"]
+
+# When the mean pairwise correlation breaches this level the market is in a
+# breakdown regime (REF 'Model Failure & Crises' + 'Liquidity & Regulation'
+# feedback loops): tighten both the sector and per-position caps.
+CORR_BREAKDOWN_THRESHOLD = 0.70
+STRESS_SECTOR_CAP_PCT     = 0.25
+STRESS_POSITION_CAP_PCT   = 0.10
+
 
 class RiskAgent:
     def __init__(self):
@@ -51,20 +61,29 @@ class RiskAgent:
         positions = portfolio["positions"]
 
         prices_cache = self._fetch_recent_prices()
+        corr_breakdown = self._corr_breakdown(prices_cache)
+        stress_mode = corr_breakdown >= CORR_BREAKDOWN_THRESHOLD
+        sector_cap_pct = STRESS_SECTOR_CAP_PCT if stress_mode else MAX_SECTOR_PCT
+        position_cap_pct = STRESS_POSITION_CAP_PCT if stress_mode else MAX_POSITION_PCT
+        if stress_mode:
+            logger.warning(
+                f"Correlation breakdown {corr_breakdown:.2f}>=0.70 — tightened "
+                f"sector cap to {sector_cap_pct:.0%}, position cap to {position_cap_pct:.0%}"
+            )
         approved = []
 
         for sig in signals:
             ticker = sig["ticker"]
 
             kelly_fraction = self._kelly_fraction(sig)
-            target_notional = nav * kelly_fraction * MAX_POSITION_PCT
+            target_notional = nav * kelly_fraction * position_cap_pct
 
             sector = SECTOR_MAP.get(ticker, "other")
             sector_exposure = sum(
                 p["notional"] for p in positions.values()
                 if SECTOR_MAP.get(p["ticker"], "other") == sector
             )
-            if sector_exposure + target_notional > nav * MAX_SECTOR_PCT:
+            if sector_exposure + target_notional > nav * sector_cap_pct:
                 logger.warning(f"Rejected {ticker}: sector {sector} concentration limit")
                 self._write_shadow(cycle_id, sig, {"action": "reject", "reason": "sector_cap"}, nav)
                 continue
@@ -106,8 +125,8 @@ class RiskAgent:
                 "var_contribution_pct": decision["var_contribution_pct"],
                 "price_estimate":  decision["price_estimate"],
                 "risk_checks": {
-                    "position_pct_ok": True,
-                    "sector_pct_ok": sector_exposure + target_notional <= nav * MAX_SECTOR_PCT,
+                    "position_pct_ok": sector_exposure + target_notional <= nav * sector_cap_pct,
+                    "sector_pct_ok": sector_exposure + target_notional <= nav * sector_cap_pct,
                     "var_ok": var_contrib <= nav * MAX_VAR_PCT,
                 },
                 "mode": os.getenv("KRAKEN_TRADING_MODE", "paper"),
@@ -213,7 +232,29 @@ class RiskAgent:
         b = 1.5
         kelly = (p_win * b - p_lose) / b
         half_kelly = max(0.0, kelly / 2)
+        # KG `risk_weight` scales sizing (single source of truth in Neo4j).
+        rw = signal.get("risk_weight")
+        if isinstance(rw, (int, float)) and 0.0 < rw <= 1.0:
+            half_kelly *= rw
         return min(half_kelly, 1.0)
+
+    # ── Correlation breakdown ────────────────────────────────────────────────
+    def _corr_breakdown(self, prices: dict) -> float:
+        """Mean pairwise 60d rolling correlation over the equity+gold universe."""
+        frame = pd.DataFrame(
+            {t: prices[t] for t in CORR_UNIVERSE if t in prices}
+        )
+        if frame.shape[1] < 3 or frame.empty:
+            return 0.5
+        rets = frame.pct_change().dropna().tail(60)
+        if len(rets) < 21:
+            return 0.5
+        cmat = rets.corr().values
+        tri = cmat[np.triu_indices(n=len(rets.columns), k=1)]
+        if not tri.size:
+            return 0.5
+        val = float(np.nanmean(tri))
+        return 0.5 if np.isnan(val) else val
 
     # ── Marginal VaR ──────────────────────────────────────────────────────────
     def _marginal_var(self, ticker: str, notional: float,
@@ -230,13 +271,11 @@ class RiskAgent:
     # ── Price helpers ─────────────────────────────────────────────────────────
     def _fetch_recent_prices(self) -> dict:
         tickers = list(SECTOR_MAP.keys())
-        try:
-            raw = yf.download(tickers, period="3mo", auto_adjust=True, progress=False)
-            close = raw["Close"]
-            return {t: close[t].dropna() for t in tickers if t in close.columns}
-        except Exception as e:
-            logger.error(f"Price fetch error: {e}")
+        close = provider.get_close_series_many(tickers, days=90)
+        if close.empty:
+            logger.warning("RiskAgent: no price data available")
             return {}
+        return {t: close[t].dropna() for t in tickers if t in close.columns}
 
     def _get_price(self, ticker: str, prices: dict) -> float:
         series = prices.get(ticker)

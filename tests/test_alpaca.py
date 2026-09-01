@@ -10,7 +10,13 @@ from agent.alpaca_client import AlpacaClient, AlpacaOrderResult
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    # Hermetic: ignore .env (real paper keys live there) so these tests
+    # assert pure library defaults and never touch the Alpaca API.
+    monkeypatch.delenv("ALPACA_API_KEY_ID", raising=False)
+    monkeypatch.delenv("ALPACA_API_SECRET_KEY", raising=False)
+    monkeypatch.delenv("ALPACA_BASE_URL", raising=False)
+    monkeypatch.delenv("ALPACA_DATA_URL", raising=False)
     return AlpacaClient()
 
 

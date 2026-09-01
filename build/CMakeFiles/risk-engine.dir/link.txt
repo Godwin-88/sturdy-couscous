@@ -1,1 +1,0 @@
-/usr/bin/c++ -g -Wl,--dependency-file=CMakeFiles/risk-engine.dir/link.d "CMakeFiles/risk-engine.dir/src/main.cpp.o" -o risk-engine  src/libriskengine.a -lhiredis -lpq -lssl -lcrypto -lcurl
