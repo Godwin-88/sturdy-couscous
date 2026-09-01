@@ -6,6 +6,9 @@ from backtest.cli import _run_full_ablation
 from backtest.metrics_breakdown import breakdown_by_overlay_config
 
 
+# Repo root, works on host AND inside the API container (/app).
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 class FullAblationTest(unittest.TestCase):
     def test_ablate_overlays_exists(self):
         from backtest.cli import _parse_args
@@ -24,42 +27,42 @@ class FullAblationTest(unittest.TestCase):
 
 class ParityEvidenceTest(unittest.TestCase):
     def test_parity_evidence_doc_exists(self):
-        doc = Path("/home/ed/projects/sturdy-couscous/docs/p8_parity_evidence.md").read_text()
+        doc = (REPO_ROOT / "docs/p8_parity_evidence.md").read_text()
         self.assertIn("P3 — Unit Parity Test Suite", doc)
         self.assertIn("P5 — Shadow Mode Discrepancy Log", doc)
         self.assertIn("P7 — Live-Mode Parity Validation", doc)
 
     def test_parity_table_exists(self):
-        sql = Path("/home/ed/projects/sturdy-couscous/infra/postgres/init.sql").read_text()
+        sql = (REPO_ROOT / "infra/postgres/init.sql").read_text()
         self.assertIn("shadow_comparison", sql)
         self.assertIn("live_validation_discrepancy", sql)
 
 
 class ArchitectureWriteupTest(unittest.TestCase):
     def test_architecture_doc_exists(self):
-        doc = Path("/home/ed/projects/sturdy-couscous/docs/p8_architecture.md").read_text()
+        doc = (REPO_ROOT / "docs/p8_architecture.md").read_text()
         self.assertIn("Python/C++ Boundary", doc)
         self.assertIn("Known Limitations", doc)
 
     def test_architecture_cites_p3_parity(self):
-        doc = Path("/home/ed/projects/sturdy-couscous/docs/p8_architecture.md").read_text()
+        doc = (REPO_ROOT / "docs/p8_architecture.md").read_text()
         self.assertIn("P3", doc)
 
 
 class RunbookTest(unittest.TestCase):
     def test_runbook_exists(self):
-        doc = Path("/home/ed/projects/sturdy-couscous/docs/p8_runbook.md").read_text()
+        doc = (REPO_ROOT / "docs/p8_runbook.md").read_text()
         self.assertIn("Emergency Procedures", doc)
         self.assertIn("Kill Switch", doc)
 
     def test_runbook_live_warning(self):
-        doc = Path("/home/ed/projects/sturdy-couscous/docs/p8_runbook.md").read_text()
+        doc = (REPO_ROOT / "docs/p8_runbook.md").read_text()
         self.assertIn("WARNING", doc)
 
 
 class PackagingAssessmentTest(unittest.TestCase):
     def test_packaging_doc_exists(self):
-        doc = Path("/home/ed/projects/sturdy-couscous/docs/p8_packaging_assessment.md").read_text()
+        doc = (REPO_ROOT / "docs/p8_packaging_assessment.md").read_text()
         self.assertIn("Backtest Engine as Research Tool", doc)
         self.assertIn("Execution Stack as Managed Strategy", doc)
 

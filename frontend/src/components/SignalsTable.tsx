@@ -327,7 +327,7 @@ function PlaceOrderModal({ onClose, onSuccess }: { onClose: () => void; onSucces
   const [quantity, setQuantity] = useState("0.01");
   const [orderType, setOrderType] = useState<"market" | "limit">("market");
   const [limitPrice, setLimitPrice] = useState("");
-  const [venue, setVenue] = useState("kraken");
+  const [venue, setVenue] = useState("alpaca");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ order_id: string; fill_price: number; fee_usd: number; mode: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -370,7 +370,7 @@ function PlaceOrderModal({ onClose, onSuccess }: { onClose: () => void; onSucces
             <div>
               <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Ticker</div>
               <input value={ticker} onChange={e => setTicker(e.target.value)}
-                placeholder="e.g. BTC-USD"
+                placeholder="e.g. SPY"
                 className="w-full bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5" />
             </div>
             <div>
@@ -410,8 +410,9 @@ function PlaceOrderModal({ onClose, onSuccess }: { onClose: () => void; onSucces
             <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Venue</div>
             <select value={venue} onChange={e => setVenue(e.target.value)}
               className="w-full bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5">
-              <option value="kraken">Kraken</option>
-              <option value="ibkr">IBKR</option>
+              <option value="alpaca">Alpaca Paper</option>
+              <option value="kraken">Kraken (legacy)</option>
+              <option value="ibkr">IBKR (legacy)</option>
             </select>
           </div>
 

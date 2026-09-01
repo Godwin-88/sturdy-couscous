@@ -5,6 +5,11 @@ from pathlib import Path
 
 import pytest
 
+from pathlib import Path
+
+# Repo root, works on host AND inside the API container (/app).
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 
 VALID_IBKR_SIGNAL = {
     "schema_version": 1,
@@ -32,18 +37,18 @@ class TestIBKRAdapterInterface:
 
     def test_ibkr_adapter_exists(self):
         """IBKRAdapter header exists."""
-        assert Path("/home/ed/projects/sturdy-couscous/cpp-risk/include/graphalpha/ibkr_adapter.hpp").exists()
+        assert (REPO_ROOT / "cpp-risk/include/graphalpha/ibkr_adapter.hpp").exists()
 
-    def test_ibkr_venue_id(self):
-        """IBKRAdapter returns 'ibkr' as venue_id."""
+    def test_default_venue_alpaca(self):
+        """Default universe routes equities via Alpaca (IBKR stays dormant/profile)."""
         from backtest.universe import lookup
         entry = lookup("SPY")
-        assert entry.venue == "ibkr"
+        assert entry.venue == "alpaca"
 
     def test_ibkr_rejects_live_mode(self):
         """Hard rule: IBKRAdapter rejects non-paper orders."""
         # Test the paper-only constraint is enforced in the adapter logic
-        ibkr_cpp = Path("/home/ed/projects/sturdy-couscous/cpp-risk/src/ibkr_adapter.cpp").read_text()
+        ibkr_cpp = (REPO_ROOT / "cpp-risk/src/ibkr_adapter.cpp").read_text()
         assert 'order.mode != "paper"' in ibkr_cpp
         assert "REJECTED (HARD)" in ibkr_cpp
 
@@ -53,9 +58,9 @@ class TestVenueRouting:
 
     def test_execution_engine_routes_by_venue(self):
         """ExecutionEngine dispatches based on order.venue field."""
-        exec_cpp = Path("/home/ed/projects/sturdy-couscous/cpp-risk/src/execution_engine.cpp").read_text()
+        exec_cpp = (REPO_ROOT / "cpp-risk/src/execution_engine.cpp").read_text()
         assert "adapters_.find(order.venue)" in exec_cpp
-        main_cpp = Path("/home/ed/projects/sturdy-couscous/cpp-risk/src/main.cpp").read_text()
+        main_cpp = (REPO_ROOT / "cpp-risk/src/main.cpp").read_text()
         assert "IBKRAdapter" in main_cpp
         assert "KrakenAdapter" in main_cpp
 
@@ -80,7 +85,7 @@ class TestCrossVenuePortfolio:
 
     def test_portfolio_loader_infers_sector(self):
         """PortfolioLoader correctly infers sector for positions."""
-        loader_cpp = Path("/home/ed/projects/sturdy-couscous/cpp-risk/src/PortfolioLoader.cpp").read_text()
+        loader_cpp = (REPO_ROOT / "cpp-risk/src/PortfolioLoader.cpp").read_text()
         assert 'infer_sector(p.ticker)' in loader_cpp
 
 
@@ -113,25 +118,25 @@ class TestDockerComposeIBKR:
 
     def test_ib_gateway_service_exists(self):
         """ib-gateway service defined in docker-compose.yml."""
-        compose = Path("/home/ed/projects/sturdy-couscous/docker-compose.yml").read_text()
+        compose = (REPO_ROOT / "docker-compose.yml").read_text()
         assert "ib-gateway:" in compose
         assert "IBKR_USERNAME" in compose
         assert "IBKR_TRADING_MODE" in compose
 
     def test_ibkr_env_vars_in_env_example(self):
         """IBKR credentials documented in .env.example."""
-        env = Path("/home/ed/projects/sturdy-couscous/.env.example").read_text()
+        env = (REPO_ROOT / ".env.example").read_text()
         assert "IBKR_USERNAME=" in env
         assert "IBKR_PASSWORD=" in env
         assert "IBKR_TRADING_MODE=paper" in env
 
     def test_risk_engine_connects_to_ibkr(self):
         """risk-engine is configured to connect to IB Gateway."""
-        compose = Path("/home/ed/projects/sturdy-couscous/docker-compose.yml").read_text()
+        compose = (REPO_ROOT / "docker-compose.yml").read_text()
         assert "IBKR_HOST:" in compose or "IBKR_HOST=" in compose
         assert "IBKR_PORT" in compose
 
     def test_ibkr_profile_condition(self):
         """IB gateway only starts when credentials are provided."""
-        compose = Path("/home/ed/projects/sturdy-couscous/docker-compose.yml").read_text()
+        compose = (REPO_ROOT / "docker-compose.yml").read_text()
         assert 'profiles: ["ibkr"]' in compose

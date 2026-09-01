@@ -12,21 +12,18 @@ class UniverseTestCase(unittest.TestCase):
         from backtest.universe import get_universe
         for entry in get_universe():
             self.assertIn(entry.asset_class, {"equity_xstock", "macro_proxy", "crypto"})
-            self.assertIn(entry.venue, {"ibkr", "kraken"})
+            self.assertIn(entry.venue, {"alpaca"})
             self.assertTrue(entry.venue_symbol.isascii())
             self.assertIsInstance(entry.sector, str)
 
     def test_universe_routing(self):
-        from backtest.universe import get_universe, add
+        from backtest.universe import get_universe
         for entry in get_universe():
-            if entry.asset_class == "crypto":
-                self.assertEqual(entry.venue, "kraken")
-            else:
-                self.assertEqual(entry.venue, "ibkr")
+            self.assertEqual(entry.venue, "alpaca")
 
     def test_universe_validation(self):
         from backtest.universe import add, lookup
-        add("TST", "equity_xstock", "ibkr", "TST", "Test")
+        add("TST", "equity_xstock", "alpaca", "TST", "Test")
         entry = lookup("TST")
         self.assertEqual(entry.venue_symbol, "TST")
         self.assertEqual(entry.sector, "Test")
@@ -143,7 +140,7 @@ class DynamicUniverseTestCase(unittest.TestCase):
         tickers = [e.ticker for e in entries]
         self.assertIn("AAPL", tickers)
         self.assertIn("MSFT", tickers)
-        self.assertTrue(all(e.venue == "ibkr" for e in entries))
+        self.assertTrue(all(e.venue == "alpaca" for e in entries))
         self.assertTrue(all(e.asset_class == "equity_xstock" for e in entries))
 
     def test_dynamic_crypto_tickers(self):
@@ -155,11 +152,11 @@ class DynamicUniverseTestCase(unittest.TestCase):
         self.assertIn("SOL-USD", tickers)
         for e in entries:
             self.assertEqual(e.asset_class, "crypto")
-            self.assertEqual(e.venue, "kraken")
+            self.assertEqual(e.venue, "alpaca")
 
     def test_universe_presets(self):
         from backtest.universe import use_preset, get_universe
         use_preset("crypto")
         self.assertEqual([e.ticker for e in get_universe()], ["BTC-USD", "ETH-USD"])
         use_preset("equity")
-        self.assertEqual([e.ticker for e in get_universe()], ["SPY", "QQQ", "TLT", "GLD"])
+        self.assertEqual([e.ticker for e in get_universe()], ["SPY", "QQQ", "XLF", "XLE"])

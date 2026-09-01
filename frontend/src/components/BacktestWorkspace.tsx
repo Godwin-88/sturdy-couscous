@@ -671,8 +671,12 @@ function TradeLogTab({ trades }: { trades: TradeLogEntry[] }) {
   const filtered = trades
     .filter(t => !filter || t.ticker.includes(filter.toUpperCase()) || t.strategy.includes(filter) || t.regime.includes(filter))
     .sort((a, b) => {
-      const av = a[sortKey]; const bv = b[sortKey];
-      return sortDir * (av < bv ? -1 : av > bv ? 1 : 0);
+      const av = a[sortKey] ?? "";
+      const bv = b[sortKey] ?? "";
+      const cmp = typeof av === "number" && typeof bv === "number"
+        ? av - bv
+        : String(av).localeCompare(String(bv));
+      return sortDir * (cmp > 0 ? 1 : cmp < 0 ? -1 : 0);
     });
 
   const toggleSort = (key: keyof TradeLogEntry) => {

@@ -132,3 +132,6 @@ build/
 *.la
 *.lai
 *.slo
+
+# Build output (generated)
+frontend/dist/

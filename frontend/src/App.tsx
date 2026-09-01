@@ -19,6 +19,7 @@ import BacktestWorkspace   from "@/components/BacktestWorkspace";
 import ContradictionsPanel from "@/components/ContradictionsPanel";
 import RiskWorkspace       from "@/components/RiskWorkspace";
 import IntelligencePanel   from "@/components/IntelligencePanel";
+  import AlpacaPanel         from "@/components/AlpacaPanel";
 import AnalyticsPanel      from "@/components/AnalyticsPanel";
 import ContextMenu, { type ContextMenuSeries } from "@/components/ContextMenu";
 import HypothesisBoard     from "@/components/HypothesisBoard";
@@ -211,6 +212,7 @@ function DashboardTab() {
         <div className="flex-1 min-h-[240px]"><AgentLog /></div>
       </div>
       <div className="flex flex-col gap-3 overflow-hidden min-h-0">
+        <AlpacaPanel />
         <PnLDashboard />
         <div className="flex-1 min-h-0"><DashboardGraph /></div>
       </div>

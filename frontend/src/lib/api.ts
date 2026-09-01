@@ -246,6 +246,30 @@ export const signalsApi = {
   venuesStatus: () => apiFetch<{ venues: { name: string; type: string; status: string; mode: string; last_heartbeat: string | null }[] }>("/venues/status"),
 };
 
+// ── Alpaca paper-trading API (Phase 3: wire Alpaca into the UI) ─────────────────
+
+export interface AlpacaAccount {
+  status:         string;
+  cash:           number;
+  equity:         number;
+  buying_power:   number;
+}
+
+export interface AlpacaPosition {
+  symbol:           string;
+  qty:              number;
+  avg_entry_price:  number;
+  current_price:    number;
+  market_value:     number;
+  side:              "buy" | "sell";
+}
+
+export const alpacaApi = {
+  account:      () => apiFetch<AlpacaAccount>("/alpaca/account"),
+  positions:    () => apiFetch<AlpacaPosition[]>("/alpaca/positions"),
+  bars:        (symbol: string) => apiFetch<{ t: string; o: number; h: number; l: number; c: number; v: number }[]>(`/alpaca/bars/${encodeURIComponent(symbol)}`),
+};
+
 export const marketApi = {
   downloadData: (req: { tickers: string[]; start: string; end: string; interval?: string; fred_series?: string[]; combine?: boolean }) =>
     apiFetch<{ prices?: Record<string, unknown>[]; prices_by_ticker?: Record<string, unknown[]>; fred?: Record<string, unknown>; tickers: string[]; rows: number; start: string; end: string; interval: string }>("/market/data", { method: "POST", body: JSON.stringify(req) }),

@@ -8,6 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from pathlib import Path
+
+# Repo root, works on host AND inside the API container (/app).
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 # Fixture for a valid signal
 VALID_SIGNAL = {
     "schema_version": 1,
@@ -78,7 +83,7 @@ class TestOrchestratorPublishing:
         from backtest.universe import _create_universe_entry, _infer_venue_symbol
         entry = _create_universe_entry("SPY")
         assert entry.asset_class == "equity_xstock"
-        assert entry.venue == "ibkr"
+        assert entry.venue == "alpaca"
         assert entry.venue_symbol == "SPY"
 
 
@@ -88,7 +93,7 @@ class TestSubscriberMode:
     def test_subscriber_reconnect_on_disconnect(self):
         """RiskEngine reconnects on Redis disconnect."""
         # Verify the subscriber code exists in main.cpp
-        assert os.path.exists("/home/ed/projects/sturdy-couscous/cpp-risk/src/main.cpp")
+        assert (REPO_ROOT / "cpp-risk/src/main.cpp").exists()
 
     def test_heartbeat_distinguishes_quiet_cycles(self):
         """Heartbeat allows ops to distinguish quiet cycles from failures."""
@@ -106,15 +111,14 @@ class TestShadowComparison:
 
     def test_shadow_comparison_table_exists(self):
         """Shadow comparison table has correct schema."""
-        from pathlib import Path
-        init_sql = Path("/home/ed/projects/sturdy-couscous/infra/postgres/init.sql").read_text()
+        init_sql = (REPO_ROOT / "infra/postgres/init.sql").read_text()
         assert "shadow_comparison" in init_sql
         assert "cpp_decision" in init_sql
         assert "python_decision" in init_sql
 
     def test_shadow_comparison_columns(self):
         """Shadow comparison includes discrepancy flag."""
-        init_sql = open("/home/ed/projects/sturdy-couscous/infra/postgres/init.sql").read()
+        init_sql = (REPO_ROOT / "infra/postgres/init.sql").read_text()
         assert "discrepancy" in init_sql
 
 
@@ -123,21 +127,20 @@ class TestDockerComposeIntegration:
 
     def test_risk_engine_service_defined(self):
         """risk-engine service is in docker-compose.yml."""
-        from pathlib import Path
-        compose = Path("/home/ed/projects/sturdy-couscous/docker-compose.yml").read_text()
+        compose = (REPO_ROOT / "docker-compose.yml").read_text()
         assert "risk-engine:" in compose
         assert "REDIS_SUBSCRIBE" in compose
 
     def test_risk_engine_depends_on_redis_postgres(self):
         """risk-engine waits for redis and postgres."""
-        compose = open("/home/ed/projects/sturdy-couscous/docker-compose.yml").read()
+        compose = (REPO_ROOT / "docker-compose.yml").read_text()
         assert "depends_on:" in compose
         assert "postgres:" in compose
         assert "redis:" in compose
 
     def test_risk_engine_reads_env_file(self):
         """risk-engine reads .env like other services."""
-        compose = open("/home/ed/projects/sturdy-couscous/docker-compose.yml").read()
+        compose = (REPO_ROOT / "docker-compose.yml").read_text()
         assert "env_file: .env" in compose
 
 
