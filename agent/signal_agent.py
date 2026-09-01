@@ -35,7 +35,14 @@ class SignalAgent:
         self.db = get_db()
 
     async def run(self, regime: str, active_strategies: list[dict]) -> list[dict]:
-        prices = self._fetch_prices(list(TICKER_MAP.keys()))
+        try:
+            prices = self._fetch_prices(list(TICKER_MAP.keys()))
+        except Exception as e:
+            logger.warning(f"SignalAgent price fetch failed: {e}")
+            prices = pd.DataFrame()
+        if prices.empty:
+            logger.warning("SignalAgent: no price data — no signals this cycle")
+            return []
         signals = []
 
         for strategy in active_strategies:
@@ -75,8 +82,14 @@ class SignalAgent:
 
     # ── Market data ───────────────────────────────────────────────────────────
     def _fetch_prices(self, tickers: list[str]) -> pd.DataFrame:
-        raw = yf.download(tickers, period="2y", auto_adjust=True, progress=False)
-        return raw["Close"].dropna()
+        try:
+            raw = yf.download(tickers, period="2y", auto_adjust=True, progress=False)
+            if raw is None or raw.empty:
+                return pd.DataFrame()
+            return raw["Close"].dropna()
+        except Exception as e:
+            logger.warning(f"SignalAgent _fetch_prices failed: {e}")
+            return pd.DataFrame()
 
     # ── Graph: get formula for strategy ──────────────────────────────────────
     def _get_strategy_formula(self, strategy_name: str) -> dict:

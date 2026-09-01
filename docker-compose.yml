@@ -37,12 +37,7 @@ services:
         condition: service_healthy
     volumes:
       - ./master.cypher:/graph/master.cypher:ro
-    entrypoint: >
-      sh -c "cat /graph/master.cypher | cypher-shell
-             -u ${NEO4J_USER:-neo4j}
-             -p ${NEO4J_PASSWORD:-graphalpha}
-             -a bolt://neo4j:7687 &&
-             echo 'Graph loaded successfully'"
+    entrypoint: ["/bin/sh", "-c", "cat /graph/master.cypher | cypher-shell -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD:-graphalpha} -a bolt://neo4j:7687 && echo 'Graph loaded successfully'"]
     restart: "no"
 
   # ── Audit & portfolio state DB ───────────────────────────────────────────────

@@ -173,7 +173,7 @@ class KGSignalGenerator:
     def _fetch_active_formulas(self, regime: str) -> list[dict]:
         """Query KG for Formula nodes active in the current regime."""
         try:
-            rows = list(self.db.execute(f"""
+            rows = list(self.db.execute_and_fetch(f"""
             MATCH (r:Regime {{name: '{regime}'}})<-[:ACTIVATED_BY]-(s:Strategy)
                   -[:HAS_FORMULA]->(f:Formula)
             RETURN f.id AS formula_id, f.name AS name, f.expression AS expression
@@ -184,7 +184,7 @@ class KGSignalGenerator:
             logger.debug(f"KG formula query failed: {e}")
             # Fallback: query all formulas without regime filter
             try:
-                rows = list(self.db.execute("""
+                rows = list(self.db.execute_and_fetch("""
                 MATCH (f:Formula)
                 WHERE f.expression IS NOT NULL
                 RETURN f.id AS formula_id, f.name AS name, f.expression AS expression

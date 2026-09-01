@@ -1,6 +1,6 @@
 // =============================================================================
 // GRAPHALPHA — MASTER KNOWLEDGE GRAPH
-// Memgraph-compatible Cypher
+// Neo4j 5-compatible Cypher (migrated from Memgraph)
 // Schema version: 0.2.0
 // Changelog:
 //   0.2.0 — Added factor investing, asset pricing, risk metrics, estimation,
@@ -44,20 +44,20 @@
 // 0. CONSTRAINTS & INDEXES
 // -----------------------------------------------------------------------------
 
-CREATE CONSTRAINT ON (c:Concept)      ASSERT c.name IS UNIQUE;
-CREATE CONSTRAINT ON (cat:Category)   ASSERT cat.name IS UNIQUE;
-CREATE CONSTRAINT ON (f:Formula)      ASSERT f.id IS UNIQUE;
-CREATE CONSTRAINT ON (s:Strategy)     ASSERT s.name IS UNIQUE;
-CREATE CONSTRAINT ON (r:Regime)       ASSERT r.name IS UNIQUE;
-CREATE CONSTRAINT ON (t:Ticker)       ASSERT t.symbol IS UNIQUE;
-CREATE CONSTRAINT ON (sig:Signal)     ASSERT sig.id IS UNIQUE;
-CREATE CONSTRAINT ON (p:Position)     ASSERT p.id IS UNIQUE;
+CREATE CONSTRAINT concept_name      IF NOT EXISTS FOR (c:Concept)    REQUIRE c.name   IS UNIQUE;
+CREATE CONSTRAINT category_name     IF NOT EXISTS FOR (cat:Category) REQUIRE cat.name IS UNIQUE;
+CREATE CONSTRAINT formula_id        IF NOT EXISTS FOR (f:Formula)    REQUIRE f.id     IS UNIQUE;
+CREATE CONSTRAINT strategy_name     IF NOT EXISTS FOR (s:Strategy)   REQUIRE s.name   IS UNIQUE;
+CREATE CONSTRAINT regime_name       IF NOT EXISTS FOR (r:Regime)     REQUIRE r.name   IS UNIQUE;
+CREATE CONSTRAINT ticker_symbol     IF NOT EXISTS FOR (t:Ticker)     REQUIRE t.symbol IS UNIQUE;
+CREATE CONSTRAINT signal_id         IF NOT EXISTS FOR (sig:Signal)   REQUIRE sig.id   IS UNIQUE;
+CREATE CONSTRAINT position_id       IF NOT EXISTS FOR (p:Position)   REQUIRE p.id     IS UNIQUE;
 
-CREATE INDEX ON :Concept(category);
-CREATE INDEX ON :Concept(difficulty);
-CREATE INDEX ON :Signal(created_at);
-CREATE INDEX ON :Signal(status);
-CREATE INDEX ON :Position(status);
+CREATE INDEX concept_category   IF NOT EXISTS FOR (c:Concept) ON (c.category);
+CREATE INDEX concept_difficulty IF NOT EXISTS FOR (c:Concept) ON (c.difficulty);
+CREATE INDEX signal_created_at  IF NOT EXISTS FOR (s:Signal)  ON (s.created_at);
+CREATE INDEX signal_status      IF NOT EXISTS FOR (s:Signal)  ON (s.status);
+CREATE INDEX position_status    IF NOT EXISTS FOR (p:Position) ON (p.status);
 
 
 // -----------------------------------------------------------------------------

@@ -25,10 +25,14 @@ class RegimeAgent:
         self.db = get_db()
 
     async def run(self) -> dict[str, Any]:
-        prices  = self._fetch_market_data()
-        regime  = self._classify_regime(prices)
-        conf    = self._regime_confidence(prices, regime)
-        strategies = self._query_active_strategies(regime)
+        try:
+            prices  = self._fetch_market_data()
+            regime  = self._classify_regime(prices)
+            conf    = self._regime_confidence(prices, regime)
+            strategies = self._query_active_strategies(regime)
+        except Exception as e:
+            logger.warning(f"RegimeAgent run failed: {e}")
+            regime, conf, strategies = "Neutral", 0.0, []
 
         return {
             "regime": regime,
@@ -40,13 +44,25 @@ class RegimeAgent:
     def _fetch_market_data(self) -> pd.DataFrame:
         """Pull SPY, VIX proxy (^VIX), and 10Y yield (^TNX) for regime signals."""
         tickers = ["SPY", "^VIX", "^TNX", "HYG"]
-        raw = yf.download(tickers, period="1y", auto_adjust=True, progress=False)
-        return raw["Close"].dropna()
+        try:
+            raw = yf.download(tickers, period="1y", auto_adjust=True, progress=False)
+            if raw is None or raw.empty:
+                return pd.DataFrame()
+            return raw["Close"].dropna()
+        except Exception as e:
+            logger.warning(f"RegimeAgent market data fetch failed: {e}")
+            return pd.DataFrame()
 
     # ── Regime classification ─────────────────────────────────────────────────
     def _classify_regime(self, prices: pd.DataFrame) -> str:
-        spy   = prices["SPY"]
-        vix   = prices["^VIX"]
+        if prices.empty or "SPY" not in prices.columns or "^VIX" not in prices.columns:
+            logger.warning("RegimeAgent: no SPY/VIX data — defaulting to Neutral regime")
+            return "Neutral"
+        spy   = prices["SPY"].dropna()
+        vix   = prices["^VIX"].dropna()
+        if spy.empty or vix.empty:
+            logger.warning("RegimeAgent: empty SPY/VIX series — defaulting to Neutral regime")
+            return "Neutral"
         hyg   = prices.get("HYG", pd.Series(dtype=float))
 
         # Rolling metrics (use only past data — no lookahead)

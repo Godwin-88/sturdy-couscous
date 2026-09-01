@@ -123,6 +123,8 @@ class Orchestrator:
         cycle_start = time.time()
         self._tick += 1
         audit = {"timestamp": datetime.utcnow().isoformat(), "steps": [], "tick": self._tick}
+        cycle_id = "unassigned"
+        signals: list[dict] = []
 
         try:
             # ── Step 1: Regime classification ─────────────────────────────────
@@ -274,9 +276,12 @@ class Orchestrator:
         LOOP_COUNTER.inc()
 
         # Persist to Postgres for research endpoints
-        asyncio.create_task(self._persist_cycle_audit(audit, cycle_id))
-        asyncio.create_task(self._persist_signal_archive(signals, cycle_id))
-        asyncio.create_task(self._persist_kg_edge_snapshots(audit))
+        try:
+            asyncio.create_task(self._persist_cycle_audit(audit, cycle_id))
+            asyncio.create_task(self._persist_signal_archive(signals, cycle_id))
+            asyncio.create_task(self._persist_kg_edge_snapshots(audit))
+        except Exception as e:
+            logger.warning(f"Cycle persistence error: {e}")
 
         return audit
 
