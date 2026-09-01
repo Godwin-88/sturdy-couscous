@@ -87,8 +87,10 @@ export interface TradeLogEntry {
   qty:          number;
   pnl:          number;
   fee:          number;
+  slippage?:    number;
   hold_days:    number;
   regime:       string;
+  asset_class?: string;
 }
 
 export interface StrategyBreakdown {
@@ -153,6 +155,16 @@ export interface BacktestResult {
   jk_z_stat?:           number;
   jk_p_value?:          number;
   jk_significant?:      boolean;
+  sortino_ratio?: number;
+  regime_performance?: {
+    regime: string;
+    return_pct: number;
+    sharpe: number;
+    trades: number;
+    win_rate: number;
+  }[];
+  total_fees?: number;
+  total_slippage?: number;
 }
 
 export interface MarketQuote {
@@ -221,6 +233,25 @@ export interface MacroResult {
 
 // ── API calls ──────────────────────────────────────────────────────────────────
 
+export const signalsApi = {
+  placeOrder: (req: { ticker: string; direction: string; quantity: number; order_type?: string; limit_price?: number | null; venue?: string }) =>
+    apiFetch<{ order_id: string; status: string; mode: string; venue: string; ticker: string; direction: string; quantity: number; fill_price: number; fee_usd: number; created_at: string }>("/signals/place", { method: "POST", body: JSON.stringify(req) }),
+  exportSignals: (format = "json", startDate?: string, endDate?: string) => {
+    const p = new URLSearchParams();
+    p.set("format", format);
+    if (startDate) p.set("start_date", startDate);
+    if (endDate) p.set("end_date", endDate);
+    return apiFetch<SignalExport[]>(`/signals/export?${p.toString()}`);
+  },
+  venuesStatus: () => apiFetch<{ venues: { name: string; type: string; status: string; mode: string; last_heartbeat: string | null }[] }>("/venues/status"),
+};
+
+export const marketApi = {
+  downloadData: (req: { tickers: string[]; start: string; end: string; interval?: string; fred_series?: string[]; combine?: boolean }) =>
+    apiFetch<{ prices?: Record<string, unknown>[]; prices_by_ticker?: Record<string, unknown[]>; fred?: Record<string, unknown>; tickers: string[]; rows: number; start: string; end: string; interval: string }>("/market/data", { method: "POST", body: JSON.stringify(req) }),
+  listFredSeries: () => apiFetch<{ series: { id: string; name: string }[] }>("/market/fred-series"),
+};
+
 export const agentApi = {
   status:         () => apiFetch<AgentStatus>("/agent/status"),
   risk:           () => apiFetch<RiskMetrics>("/agent/risk"),
@@ -254,7 +285,11 @@ export const agentApi = {
     start_date: string; end_date: string; initial_capital: number;
     use_graph: boolean; run_both: boolean;
     rebal_freq: number; fee_pct: number; slip_pct: number;
-  }) => apiFetch<{ status: string }>("/backtest/run", { method: "POST", body: JSON.stringify(params) }),
+    tickers?: string; trade_threshold?: number;
+    benchmark?: string; rf_rate?: number; // NEW
+  }) => apiFetch<{ status: string; run_id?: string }>("/backtest/run", { method: "POST", body: JSON.stringify(params) }),
+  cancelBacktest: () => apiFetch<{ ok: boolean }>("/backtest/cancel", { method: "POST" }),
+
   backtestSuggestions: () => apiFetch<TradeSuggestion[]>("/backtest/suggestions"),
   actionSuggestion: (suggestion_id: string, action: string, notes = "") =>
     apiFetch<{ ok: boolean }>("/backtest/suggestions/action", {

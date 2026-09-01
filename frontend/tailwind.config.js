@@ -4,7 +4,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        mono: ["JetBrains Mono", "Fira Code", "ui-monospace", "monospace"],
+        sans: ["Raleway", "system-ui", "sans-serif"],
+        mono: ["Raleway", "system-ui", "sans-serif"],
       },
       colors: {
         brand: {

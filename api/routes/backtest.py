@@ -19,7 +19,12 @@ class BacktestRequest(BaseModel):
     rebal_freq:      int   = 5
     fee_pct:         float = 0.0010
     slip_pct:        float = 0.0005
-    run_both:        bool  = False   # if True, run grounded then ungrounded sequentially
+    run_both:        bool  = False
+    tickers:         str   = "SPY,QQQ,TLT,GLD,BTC-USD"
+    trade_threshold: float = 0.05
+    benchmark:       str   = "SPY"     # NEW
+    rf_rate:         float = 0.05      # NEW
+
 
 
 class ApprovalRequest(BaseModel):
@@ -40,7 +45,10 @@ def _run_engine(req: BacktestRequest, use_graph: bool, r) -> dict | None:
     label = "grounded" if use_graph else "ungrounded"
     r.set("graphalpha:backtest_status", f"running:{label}")
     r.set("graphalpha:backtest_progress", json.dumps({"pct": 0, "msg": f"Starting {label} run…"}))
+    
     try:
+        # Clear cancel flag at start
+        r.set("graphalpha:backtest_cancel", "0")
         result = subprocess.run(
             [PYTHON, "engine.py",
              "--start",        req.start_date,
@@ -49,6 +57,10 @@ def _run_engine(req: BacktestRequest, use_graph: bool, r) -> dict | None:
              "--rebal-freq",   str(req.rebal_freq),
              "--fee-pct",      str(req.fee_pct),
              "--slip-pct",     str(req.slip_pct),
+             "--tickers",      req.tickers,
+             "--trade-threshold", str(req.trade_threshold),
+             "--benchmark", req.benchmark,
+             "--rf-rate", str(req.rf_rate),
              "--use-graph" if use_graph else "--no-graph"],
             capture_output=True, text=True, timeout=900,
             cwd=BACKTEST_DIR,
@@ -150,3 +162,10 @@ def action_suggestion(req: ApprovalRequest):
         }))
 
     return {"ok": True, "suggestion": acted}
+
+@router.post("/cancel")
+def cancel_backtest():
+    r = _redis()
+    r.set("graphalpha:backtest_cancel", "1")
+    r.set("graphalpha:backtest_status", "error:Cancelled by user")
+    return {"ok": True}

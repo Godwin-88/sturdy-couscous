@@ -517,7 +517,8 @@ MERGE (s:Strategy {name: 'Momentum Breakout'})
       s.param_lookback     = 14,
       s.param_threshold    = 2.0,
       s.risk_weight        = 0.6,
-      s.status             = 'active';
+      s.status             = 'active',
+      s.target_ticker      = 'QQQ';
 
 MERGE (s:Strategy {name: 'Volatility Mean Reversion'})
   SET s.derived_from       = 'Implied Volatility',
@@ -527,7 +528,8 @@ MERGE (s:Strategy {name: 'Volatility Mean Reversion'})
       s.param_zscore_entry = 2.0,
       s.param_zscore_exit  = 0.5,
       s.risk_weight        = 0.5,
-      s.status             = 'active';
+      s.status             = 'active',
+      s.target_ticker      = 'SPY';
 
 MERGE (s:Strategy {name: 'Delta-Neutral Carry'})
   SET s.derived_from       = 'Delta Hedging',
@@ -536,7 +538,8 @@ MERGE (s:Strategy {name: 'Delta-Neutral Carry'})
       s.sizing_formula_ref = 'f_sharpe',
       s.param_rebalance_h  = 4,
       s.risk_weight        = 0.4,
-      s.status             = 'active';
+      s.status             = 'active',
+      s.target_ticker      = 'SPY';
 
 MERGE (s:Strategy {name: 'Gamma Scalp'})
   SET s.derived_from       = 'Gamma Scalping',
@@ -545,7 +548,8 @@ MERGE (s:Strategy {name: 'Gamma Scalp'})
       s.sizing_formula_ref = 'f_kelly',
       s.param_gamma_min    = 0.05,
       s.risk_weight        = 0.7,
-      s.status             = 'active';
+      s.status             = 'active',
+      s.target_ticker      = 'SPY';
 
 MERGE (s:Strategy {name: 'Vol Surface Arb'})
   SET s.derived_from       = 'Volatility Smile',
@@ -554,7 +558,8 @@ MERGE (s:Strategy {name: 'Vol Surface Arb'})
       s.sizing_formula_ref = 'f_sharpe',
       s.param_arb_threshold= 0.005,
       s.risk_weight        = 0.3,
-      s.status             = 'active';
+      s.status             = 'active',
+      s.target_ticker      = 'QQQ';
 
 
 // -----------------------------------------------------------------------------
@@ -1080,7 +1085,8 @@ MERGE (s:Strategy {name: 'Factor Momentum Rotation'})
       s.param_skip         = 1,
       s.param_top_pct      = 0.25,
       s.risk_weight        = 0.65,
-      s.status             = 'active';
+      s.status             = 'active',
+      s.target_ticker      = 'QQQ';
 
 MERGE (s:Strategy {name: 'Multi-Factor Long-Short'})
   SET s.derived_from       = 'Fama-French 5-Factor',
@@ -1090,7 +1096,8 @@ MERGE (s:Strategy {name: 'Multi-Factor Long-Short'})
       s.param_max_net_exp  = 0.1,
       s.param_factors      = 'value;momentum;quality;low_vol',
       s.risk_weight        = 0.7,
-      s.status             = 'active';
+      s.status             = 'active',
+      s.target_ticker      = 'SPY';
 
 MERGE (s:Strategy {name: 'Smart Beta Tilt'})
   SET s.derived_from       = 'Smart Beta',
@@ -1100,7 +1107,8 @@ MERGE (s:Strategy {name: 'Smart Beta Tilt'})
       s.param_quality_min  = 0.6,
       s.param_vol_max      = 0.25,
       s.risk_weight        = 0.5,
-      s.status             = 'active';
+      s.status             = 'active',
+      s.target_ticker      = 'XLF';
 
 
 // -----------------------------------------------------------------------------
@@ -1638,7 +1646,8 @@ MERGE (s:Strategy {name: 'Systemic Risk Hedge'})
       s.param_max_gross_exp   = 0.4,
       s.risk_weight        = 0.9,
       s.strategy_type      = 'overlay',
-      s.status             = 'active';
+      s.status             = 'active',
+      s.target_ticker      = 'GLD';
 
 MERGE (s:Strategy {name: 'Contagion Path Avoidance'})
   SET s.derived_from       = 'Financial Network',
@@ -1649,7 +1658,8 @@ MERGE (s:Strategy {name: 'Contagion Path Avoidance'})
       s.param_contagion_prob_max = 0.3,
       s.risk_weight        = 0.95,
       s.strategy_type      = 'overlay',
-      s.status             = 'active';
+      s.status             = 'active',
+      s.target_ticker      = 'XLF';
 
 
 // -----------------------------------------------------------------------------
@@ -2442,7 +2452,8 @@ MERGE (s:Strategy {name: 'Long Variance Swap'})
       s.param_maturity_days  = 30,
       s.risk_weight          = 0.7,
       s.strategy_type        = 'alpha',
-      s.status               = 'active';
+      s.status               = 'active',
+      s.target_ticker      = 'SPY';
 
 MERGE (s:Strategy {name: 'Short Variance Swap (Vol Premium Harvest)'})
   SET s.derived_from           = 'Variance Risk Premium',
@@ -2453,7 +2464,8 @@ MERGE (s:Strategy {name: 'Short Variance Swap (Vol Premium Harvest)'})
       s.param_exit_vol_zscore  = 2.5,
       s.risk_weight            = 0.5,
       s.strategy_type          = 'alpha',
-      s.status                 = 'active';
+      s.status                 = 'active',
+      s.target_ticker      = 'SPY';
 
 MERGE (s:Strategy {name: 'Granger Contagion Monitor'})
   SET s.derived_from           = 'Granger Causality',
@@ -2465,7 +2477,8 @@ MERGE (s:Strategy {name: 'Granger Contagion Monitor'})
       s.param_max_lag          = 4,
       s.risk_weight            = 0.95,
       s.strategy_type          = 'monitor',
-      s.status                 = 'active';
+      s.status                 = 'active',
+      s.target_ticker      = 'XLF';
 
 
 // -----------------------------------------------------------------------------
@@ -3030,7 +3043,8 @@ MERGE (s:Strategy {name: 'Jump-Filtered Vol Trading'})
       s.param_jump_tol       = 0.01,
       s.risk_weight          = 0.65,
       s.strategy_type        = 'alpha',
-      s.status               = 'active';
+      s.status               = 'active',
+      s.target_ticker      = 'SPY';
 
 MATCH (s:Strategy {name:'Jump-Filtered Vol Trading'}), (c:Concept {name:'OS Volatility Estimator'})   MERGE (s)-[:DERIVED_FROM]->(c);
 MATCH (s:Strategy {name:'Jump-Filtered Vol Trading'}), (c:Concept {name:'Variance Swap'})             MERGE (s)-[:DERIVED_FROM]->(c);
@@ -3596,7 +3610,8 @@ MERGE (s:Strategy {name: 'DeepVaR Risk Overlay'})
       s.param_corr_window    = 125,
       s.risk_weight          = 0.90,
       s.strategy_type        = 'overlay',
-      s.status               = 'active';
+      s.status               = 'active',
+      s.target_ticker      = 'SPY';
 
 MERGE (s:Strategy {name: 'Transformer Vol Forecast'})
   SET s.derived_from         = 'Multi-Transformer (Ramos-Perez)',
@@ -3608,7 +3623,8 @@ MERGE (s:Strategy {name: 'Transformer Vol Forecast'})
       s.param_vol_diff_entry = 0.02,
       s.risk_weight          = 0.70,
       s.strategy_type        = 'alpha',
-      s.status               = 'active';
+      s.status               = 'active',
+      s.target_ticker      = 'SPY';
 
 // Strategy → Concept relationships
 MATCH (s:Strategy {name:'DeepVaR Risk Overlay'}),    (c:Concept {name:'DeepVaR'})                         MERGE (s)-[:DERIVED_FROM]->(c);
@@ -4700,7 +4716,8 @@ MERGE (s:Strategy {name: 'GARCH-EVT VaR Overlay'})
       s.param_garch_model    = 'GJR-GARCH',
       s.risk_weight          = 0.85,
       s.strategy_type        = 'overlay',
-      s.status               = 'active';
+      s.status               = 'active',
+      s.target_ticker      = 'SPY';
 
 MERGE (s:Strategy {name: 'Asymmetric Vol Regime Signal'})
   SET s.derived_from         = 'EGARCH',
@@ -4712,7 +4729,8 @@ MERGE (s:Strategy {name: 'Asymmetric Vol Regime Signal'})
       s.param_entry_lag      = 1,
       s.risk_weight          = 0.60,
       s.strategy_type        = 'alpha',
-      s.status               = 'active';
+      s.status               = 'active',
+      s.target_ticker      = 'SPY';
 
 // Strategy → Concept
 MATCH (s:Strategy {name:'GARCH-EVT VaR Overlay'}),      (c:Concept {name:'GARCH-EVT Model'})              MERGE (s)-[:DERIVED_FROM]->(c);
@@ -5221,7 +5239,8 @@ MERGE (s:Strategy {name: 'Bayesian Macro Risk Signal'})
       s.param_inference_algo = 'VariableElimination',
       s.risk_weight          = 0.80,
       s.strategy_type        = 'overlay',
-      s.status               = 'active';
+      s.status               = 'active',
+      s.target_ticker      = 'SPY';
 
 MATCH (s:Strategy {name:'Bayesian Macro Risk Signal'}), (c:Concept {name:'Bayesian Network'})               MERGE (s)-[:DERIVED_FROM]->(c);
 MATCH (s:Strategy {name:'Bayesian Macro Risk Signal'}), (c:Concept {name:'Variable Elimination (VE)'})      MERGE (s)-[:DERIVED_FROM]->(c);
@@ -5646,7 +5665,8 @@ MERGE (s:Strategy {name: 'Learned BN Macro Regime Signal'})
       s.param_domain_fix    = 'manual_edge_direction_from_domain_knowledge',
       s.param_sell_threshold = 0.35,
       s.strategy_type       = 'overlay',
-      s.status              = 'active';
+      s.status              = 'active',
+      s.target_ticker      = 'SPY';
 
 MATCH (s:Strategy {name:'Learned BN Macro Regime Signal'}), (c:Concept {name:'Hill Climb Search'}) MERGE (s)-[:DERIVED_FROM]->(c);
 MATCH (s:Strategy {name:'Learned BN Macro Regime Signal'}), (c:Concept {name:'K2 Score'}) MERGE (s)-[:DERIVED_FROM]->(c);
@@ -6107,7 +6127,8 @@ MERGE (s:Strategy {name: 'Climate Credit Risk Overlay'})
       s.param_exposure_cut    = 0.15,
       s.param_horizon_years   = 5,
       s.strategy_type         = 'overlay',
-      s.status                = 'active';
+      s.status                = 'active',
+      s.target_ticker      = 'XLE';
 
 MERGE (s:Strategy {name: 'BN Physical Risk Signal'})
   SET s.derived_from          = 'BN Flood Risk Model',
@@ -6116,7 +6137,8 @@ MERGE (s:Strategy {name: 'BN Physical Risk Signal'})
       s.param_sell_threshold  = 0.30,
       s.param_sectors         = ['real_estate','insurance','infrastructure'],
       s.strategy_type         = 'overlay',
-      s.status                = 'active';
+      s.status                = 'active',
+      s.target_ticker      = 'XLE';
 
 MATCH (s:Strategy {name:'Climate Credit Risk Overlay'}), (c:Concept {name:'CERM'}) MERGE (s)-[:DERIVED_FROM]->(c);
 MATCH (s:Strategy {name:'Climate Credit Risk Overlay'}), (c:Concept {name:'Climate-Adjusted PD'}) MERGE (s)-[:DERIVED_FROM]->(c);
@@ -6589,7 +6611,8 @@ MERGE (s:Strategy {name: 'DYNOTEARS Contagion Signal'})
       s.param_window       = '2008-09-01 to 2008-11-30',
       s.param_universe     = 'SP100_Financials',
       s.strategy_type      = 'systemic_risk_signal',
-      s.status             = 'active';
+      s.status             = 'active',
+      s.target_ticker      = 'XLF';
 
 MERGE (s:Strategy {name: 'BN Oil Price Signal'})
   SET s.derived_from       = 'Oil Price BN',
@@ -6597,7 +6620,8 @@ MERGE (s:Strategy {name: 'BN Oil Price Signal'})
       s.param_sell_threshold = 0.40,
       s.param_buy_threshold  = 0.35,
       s.strategy_type      = 'commodity_overlay',
-      s.status             = 'active';
+      s.status             = 'active',
+      s.target_ticker      = 'XLE';
 
 MERGE (s:Strategy {name: 'Bayesian Credit Signal'})
   SET s.derived_from          = 'BN Credit Scoring',
@@ -6606,7 +6630,8 @@ MERGE (s:Strategy {name: 'Bayesian Credit Signal'})
       s.param_pd_threshold    = 0.05,
       s.param_macro_conditioning = true,
       s.strategy_type         = 'credit_overlay',
-      s.status                = 'active';
+      s.status                = 'active',
+      s.target_ticker      = 'XLF';
 
 MATCH (s:Strategy {name:'DYNOTEARS Contagion Signal'}), (c:Concept {name:'DYNOTEARS'}) MERGE (s)-[:DERIVED_FROM]->(c);
 MATCH (s:Strategy {name:'DYNOTEARS Contagion Signal'}), (c:Concept {name:'VARLiNGAM'}) MERGE (s)-[:DERIVED_FROM]->(c);

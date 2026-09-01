@@ -20,7 +20,7 @@ from typing import Any
 
 import numpy as np
 import yfinance as yf
-from gqlalchemy import Memgraph
+from common.graph import get_db
 from loguru import logger
 
 # ── Symbolic expression evaluator ────────────────────────────────────────────
@@ -128,10 +128,7 @@ def _normalise_score(raw: float | None, low: float = -3.0, high: float = 3.0) ->
 
 class KGSignalGenerator:
     def __init__(self):
-        self.db = Memgraph(
-            host=os.getenv("MEMGRAPH_HOST", "memgraph"),
-            port=int(os.getenv("MEMGRAPH_PORT", 7687)),
-        )
+        self.db = get_db()
         self._price_cache: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
 
     async def run(self, regime: str, tickers: list[str]) -> list[dict[str, Any]]:

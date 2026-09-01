@@ -8,6 +8,8 @@ import json
 import math
 import os
 import time
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, TimeoutError
 from datetime import datetime, date, timedelta
 from typing import Any, Optional
 
@@ -887,7 +889,21 @@ def get_signal_ic(
     metric = "score"
     signals_df = _fetch_system_series(metric, strategy=strategy, ticker=ticker, start_date=start_date, end_date=end_date)
     if signals_df.empty:
-        raise HTTPException(status_code=404, detail=f"No signals found for strategy={strategy}")
+        return _sanitize({
+            "strategy": strategy,
+            "ticker": ticker,
+            "forward_horizon_days": forward_horizon,
+            "n_observations": 0,
+            "n_days": 0,
+            "summary": {
+                "ic_mean": None,
+                "ic_std": None,
+                "information_ratio": None,
+                "t_statistic": None,
+                "interpretation": f"No signal data found for strategy={strategy} in signal_archive. This is expected if the agent pipeline has not yet generated signals for this strategy.",
+            },
+            "ic_timeseries": [],
+        })
 
     # Group by ticker and compute IC per day
     results: list[dict] = []
@@ -1243,304 +1259,317 @@ def _compute_corr_matrix(cov: np.ndarray, tickers: list[str]) -> dict:
 # FEATURE 17: Time Series Forecasting (Tier 3 — Predictive)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# ── Subprocess-safe forecast runner ──────────────────────────────────────────
+# statsmodels ARIMA/ETS/VAR/VECM can segfault in native C extensions.
+# Running them in a subprocess with a timeout prevents the crash from killing
+# the entire uvicorn process.
+
+_FORECAST_TIMEOUT = 60  # seconds
+
+
+def _run_forecast_inner(req_dict: dict) -> dict:
+    """Run the actual forecast computation (called in a subprocess)."""
+    import warnings
+    import numpy as np
+    import pandas as pd
+    from datetime import datetime
+    from typing import Any, Optional
+
+    # Re-create the request from dict (avoids pickle issues with Pydantic)
+    ticker = req_dict["ticker"]
+    model = req_dict["model"]
+    horizon = req_dict["horizon"]
+    conf_level = req_dict["conf_level"]
+    max_p = req_dict.get("max_p", 5)
+    max_q = req_dict.get("max_q", 5)
+    max_d = req_dict.get("max_d", 2)
+    compare_tickers = req_dict.get("compare_tickers", ["SPY"])
+    vecm_k_ar_diff = req_dict.get("vecm_k_ar_diff", 2)
+
+    # Fetch data inside subprocess
+    import yfinance as yf
+    t = yf.Ticker(ticker)
+    df = t.history(start="2020-01-01", end=datetime.utcnow().strftime("%Y-%m-%d"))
+    if df is None or df.empty:
+        return {"error": f"No data for {ticker}"}
+
+    values = df["Close"].dropna().values
+    if len(values) < 30:
+        return {"error": f"Need at least 30 data points, got {len(values)}"}
+
+    result: dict[str, Any] = {
+        "ticker": ticker,
+        "model": model,
+        "horizon": horizon,
+        "conf_level": conf_level,
+        "n_observations": len(values),
+    }
+
+    if model == "arima":
+        from statsmodels.tsa.arima.model import ARIMA
+        from statsmodels.tsa.stattools import adfuller
+        from scipy import stats as sp_stats
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+
+            d = max_d
+            if d > 0:
+                adf_stat, adf_p, *_ = adfuller(values)
+                d = 0 if adf_p < 0.05 else min(1, max_d)
+
+            candidate_orders = []
+            for p in range(0, min(max_p + 1, 3)):
+                for q in range(0, min(max_q + 1, 3)):
+                    candidate_orders.append((p, d, q))
+            for order in [(1, d, 1), (0, d, 0), (1, d, 0), (0, d, 1)]:
+                if order not in candidate_orders:
+                    candidate_orders.append(order)
+
+            best_order = None
+            best_aic = float("inf")
+            failures = 0
+            fitted = None
+            for order in candidate_orders:
+                try:
+                    m = ARIMA(values, order=order)
+                    fitted = m.fit()
+                    if fitted.aic < best_aic:
+                        best_aic = fitted.aic
+                        best_order = order
+                    failures = 0
+                except Exception:
+                    failures += 1
+                    if failures >= 4:
+                        break
+                    continue
+
+            if best_order is None or fitted is None:
+                return {"error": "No viable ARIMA order found for this series"}
+
+        forecast_result = fitted.get_forecast(steps=horizon)
+        forecast_values = forecast_result.predicted_mean
+        conf_int = forecast_result.conf_int(alpha=1 - conf_level)
+        residuals = fitted.resid
+        _, ljung_p = sp_stats.normaltest(residuals[-min(100, len(residuals)):])
+
+        result.update({
+            "order": {"p": best_order[0], "d": best_order[1], "q": best_order[2]},
+            "aic": float(fitted.aic),
+            "bic": float(fitted.bic),
+            "forecast": [float(v) for v in forecast_values],
+            "conf_int_lower": [float(v) for v in conf_int[:, 0]] if hasattr(conf_int, "shape") else [float(v) for v in conf_int.iloc[:, 0]],
+            "conf_int_upper": [float(v) for v in conf_int[:, 1]] if hasattr(conf_int, "shape") else [float(v) for v in conf_int.iloc[:, 1]],
+            "residuals": [float(v) for v in residuals[-min(100, len(residuals)):]],
+            "residual_std": float(np.std(residuals)),
+            "ljung_box_p": float(ljung_p),
+            "rmse": float(np.sqrt(np.mean(residuals ** 2))),
+            "mae": float(np.mean(np.abs(residuals))),
+            "historical": [float(v) for v in values[-min(252, len(values)):]],
+        })
+
+    elif model == "ets":
+        from statsmodels.tsa.holtwinters import ExponentialSmoothing
+        from scipy import stats as sp_stats
+
+        best_aic = float("inf")
+        best_seasonal = None
+        for seasonal in ["add", "mul"]:
+            try:
+                m = ExponentialSmoothing(values, seasonal_periods=5, trend="add", seasonal=seasonal)
+                fitted = m.fit()
+                if fitted.aic < best_aic:
+                    best_aic = fitted.aic
+                    best_seasonal = seasonal
+            except Exception:
+                continue
+
+        if best_seasonal is None:
+            m = ExponentialSmoothing(values, trend="add", seasonal=None)
+            fitted = m.fit()
+            best_seasonal = "none"
+
+        forecast_values = fitted.forecast(horizon)
+        residuals = fitted.resid
+        resid_std = float(np.std(residuals))
+        z = float(sp_stats.norm.ppf(1 - (1 - conf_level) / 2))
+        conf_lower = [float(v) - z * resid_std for v in forecast_values]
+        conf_upper = [float(v) + z * resid_std for v in forecast_values]
+
+        result.update({
+            "seasonal": best_seasonal,
+            "aic": float(fitted.aic),
+            "bic": float(fitted.bic),
+            "forecast": [float(v) for v in forecast_values],
+            "conf_int_lower": conf_lower,
+            "conf_int_upper": conf_upper,
+            "residuals": [float(v) for v in residuals[-min(100, len(residuals)):]],
+            "residual_std": resid_std,
+            "rmse": float(np.sqrt(np.mean(residuals ** 2))),
+            "mae": float(np.mean(np.abs(residuals))),
+            "historical": [float(v) for v in values[-min(252, len(values)):]],
+        })
+
+    elif model == "var":
+        from statsmodels.tsa.api import VAR as VARModel
+
+        all_tickers = [ticker] + [t for t in compare_tickers if t != ticker]
+        price_data: dict[str, np.ndarray] = {}
+        for t in all_tickers:
+            t_df = yf.Ticker(t).history(start="2020-01-01", end=datetime.utcnow().strftime("%Y-%m-%d"))
+            if t_df is not None and not t_df.empty:
+                price_data[t] = t_df["Close"].dropna().values
+
+        if len(price_data) < 2:
+            return {"error": "Need at least 2 tickers with valid data for VAR"}
+
+        min_len = min(len(v) for v in price_data.values())
+        aligned = {k: v[-min_len:] for k, v in price_data.items()}
+
+        return_data = {}
+        for k, v in aligned.items():
+            rets = np.diff(np.log(v[np.where(v > 0)]))
+            if len(rets) >= 60:
+                return_data[k] = rets
+
+        if len(return_data) < 2:
+            return {"error": "Insufficient return data after alignment"}
+
+        min_rlen = min(len(v) for v in return_data.values())
+        rets_matrix = np.column_stack([return_data[k][-min_rlen:] for k in return_data])
+        ticker_names = list(return_data.keys())
+
+        var_model = VARModel(rets_matrix)
+        lag_order = var_model.select_order(maxlags=min(15, min_rlen // 5))
+        best_lag = lag_order.aic if hasattr(lag_order, "aic") else min(5, min_rlen // 10)
+
+        var_fitted = var_model.fit(maxlags=best_lag, ic="aic")
+        var_forecast = var_fitted.forecast(var_fitted.y, steps=horizon)
+
+        forecasts: dict[str, list[float]] = {}
+        for i, tk in enumerate(ticker_names):
+            forecasts[tk] = [float(v) for v in var_forecast[:, i]]
+
+        irf = var_fitted.irf(10)
+        impulse_responses = {}
+        for i, imp in enumerate(ticker_names):
+            for j, resp in enumerate(ticker_names):
+                key = f"{imp}→{resp}"
+                impulse_responses[key] = [float(v) for v in irf.irfs[:, i, j]]
+
+        try:
+            fevd = var_fitted.fevd(horizon)
+            fevd_data: dict[str, dict[str, float]] = {}
+            for i, tk in enumerate(ticker_names):
+                fevd_data[tk] = {t2: float(fevd[i].iloc[-1, j]) for j, t2 in enumerate(ticker_names)}
+        except Exception:
+            fevd_data = {}
+
+        result.update({
+            "tickers": ticker_names,
+            "best_lag": int(best_lag) if best_lag else None,
+            "aic": float(var_fitted.aic),
+            "bic": float(var_fitted.bic),
+            "forecasts": forecasts,
+            "forecast": forecasts.get(ticker, []),
+            "impulse_responses": impulse_responses,
+            "fevd": fevd_data,
+            "historical": {tk: [float(v) for v in return_data[tk][-min(252, len(return_data[tk])):]] for tk in ticker_names},
+            "conf_int_lower": [],
+            "conf_int_upper": [],
+            "residuals": [],
+            "residual_std": 0,
+            "rmse": 0,
+            "mae": 0,
+        })
+
+    elif model == "vecm":
+        from statsmodels.tsa.vector_ar.vecm import VECM as VECMModel, select_coint_rank
+
+        all_tickers = [ticker] + [t for t in compare_tickers if t != ticker]
+        price_data: dict[str, np.ndarray] = {}
+        for t in all_tickers:
+            t_df = yf.Ticker(t).history(start="2020-01-01", end=datetime.utcnow().strftime("%Y-%m-%d"))
+            if t_df is not None and not t_df.empty:
+                price_data[t] = t_df["Close"].dropna().values
+
+        if len(price_data) < 2:
+            return {"error": "Need at least 2 tickers with valid data for VECM"}
+
+        min_len = min(len(v) for v in price_data.values())
+        aligned = {k: v[-min_len:] for k, v in price_data.items()}
+        ticker_names = list(aligned.keys())
+        price_matrix = np.column_stack([aligned[k] for k in ticker_names])
+
+        try:
+            coint_result = select_coint_rank(price_matrix, det_order=1, k_ar_diff=vecm_k_ar_diff)
+            coint_rank = coint_result.rank if hasattr(coint_result, "rank") else 1
+        except Exception:
+            coint_rank = 1
+
+        vecm_model = VECMModel(price_matrix, k_ar_diff=vecm_k_ar_diff, coint_rank=coint_rank, deterministic="ci")
+        vecm_fitted = vecm_model.fit()
+        vecm_forecast = vecm_fitted.predict(steps=horizon)
+
+        forecasts: dict[str, list[float]] = {}
+        for i, tk in enumerate(ticker_names):
+            forecasts[tk] = [float(v) for v in vecm_forecast[:, i]]
+
+        alpha = vecm_fitted.alpha.tolist() if hasattr(vecm_fitted, "alpha") else []
+        beta = vecm_fitted.beta.tolist() if hasattr(vecm_fitted, "beta") else []
+
+        result.update({
+            "tickers": ticker_names,
+            "coint_rank": int(coint_rank),
+            "k_ar_diff": vecm_k_ar_diff,
+            "aic": float(vecm_fitted.aic) if hasattr(vecm_fitted, "aic") else 0,
+            "bic": float(vecm_fitted.bic) if hasattr(vecm_fitted, "bic") else 0,
+            "forecasts": forecasts,
+            "forecast": forecasts.get(ticker, []),
+            "alpha": _sanitize(alpha),
+            "beta": _sanitize(beta),
+            "historical": {tk: [float(v) for v in aligned[tk][-min(252, len(aligned[tk])):]] for tk in ticker_names},
+            "conf_int_lower": [],
+            "conf_int_upper": [],
+            "residuals": [],
+            "residual_std": 0,
+            "rmse": 0,
+            "mae": 0,
+        })
+
+    else:
+        return {"error": f"Unknown model: {model}"}
+
+    # Sanitize NaN/Inf before returning
+    return _sanitize(result)
+
+
 @router.post("/forecast")
 def post_forecast(req: ForecastRequest):
-    """ARIMA/ETS time series forecasting with confidence intervals and diagnostics."""
+    """ARIMA/ETS time series forecasting with confidence intervals and diagnostics.
+    Runs model fitting in a subprocess with a timeout to prevent native C extension
+    crashes (e.g. munmap_chunk) from killing the uvicorn process.
+    """
+    # Quick pre-check: can we fetch data?
     df = _fetch_yfinance(req.ticker, "2020-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
     if df is None or df.empty:
         raise HTTPException(status_code=404, detail=f"No data for {req.ticker}")
 
-    values = df["Close"].dropna().values
-    if len(values) < 30:
-        raise HTTPException(status_code=400, detail=f"Need at least 30 data points, got {len(values)}")
+    # Run the actual model fitting in a subprocess
+    req_dict = req.model_dump()
+    try:
+        with ProcessPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_run_forecast_inner, req_dict)
+            result = future.result(timeout=_FORECAST_TIMEOUT)
+    except TimeoutError:
+        raise HTTPException(status_code=504, detail=f"Forecast timed out after {_FORECAST_TIMEOUT}s — the model may be too complex for this data")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Forecast failed: {str(e)}")
 
-    result: dict[str, Any] = {
-        "ticker": req.ticker,
-        "model": req.model,
-        "horizon": req.horizon,
-        "conf_level": req.conf_level,
-        "n_observations": len(values),
-    }
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
 
-    if req.model == "arima":
-        try:
-            import warnings
-            from statsmodels.tsa.arima.model import ARIMA
-
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-
-                # Auto-select d via ADF test if max_d > 0
-                d = req.max_d
-                if d > 0:
-                    from statsmodels.tsa.stattools import adfuller
-                    adf_stat, adf_p, *_ = adfuller(values)
-                    d = 0 if adf_p < 0.05 else min(1, req.max_d)
-
-                # Try a small set of orders to avoid repeated fit crashes
-                candidate_orders = []
-                for p in range(0, min(req.max_p + 1, 3)):
-                    for q in range(0, min(req.max_q + 1, 3)):
-                        candidate_orders.append((p, d, q))
-                # Ensure fallbacks are present
-                for order in [(1, d, 1), (0, d, 0), (1, d, 0), (0, d, 1)]:
-                    if order not in candidate_orders:
-                        candidate_orders.append(order)
-
-                best_order = None
-                best_aic = float("inf")
-                failures = 0
-                fitted = None
-                for order in candidate_orders:
-                    try:
-                        model = ARIMA(values, order=order)
-                        fitted = model.fit()
-                        if fitted.aic < best_aic:
-                            best_aic = fitted.aic
-                            best_order = order
-                        failures = 0
-                    except Exception:
-                        failures += 1
-                        if failures >= 4:
-                            break
-                        continue
-
-                if best_order is None or fitted is None:
-                    raise ValueError("No viable ARIMA order found for this series")
-
-            # Forecast
-            forecast_result = fitted.get_forecast(steps=req.horizon)
-            forecast_values = forecast_result.predicted_mean
-            conf_int = forecast_result.conf_int(alpha=1 - req.conf_level)
-
-            # Residual diagnostics
-            residuals = fitted.resid
-            from scipy import stats as sp_stats
-            _, ljung_p = sp_stats.normaltest(residuals[-min(100, len(residuals)):])
-
-            result.update({
-                "order": {"p": best_order[0], "d": best_order[1], "q": best_order[2]},
-                "aic": float(fitted.aic),
-                "bic": float(fitted.bic),
-                "forecast": [float(v) for v in forecast_values],
-                "conf_int_lower": [float(v) for v in conf_int[:, 0]] if hasattr(conf_int, "shape") else [float(v) for v in conf_int.iloc[:, 0]],
-                "conf_int_upper": [float(v) for v in conf_int[:, 1]] if hasattr(conf_int, "shape") else [float(v) for v in conf_int.iloc[:, 1]],
-                "residuals": [float(v) for v in residuals[-min(100, len(residuals)):]],
-                "residual_std": float(np.std(residuals)),
-                "ljung_box_p": float(ljung_p),
-                "rmse": float(np.sqrt(np.mean(residuals ** 2))),
-                "mae": float(np.mean(np.abs(residuals))),
-                "historical": [float(v) for v in values[-min(252, len(values)):]],
-            })
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"ARIMA failed: {str(e)}")
-
-    elif req.model == "ets":
-        try:
-            from statsmodels.tsa.holtwinters import ExponentialSmoothing
-
-            # Try additive and multiplicative seasonality
-            best_aic = float("inf")
-            best_seasonal = None
-            for seasonal in ["add", "mul"]:
-                try:
-                    model = ExponentialSmoothing(
-                        values, seasonal_periods=5, trend="add", seasonal=seasonal
-                    )
-                    fitted = model.fit()
-                    if fitted.aic < best_aic:
-                        best_aic = fitted.aic
-                        best_seasonal = seasonal
-                except Exception:
-                    continue
-
-            if best_seasonal is None:
-                # Fallback to simple exponential smoothing
-                model = ExponentialSmoothing(values, trend="add", seasonal=None)
-                fitted = model.fit()
-                best_seasonal = "none"
-
-            forecast_values = fitted.forecast(req.horizon)
-            residuals = fitted.resid
-
-            # Simple confidence intervals using residual std
-            resid_std = float(np.std(residuals))
-            z = float(sp_stats.norm.ppf(1 - (1 - req.conf_level) / 2))
-            conf_lower = [float(v) - z * resid_std for v in forecast_values]
-            conf_upper = [float(v) + z * resid_std for v in forecast_values]
-
-            result.update({
-                "seasonal": best_seasonal,
-                "aic": float(fitted.aic),
-                "bic": float(fitted.bic),
-                "forecast": [float(v) for v in forecast_values],
-                "conf_int_lower": conf_lower,
-                "conf_int_upper": conf_upper,
-                "residuals": [float(v) for v in residuals[-min(100, len(residuals)):]],
-                "residual_std": resid_std,
-                "rmse": float(np.sqrt(np.mean(residuals ** 2))),
-                "mae": float(np.mean(np.abs(residuals))),
-                "historical": [float(v) for v in values[-min(252, len(values)):]],
-            })
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"ETS failed: {str(e)}")
-
-    elif req.model == "var":
-        try:
-            from statsmodels.tsa.api import VAR as VARModel
-
-            # Fetch primary + comparison ticker data
-            all_tickers = [req.ticker] + [t for t in req.compare_tickers if t != req.ticker]
-            price_data: dict[str, np.ndarray] = {}
-            for t in all_tickers:
-                t_df = _fetch_yfinance(t, "2020-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
-                if t_df is not None and not t_df.empty:
-                    price_data[t] = t_df["Close"].dropna().values
-
-            if len(price_data) < 2:
-                raise HTTPException(status_code=400, detail="Need at least 2 tickers with valid data for VAR")
-
-            # Align to shortest series
-            min_len = min(len(v) for v in price_data.values())
-            aligned = {k: v[-min_len:] for k, v in price_data.items()}
-
-            # Compute returns for stationarity
-            return_data = {}
-            for k, v in aligned.items():
-                rets = np.diff(np.log(v[np.where(v > 0)]))
-                if len(rets) >= 60:
-                    return_data[k] = rets
-
-            if len(return_data) < 2:
-                raise HTTPException(status_code=400, detail="Insufficient return data after alignment")
-
-            min_rlen = min(len(v) for v in return_data.values())
-            rets_matrix = np.column_stack([return_data[k][-min_rlen:] for k in return_data])
-            ticker_names = list(return_data.keys())
-
-            # Fit VAR with auto lag selection via AIC
-            var_model = VARModel(rets_matrix)
-            lag_order = var_model.select_order(maxlags=min(15, min_rlen // 5))
-            best_lag = lag_order.aic if hasattr(lag_order, "aic") else min(5, min_rlen // 10)
-
-            var_fitted = var_model.fit(maxlags=best_lag, ic="aic")
-
-            # Forecast
-            var_forecast = var_fitted.forecast(var_fitted.y, steps=req.horizon)
-
-            # Build forecast for each ticker
-            forecasts: dict[str, list[float]] = {}
-            for i, tk in enumerate(ticker_names):
-                forecasts[tk] = [float(v) for v in var_forecast[:, i]]
-
-            # Impulse response
-            irf = var_fitted.irf(10)
-            impulse_responses = {}
-            for i, imp in enumerate(ticker_names):
-                for j, resp in enumerate(ticker_names):
-                    key = f"{imp}→{resp}"
-                    impulse_responses[key] = [float(v) for v in irf.irfs[:, i, j]]
-
-            # Forecast error decomposition
-            try:
-                fevd = var_fitted.fevd(req.horizon)
-                fevd_data: dict[str, dict[str, float]] = {}
-                for i, tk in enumerate(ticker_names):
-                    fevd_data[tk] = {t2: float(fevd[i].iloc[-1, j]) for j, t2 in enumerate(ticker_names)}
-            except Exception:
-                fevd_data = {}
-
-            result.update({
-                "tickers": ticker_names,
-                "best_lag": int(best_lag) if best_lag else None,
-                "aic": float(var_fitted.aic),
-                "bic": float(var_fitted.bic),
-                "forecasts": forecasts,
-                "forecast": forecasts.get(req.ticker, []),
-                "impulse_responses": impulse_responses,
-                "fevd": fevd_data,
-                "historical": {tk: [float(v) for v in return_data[tk][-min(252, len(return_data[tk])):]] for tk in ticker_names},
-                "conf_int_lower": [],
-                "conf_int_upper": [],
-                "residuals": [],
-                "residual_std": 0,
-                "rmse": 0,
-                "mae": 0,
-            })
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"VAR failed: {str(e)}")
-
-    elif req.model == "vecm":
-        try:
-            from statsmodels.tsa.vector_ar.vecm import VECM as VECMModel, select_coint_rank
-            from statsmodels.tsa.vector_ar.vecm import VECMResults
-
-            # Fetch primary + comparison ticker data
-            all_tickers = [req.ticker] + [t for t in req.compare_tickers if t != req.ticker]
-            price_data: dict[str, np.ndarray] = {}
-            for t in all_tickers:
-                t_df = _fetch_yfinance(t, "2020-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
-                if t_df is not None and not t_df.empty:
-                    price_data[t] = t_df["Close"].dropna().values
-
-            if len(price_data) < 2:
-                raise HTTPException(status_code=400, detail="Need at least 2 tickers with valid data for VECM")
-
-            # Align to shortest series
-            min_len = min(len(v) for v in price_data.values())
-            aligned = {k: v[-min_len:] for k, v in price_data.items()}
-            ticker_names = list(aligned.keys())
-
-            # Use prices (level) for VECM — it handles cointegration
-            price_matrix = np.column_stack([aligned[k] for k in ticker_names])
-
-            # Select cointegration rank
-            try:
-                coint_result = select_coint_rank(price_matrix, det_order=1, k_ar_diff=req.vecm_k_ar_diff)
-                coint_rank = coint_result.rank if hasattr(coint_result, "rank") else 1
-            except Exception:
-                coint_rank = 1
-
-            # Fit VECM
-            vecm_model = VECMModel(price_matrix, k_ar_diff=req.vecm_k_ar_diff, coint_rank=coint_rank, deterministic="ci")
-            vecm_fitted = vecm_model.fit()
-
-            # Forecast
-            vecm_forecast = vecm_fitted.predict(steps=req.horizon)
-
-            # Build forecast for each ticker
-            forecasts: dict[str, list[float]] = {}
-            for i, tk in enumerate(ticker_names):
-                forecasts[tk] = [float(v) for v in vecm_forecast[:, i]]
-
-            # Alpha (error correction) coefficients
-            alpha = vecm_fitted.alpha.tolist() if hasattr(vecm_fitted, "alpha") else []
-            beta = vecm_fitted.beta.tolist() if hasattr(vecm_fitted, "beta") else []
-
-            result.update({
-                "tickers": ticker_names,
-                "coint_rank": int(coint_rank),
-                "k_ar_diff": req.vecm_k_ar_diff,
-                "aic": float(vecm_fitted.aic) if hasattr(vecm_fitted, "aic") else 0,
-                "bic": float(vecm_fitted.bic) if hasattr(vecm_fitted, "bic") else 0,
-                "forecasts": forecasts,
-                "forecast": forecasts.get(req.ticker, []),
-                "alpha": _sanitize(alpha),
-                "beta": _sanitize(beta),
-                "historical": {tk: [float(v) for v in aligned[tk][-min(252, len(aligned[tk])):]] for tk in ticker_names},
-                "conf_int_lower": [],
-                "conf_int_upper": [],
-                "residuals": [],
-                "residual_std": 0,
-                "rmse": 0,
-                "mae": 0,
-            })
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"VECM failed: {str(e)}")
-
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown model: {req.model}")
-    return _sanitize(result)
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

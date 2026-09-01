@@ -1,6 +1,6 @@
 export function fmt$  (v: number) { return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 export function fmtPct(v: number) { return `${(v * 100).toFixed(2)}%`; }
-export function fmtN  (v: number, d = 4) { return v.toFixed(d); }
+export function fmtN  (v: number | null | undefined, d = 4) { return v == null ? "N/A" : v.toFixed(d); }
 
 export function relTime(iso: string | null): string {
   if (!iso) return "never";

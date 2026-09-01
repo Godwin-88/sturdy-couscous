@@ -19,7 +19,7 @@ from typing import Any
 import feedparser
 import httpx
 import numpy as np
-from gqlalchemy import Memgraph
+from common.graph import get_db
 from loguru import logger
 
 LLM_URL = os.getenv("GROQ_BASE_URL", os.getenv("FEATHERLESS_BASE_URL", "https://api.groq.com/openai/v1"))
@@ -95,10 +95,7 @@ def _article_id(url: str, title: str) -> str:
 
 class NewsAgent:
     def __init__(self):
-        self.db = Memgraph(
-            host=os.getenv("MEMGRAPH_HOST", "memgraph"),
-            port=int(os.getenv("MEMGRAPH_PORT", 7687)),
-        )
+        self.db = get_db()
 
     async def run(self, max_articles: int = 40) -> dict[str, Any]:
         """

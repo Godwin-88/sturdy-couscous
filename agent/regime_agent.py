@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import yfinance as yf
-from gqlalchemy import Memgraph
+from common.graph import get_db
 from loguru import logger
 
 
@@ -22,10 +22,7 @@ REGIME_NAMES = [
 
 class RegimeAgent:
     def __init__(self):
-        self.db = Memgraph(
-            host=os.getenv("MEMGRAPH_HOST", "memgraph"),
-            port=int(os.getenv("MEMGRAPH_PORT", 7687))
-        )
+        self.db = get_db()
 
     async def run(self) -> dict[str, Any]:
         prices  = self._fetch_market_data()
@@ -104,7 +101,8 @@ class RegimeAgent:
                s.strategy_type AS type,
                s.param_sell_threshold AS sell_threshold,
                s.param_exposure_cut AS exposure_cut,
-               s.derived_from AS derived_from
+               s.derived_from AS derived_from,
+               s.target_ticker AS ticker
         """
         try:
             results = list(self.db.execute_and_fetch(query))

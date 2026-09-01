@@ -1,16 +1,16 @@
-.PHONY: up down logs load-graph verify shell-memgraph shell-api test backtest deploy up-risk-engine test-cpp build-cpp
+.PHONY: up down logs load-graph verify shell-neo4j shell-api test backtest deploy up-risk-engine test-cpp build-cpp
 
 # ── Local development ─────────────────────────────────────────────────────────
 up:
 	@echo "Building and starting all services..."
-	docker compose up -d --build memgraph postgres redis api agent-worker risk-engine frontend
+	docker compose up -d --build neo4j postgres redis api agent-worker risk-engine
 	@echo "Waiting for graph loader..."
 	@docker compose run --rm graph-loader
 	@echo ""
 	@echo "GraphAlpha is running:"
 	@echo "  Frontend     : http://localhost:5173"
 	@echo "  API          : http://localhost:8000/docs"
-	@echo "  Memgraph     : http://localhost:3000"
+	@echo "  Neo4j        : http://localhost:7474"
 	@echo "  RiskEngine   : see docker compose logs risk-engine"
 
 up-all:
@@ -22,7 +22,7 @@ up-all:
 	@echo "GraphAlpha is running:"
 	@echo "  Frontend     : http://localhost:5173"
 	@echo "  API          : http://localhost:8000/docs"
-	@echo "  Memgraph     : http://localhost:3000"
+	@echo "  Neo4j        : http://localhost:7474"
 	@echo "  RiskEngine   : see docker compose logs risk-engine"
 
 up-monitoring:
@@ -56,11 +56,11 @@ load-graph:
 	docker compose run --rm graph-loader
 
 verify-graph:
-	docker compose exec memgraph mgconsole --host localhost --port 7687 \
-		--execute "MATCH (n) RETURN labels(n)[0] AS type, count(n) AS count ORDER BY count DESC;"
+	docker compose exec neo4j cypher-shell -u "${NEO4J_USER:-neo4j}" -p "${NEO4J_PASSWORD:-graphalpha}" \
+		"MATCH (n) RETURN labels(n)[0] AS type, count(n) AS count ORDER BY count DESC;"
 
-shell-memgraph:
-	docker compose exec memgraph mgconsole --host localhost --port 7687
+shell-neo4j:
+	docker compose exec neo4j cypher-shell -u "${NEO4J_USER:-neo4j}" -p "${NEO4J_PASSWORD:-graphalpha}"
 
 # ── Development shells ────────────────────────────────────────────────────────
 shell-api:
@@ -76,7 +76,7 @@ test:
 test-agents:
 	docker compose exec api pytest /app/tests/test_agents.py -v
 
-# ── Backtesting ───────────────────────────────────────────────────────────────
+# ── Backtesting ──────────────────────────────────────────────────────────────
 backtest:
 	docker compose --profile backtest run --rm backtest python engine.py \
 		--start 2021-01-01 --end 2023-12-31 --use-graph
@@ -90,7 +90,7 @@ backtest-ablation:
 	@echo "=== KG-Grounded ===" && cat /tmp/grounded.json
 	@echo "=== Ungrounded ===" && cat /tmp/ungrounded.json
 
-# ── Production deployment (run on Vultr VM) ───────────────────────────────────
+# ── Production deployment (GCP) ─────────────────────────────────────────────
 deploy:
 	git pull origin main
 	docker compose -f docker-compose.yml -f docker-compose.prod.yml \
@@ -101,7 +101,7 @@ deploy-no-monitoring:
 	git pull origin main
 	docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
-# ── Paper → Live trading gate ─────────────────────────────────────────────────
+# ── Paper -> Live trading gate ─────────────────────────────────────────────────
 enable-live-trading:
 	@echo "WARNING: This enables LIVE trading with real capital."
 	@read -p "Type CONFIRM to proceed: " confirm; \

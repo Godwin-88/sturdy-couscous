@@ -10,8 +10,9 @@ from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from loguru import logger
 from prometheus_client import make_asgi_app
 
@@ -24,6 +25,7 @@ from routes.market        import router as market_router
 from routes.intelligence  import router as intelligence_router
 from routes.research      import router as research_router
 from routes.analytics     import router as analytics_router
+from routes.alpaca        import router as alpaca_router
 
 load_dotenv()
 
@@ -68,6 +70,17 @@ app.include_router(market_router)
 app.include_router(intelligence_router)
 app.include_router(research_router)
 app.include_router(analytics_router)
+app.include_router(alpaca_router)
+
+
+# ── Global exception handler: ensures CORS headers on all error responses ─────
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception on {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {exc}"},
+    )
 
 
 @app.get("/health")

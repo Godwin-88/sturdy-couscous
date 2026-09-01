@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from arch import arch_model
-from gqlalchemy import Memgraph
+from common.graph import get_db
 from loguru import logger
 
 LLM_URL = os.getenv("GROQ_BASE_URL", os.getenv("FEATHERLESS_BASE_URL", "https://api.groq.com/openai/v1"))
@@ -32,10 +32,7 @@ TICKER_MAP = {
 
 class SignalAgent:
     def __init__(self):
-        self.db = Memgraph(
-            host=os.getenv("MEMGRAPH_HOST", "memgraph"),
-            port=int(os.getenv("MEMGRAPH_PORT", 7687))
-        )
+        self.db = get_db()
 
     async def run(self, regime: str, active_strategies: list[dict]) -> list[dict]:
         prices = self._fetch_prices(list(TICKER_MAP.keys()))
@@ -116,93 +113,96 @@ class SignalAgent:
     def _compute_quant_signal(self, strategy: dict, prices: pd.DataFrame,
                                formula: dict) -> dict:
         name = strategy["name"]
+        ticker = strategy.get("ticker", "SPY")
         sell_threshold = strategy.get("sell_threshold") or 0.35
 
-        # Route to appropriate quant model based on strategy type
         if "GARCH" in name or "Vol" in name:
-            return self._garch_signal(prices, sell_threshold)
+            return self._garch_signal(prices, ticker, sell_threshold)
         if "Bayesian" in name or "BN" in name:
-            return self._bn_signal(prices, sell_threshold)
+            return self._bn_signal(prices, ticker, sell_threshold)
         if "DYNOTEARS" in name or "Contagion" in name:
-            return self._contagion_signal(prices, sell_threshold)
+            return self._contagion_signal(prices, ticker, sell_threshold)
         if "Climate" in name or "Physical" in name:
-            return self._climate_signal(prices, sell_threshold)
-        # Default: momentum / trend
-        return self._momentum_signal(prices, sell_threshold)
+            return self._climate_signal(prices, ticker, sell_threshold)
+        return self._momentum_signal(prices, ticker, sell_threshold)
 
-    def _garch_signal(self, prices: pd.DataFrame, threshold: float) -> dict:
-        rets = np.log(prices["SPY"]).diff().dropna() * 100
+    def _garch_signal(self, prices: pd.DataFrame, ticker: str, threshold: float) -> dict:
+        asset = prices.get(ticker)
+        if asset is None or asset.empty:
+            return {"ticker": ticker, "score": 0.0, "reasoning": f"No {ticker} data"}
+        rets = np.log(asset).diff().dropna() * 100
         try:
             model = arch_model(rets, vol="Garch", p=1, q=1, dist="t")
             fit   = model.fit(disp="off", show_warning=False)
             cond_vol = fit.conditional_volatility.iloc[-1]
             ann_vol  = cond_vol * np.sqrt(252)
-            score    = -min(1.0, (ann_vol - 0.15) / 0.30)  # negative when vol high
+            score    = -min(1.0, (ann_vol - 0.15) / 0.30)
             return {
-                "ticker": "SPY",
+                "ticker": ticker,
                 "score":  score,
                 "reasoning": f"GARCH(1,1) annualised vol={ann_vol:.1%}"
             }
         except Exception as e:
-            return {"ticker": "SPY", "score": 0.0, "reasoning": f"GARCH error: {e}"}
+            return {"ticker": ticker, "score": 0.0, "reasoning": f"GARCH error: {e}"}
 
-    def _bn_signal(self, prices: pd.DataFrame, threshold: float) -> dict:
-        # Simplified Bayesian signal: use VIX proxy for interest rate state
+    def _bn_signal(self, prices: pd.DataFrame, ticker: str, threshold: float) -> dict:
+        asset = prices.get(ticker)
+        if asset is None or asset.empty:
+            return {"ticker": ticker, "score": 0.0, "reasoning": f"No {ticker} data"}
         vix_data = yf.download("^VIX", period="1mo", progress=False)["Close"]
         vix_now  = vix_data.iloc[-1] if not vix_data.empty else 20.0
-        # P(IR=high) increases with VIX
         p_ir_high = min(0.95, 0.30 + vix_now / 100)
-        # Shenoy BN: P(SP=low | IR=high) ≈ 0.626 × p_ir_high
         p_sp_low  = 0.626 * p_ir_high
-        score     = -(p_sp_low - threshold) / (1 - threshold)  # negative = bearish
+        score     = -(p_sp_low - threshold) / (1 - threshold)
         return {
-            "ticker": "SPY",
+            "ticker": ticker,
             "score":  float(np.clip(score, -1, 1)),
-            "reasoning": f"BN: P(SP=low|macro)={p_sp_low:.3f}, threshold={threshold}"
+            "reasoning": f"BN: P({ticker}=low|macro)={p_sp_low:.3f}, threshold={threshold}"
         }
 
-    def _contagion_signal(self, prices: pd.DataFrame, threshold: float) -> dict:
-        # Proxy: financials sector correlation spike → contagion risk
-        fin_tickers = ["JPM", "BAC", "GS", "MS", "C"]
-        fin_data = yf.download(fin_tickers, period="3mo",
+    def _contagion_signal(self, prices: pd.DataFrame, ticker: str, threshold: float) -> dict:
+        if ticker == "XLF":
+            fin_tickers = ["JPM", "BAC", "GS", "MS", "C"]
+            fin_data = yf.download(fin_tickers, period="3mo",
+                                   auto_adjust=True, progress=False)["Close"]
+            if fin_data.empty:
+                return {"ticker": ticker, "score": 0.0, "reasoning": "No data"}
+            avg_corr = fin_data.pct_change().corr().values
+            np.fill_diagonal(avg_corr, np.nan)
+            mean_corr = np.nanmean(avg_corr)
+            score = -(mean_corr - 0.5) / 0.5
+            return {
+                "ticker": ticker,
+                "score":  float(np.clip(score, -1, 1)),
+                "reasoning": f"DYNOTEARS proxy: mean financial corr={mean_corr:.2f}"
+            }
+        return self._momentum_signal(prices, ticker, threshold)
+
+    def _climate_signal(self, prices: pd.DataFrame, ticker: str, threshold: float) -> dict:
+        if ticker == "XLE":
+            data = yf.download(["XLE", "SPY"], period="3mo",
                                auto_adjust=True, progress=False)["Close"]
-        if fin_data.empty:
-            return {"ticker": "XLF", "score": 0.0, "reasoning": "No data"}
-        avg_corr = fin_data.pct_change().corr().values
-        np.fill_diagonal(avg_corr, np.nan)
-        mean_corr = np.nanmean(avg_corr)
-        # High correlation → contagion risk → negative signal on financials
-        score = -(mean_corr - 0.5) / 0.5
-        return {
-            "ticker": "XLF",
-            "score":  float(np.clip(score, -1, 1)),
-            "reasoning": f"DYNOTEARS proxy: mean financial corr={mean_corr:.2f}"
-        }
+            if data.empty:
+                return {"ticker": ticker, "score": 0.0, "reasoning": "No data"}
+            rel_perf = (data["XLE"] / data["SPY"]).pct_change(63).iloc[-1]
+            score    = float(np.clip(rel_perf * 5, -1, 1))
+            return {
+                "ticker": ticker,
+                "score":  score,
+                "reasoning": f"Climate overlay: XLE vs SPY 3m rel perf={rel_perf:.1%}"
+            }
+        return self._momentum_signal(prices, ticker, threshold)
 
-    def _climate_signal(self, prices: pd.DataFrame, threshold: float) -> dict:
-        # Proxy: energy sector underperformance vs market → physical risk signal
-        data = yf.download(["XLE", "SPY"], period="3mo",
-                           auto_adjust=True, progress=False)["Close"]
-        if data.empty:
-            return {"ticker": "XLE", "score": 0.0, "reasoning": "No data"}
-        rel_perf = (data["XLE"] / data["SPY"]).pct_change(63).iloc[-1]
-        score    = float(np.clip(rel_perf * 5, -1, 1))
-        return {
-            "ticker": "XLE",
-            "score":  score,
-            "reasoning": f"Climate overlay: XLE vs SPY 3m rel perf={rel_perf:.1%}"
-        }
-
-    def _momentum_signal(self, prices: pd.DataFrame, threshold: float) -> dict:
-        spy  = prices.get("SPY")
-        if spy is None or spy.empty:
-            return {"ticker": "SPY", "score": 0.0, "reasoning": "No SPY data"}
-        mom_12_1 = spy.pct_change(252).iloc[-1] - spy.pct_change(21).iloc[-1]
+    def _momentum_signal(self, prices: pd.DataFrame, ticker: str, threshold: float) -> dict:
+        asset = prices.get(ticker)
+        if asset is None or asset.empty:
+            return {"ticker": ticker, "score": 0.0, "reasoning": f"No {ticker} data"}
+        mom_12_1 = asset.pct_change(252).iloc[-1] - asset.pct_change(21).iloc[-1]
         score    = float(np.clip(mom_12_1 * 5, -1, 1))
         return {
-            "ticker": "SPY",
+            "ticker": ticker,
             "score":  score,
-            "reasoning": f"Momentum 12-1: {mom_12_1:.1%}"
+            "reasoning": f"Momentum 12-1 on {ticker}: {mom_12_1:.1%}"
         }
 
     # ── LLM sentiment (Groq primary, Featherless fallback) ───────────────────

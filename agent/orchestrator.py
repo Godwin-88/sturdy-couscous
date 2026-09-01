@@ -51,7 +51,8 @@ DRAWDOWN_GAUGE  = Gauge("portfolio_drawdown_pct", "Current drawdown from peak")
 # ── Config ────────────────────────────────────────────────────────────────────
 LOOP_INTERVAL   = int(os.getenv("AGENT_LOOP_INTERVAL_SECONDS", 300))
 MAX_DRAWDOWN    = float(os.getenv("AGENT_MAX_DRAWDOWN_HALT", 0.10))
-TRADING_MODE    = os.getenv("KRAKEN_TRADING_MODE", "paper")
+TRADING_MODE    = os.getenv("TRADING_MODE", os.getenv("KRAKEN_TRADING_MODE", "paper"))
+DEFAULT_VENUE   = os.getenv("DEFAULT_VENUE", "alpaca")
 SHADOW_MODE     = os.getenv("SHADOW_MODE", "false").lower() == "true"
 
 # How often to run each slower sub-cycle (in main loop ticks)
@@ -61,7 +62,7 @@ RESEARCH_EVERY  = int(os.getenv("RESEARCH_CYCLE_TICKS", 12))  # every ~1 hour
 
 # Tickers that KGSignalGenerator evaluates formulas against
 KG_SIGNAL_TICKERS = os.getenv(
-    "KG_SIGNAL_TICKERS", "SPY,QQQ,TLT,GLD,BTC-USD"
+    "KG_SIGNAL_TICKERS", "SPY,QQQ,XLF,XLE,GLD"
 ).split(",")
 
 
@@ -69,7 +70,7 @@ class Orchestrator:
     def __init__(self):
         self.regime_agent    = RegimeAgent()
         self.signal_agent    = SignalAgent()
-        self.execution_agent = ExecutionAgent(mode=TRADING_MODE)
+        self.execution_agent = ExecutionAgent(mode=TRADING_MODE, venue=DEFAULT_VENUE)
         self.research_agent  = ResearchAgent()
         self.news_agent      = NewsAgent()
         self.macro_agent     = MacroCalendarAgent()

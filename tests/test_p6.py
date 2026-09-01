@@ -87,25 +87,25 @@ class TestCrossVenuePortfolio:
 class TestOrchestratorVenueAssignment:
     """Feature 5: Orchestrator assigns correct venue."""
 
-    def test_spy_routes_to_ibkr(self):
-        """SPY signal routes to IBKR by default."""
+    def test_spy_routes_to_alpaca(self):
+        """SPY signal routes to Alpaca by default."""
         from backtest.universe import lookup
         entry = lookup("SPY")
-        assert entry.venue == "ibkr"
+        assert entry.venue == "alpaca"
         assert entry.venue_symbol == "SPY"
 
-    def test_btc_usd_routes_to_kraken(self):
-        """BTC-USD signal routes to Kraken by default."""
+    def test_btc_usd_routes_to_alpaca(self):
+        """BTC-USD signal routes to Alpaca when in universe."""
         from backtest.universe import lookup
         entry = lookup("BTC-USD")
-        assert entry.venue == "kraken"
-        assert entry.venue_symbol == "XBTUSD"
+        assert entry.venue == "alpaca"
+        assert entry.venue_symbol == "BTC/USD"
 
-    def test_qqq_routes_to_ibkr(self):
-        """QQQ signal routes to IBKR by default."""
+    def test_qqq_routes_to_alpaca(self):
+        """QQQ signal routes to Alpaca by default."""
         from backtest.universe import lookup
         entry = lookup("QQQ")
-        assert entry.venue == "ibkr"
+        assert entry.venue == "alpaca"
 
 
 class TestDockerComposeIBKR:

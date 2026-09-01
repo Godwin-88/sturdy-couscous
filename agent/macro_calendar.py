@@ -19,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
-from gqlalchemy import Memgraph
+from common.graph import get_db
 from loguru import logger
 
 FRED_API_KEY = os.getenv("FRED_API_KEY", "")
@@ -75,10 +75,7 @@ IMPACT_PRE_SIGNAL: dict[str, float] = {
 
 class MacroCalendarAgent:
     def __init__(self):
-        self.db = Memgraph(
-            host=os.getenv("MEMGRAPH_HOST", "memgraph"),
-            port=int(os.getenv("MEMGRAPH_PORT", 7687)),
-        )
+        self.db = get_db()
 
     async def run(self, lookahead_days: int = 7) -> dict[str, Any]:
         """

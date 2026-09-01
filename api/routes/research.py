@@ -16,7 +16,7 @@ import psycopg2
 import psycopg2.extras
 import redis
 from fastapi import APIRouter, HTTPException, Query
-from gqlalchemy import Memgraph
+from common.graph import get_db
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="", tags=["research"])
@@ -25,10 +25,7 @@ router = APIRouter(prefix="", tags=["research"])
 # ── Helpers ─────────────────────────────────────────────────────────────────────
 
 def _db():
-    return Memgraph(
-        host=os.getenv("MEMGRAPH_HOST", "memgraph"),
-        port=int(os.getenv("MEMGRAPH_PORT", 7687)),
-    )
+    return get_db()
 
 
 def _redis():
@@ -167,48 +164,66 @@ class AlertSuggestRequest(BaseModel):
 @router.get("/graph/summary")
 def get_graph_summary():
     """KG health: node/edge counts, label distribution, orphan count, coverage %, last update."""
-    db = _db()
+    try:
+        db = _db()
+    except Exception:
+        return _sanitize_for_json({
+            "total_nodes": 0, "total_edges": 0, "by_label": {},
+            "orphaned_nodes": 0, "strategies_without_concepts": 0,
+            "formula_coverage_pct": 0.0, "last_kg_update": None,
+        })
     r = _redis()
 
-    # Node counts by label
-    label_query = "MATCH (n) RETURN labels(n) AS labels, count(*) AS cnt"
-    label_rows = list(db.execute_and_fetch(label_query))
-    by_label: dict[str, int] = {}
-    for row in label_rows:
-        for lbl in row.get("labels", []):
-            by_label[lbl] = by_label.get(lbl, 0) + row.get("cnt", 0)
+    try:
+        # Node counts directly (not derived from by_label to avoid multi-label double-count)
+        total_nodes_query = "MATCH (n) RETURN count(*) AS cnt"
+        total_nodes_rows = list(db.execute_and_fetch(total_nodes_query))
+        total_nodes = total_nodes_rows[0].get("cnt", 0) if total_nodes_rows else 0
 
-    total_nodes = sum(by_label.values())
-    total_edges = 0
-    edge_query = "MATCH ()-[r]->() RETURN count(*) AS cnt"
-    edge_rows = list(db.execute_and_fetch(edge_query))
-    if edge_rows:
-        total_edges = edge_rows[0].get("cnt", 0)
+        # Node counts by label
+        label_query = "MATCH (n) RETURN labels(n) AS labels, count(*) AS cnt"
+        label_rows = list(db.execute_and_fetch(label_query))
+        by_label: dict[str, int] = {}
+        for row in label_rows:
+            for lbl in row.get("labels", []):
+                by_label[lbl] = by_label.get(lbl, 0) + row.get("cnt", 0)
 
-    # Orphaned nodes (no relationships)
-    orphan_query = "MATCH (n) WHERE NOT (n)--() RETURN count(*) AS cnt"
-    orphan_rows = list(db.execute_and_fetch(orphan_query))
-    orphaned_nodes = orphan_rows[0].get("cnt", 0) if orphan_rows else 0
+        total_edges = 0
+        edge_query = "MATCH ()-[r]->() RETURN count(*) AS cnt"
+        edge_rows = list(db.execute_and_fetch(edge_query))
+        if edge_rows:
+            total_edges = edge_rows[0].get("cnt", 0)
 
-    # Strategies without concepts
-    no_concept_query = """
-    MATCH (s:Strategy) WHERE NOT (s)-[:DERIVED_FROM]->(:Concept)
-    RETURN count(*) AS cnt
-    """
-    no_concept_rows = list(db.execute_and_fetch(no_concept_query))
-    strategies_without_concepts = no_concept_rows[0].get("cnt", 0) if no_concept_rows else 0
+        # Orphaned nodes (no relationships)
+        orphan_query = "MATCH (n) WHERE NOT (n)--() RETURN count(*) AS cnt"
+        orphan_rows = list(db.execute_and_fetch(orphan_query))
+        orphaned_nodes = orphan_rows[0].get("cnt", 0) if orphan_rows else 0
 
-    # Formula coverage: strategies with at least one formula via concept
-    formula_cov_query = """
-    MATCH (s:Strategy)-[:DERIVED_FROM]->(:Concept)-[:HAS_FORMULA]->(:Formula)
-    RETURN count(DISTINCT s) AS covered
-    """
-    total_strat_query = "MATCH (s:Strategy) RETURN count(*) AS total"
-    cov_rows = list(db.execute_and_fetch(formula_cov_query))
-    total_rows = list(db.execute_and_fetch(total_strat_query))
-    covered = cov_rows[0].get("covered", 0) if cov_rows else 0
-    total_strats = total_rows[0].get("total", 0) if total_rows else 0
-    formula_coverage_pct = round(covered / total_strats, 4) if total_strats else 0.0
+        # Strategies without concepts
+        no_concept_query = """
+        MATCH (s:Strategy) WHERE NOT (s)-[:DERIVED_FROM]->(:Concept)
+        RETURN count(*) AS cnt
+        """
+        no_concept_rows = list(db.execute_and_fetch(no_concept_query))
+        strategies_without_concepts = no_concept_rows[0].get("cnt", 0) if no_concept_rows else 0
+
+        # Formula coverage: strategies with at least one formula via concept
+        formula_cov_query = """
+        MATCH (s:Strategy)-[:DERIVED_FROM]->(:Concept)-[:HAS_FORMULA]->(:Formula)
+        RETURN count(DISTINCT s) AS covered
+        """
+        total_strat_query = "MATCH (s:Strategy) RETURN count(*) AS total"
+        cov_rows = list(db.execute_and_fetch(formula_cov_query))
+        total_rows = list(db.execute_and_fetch(total_strat_query))
+        covered = cov_rows[0].get("covered", 0) if cov_rows else 0
+        total_strats = total_rows[0].get("total", 0) if total_rows else 0
+        formula_coverage_pct = round(covered / total_strats, 4) if total_strats else 0.0
+    except Exception:
+        return _sanitize_for_json({
+            "total_nodes": 0, "total_edges": 0, "by_label": {},
+            "orphaned_nodes": 0, "strategies_without_concepts": 0,
+            "formula_coverage_pct": 0.0, "last_kg_update": None,
+        })
 
     # Last KG update from Redis or kg_versions table
     last_kg_update = None
@@ -239,7 +254,10 @@ def get_graph_importance(
     limit: int = Query(20, ge=1, le=200),
 ):
     """Concept centrality ranking with configurable algorithm."""
-    db = _db()
+    try:
+        db = _db()
+    except Exception:
+        return []
     if algorithm == "degree":
         query = """
         MATCH (c:Concept)
@@ -247,37 +265,25 @@ def get_graph_importance(
         ORDER BY centrality DESC LIMIT $limit
         """
     elif algorithm == "betweenness":
-        # Approximate betweenness via MAGE if available, fallback to degree
-        try:
-            query = """
-            MATCH (c:Concept)
-            WITH c, size((c)--()) AS degree
-            RETURN c.name AS name, degree AS centrality
-            ORDER BY centrality DESC LIMIT $limit
-            """
-        except Exception:
-            query = """
-            MATCH (c:Concept)
-            RETURN c.name AS name, size((c)--()) AS centrality
-            ORDER BY centrality DESC LIMIT $limit
-            """
+        query = """
+        MATCH (c:Concept)
+        WITH c, size((c)--()) AS degree
+        RETURN c.name AS name, degree AS centrality
+        ORDER BY centrality DESC LIMIT $limit
+        """
     else:  # pagerank (default)
-        try:
-            query = """
-            MATCH (c:Concept)
-            WITH c, size((c)<--()) AS in_degree, size((c)-->()) AS out_degree
-            RETURN c.name AS name,
-                   (in_degree + out_degree) AS centrality
-            ORDER BY centrality DESC LIMIT $limit
-            """
-        except Exception:
-            query = """
-            MATCH (c:Concept)
-            RETURN c.name AS name, size((c)--()) AS centrality
-            ORDER BY centrality DESC LIMIT $limit
-            """
-    results = list(db.execute_and_fetch(query, {"limit": limit}))
-    return _sanitize_for_json(results)
+        query = """
+        MATCH (c:Concept)
+        WITH c, size((c)<--()) AS in_degree, size((c)-->()) AS out_degree
+        RETURN c.name AS name,
+               (in_degree + out_degree) AS centrality
+        ORDER BY centrality DESC LIMIT $limit
+        """
+    try:
+        results = list(db.execute_and_fetch(query, {"limit": limit}))
+        return _sanitize_for_json(results)
+    except Exception:
+        return []
 
 
 @router.get("/strategies")
@@ -431,36 +437,42 @@ def get_formulas(limit: int = Query(100, ge=1, le=500)):
 @router.get("/graph/gaps")
 def get_graph_gaps():
     """KG completeness audit: orphaned nodes, uncovered tickers, sparse regimes."""
-    db = _db()
+    try:
+        db = _db()
+    except Exception:
+        return _sanitize_for_json({"orphaned_nodes": [], "uncovered_strategies": [], "sparse_regimes": []})
 
-    # Orphaned nodes
-    orphan_query = """
-    MATCH (n) WHERE NOT (n)--()
-    RETURN labels(n) AS labels, n.name AS name, count(*) AS cnt
-    """
-    orphans = list(db.execute_and_fetch(orphan_query))
+    try:
+        # Orphaned nodes
+        orphan_query = """
+        MATCH (n) WHERE NOT (n)--()
+        RETURN labels(n) AS labels, n.name AS name, count(*) AS cnt
+        """
+        orphans = list(db.execute_and_fetch(orphan_query))
 
-    # Strategies with no concept coverage
-    no_concept_query = """
-    MATCH (s:Strategy) WHERE NOT (s)-[:DERIVED_FROM]->(:Concept)
-    RETURN s.name AS name, s.asset_class AS asset_class
-    """
-    uncovered_strategies = list(db.execute_and_fetch(no_concept_query))
+        # Strategies with no concept coverage
+        no_concept_query = """
+        MATCH (s:Strategy) WHERE NOT (s)-[:DERIVED_FROM]->(:Concept)
+        RETURN s.name AS name, s.asset_class AS asset_class
+        """
+        uncovered_strategies = list(db.execute_and_fetch(no_concept_query))
 
-    # Regimes with few strategies
-    sparse_regimes_query = """
-    MATCH (r:Regime)<-[:ACTIVATED_BY]-(s:Strategy)
-    WITH r, count(s) AS strategy_count
-    WHERE strategy_count < 2
-    RETURN r.name AS regime, strategy_count
-    """
-    sparse_regimes = list(db.execute_and_fetch(sparse_regimes_query))
+        # Regimes with few strategies
+        sparse_regimes_query = """
+        MATCH (r:Regime)<-[:ACTIVATED_BY]-(s:Strategy)
+        WITH r, count(s) AS strategy_count
+        WHERE strategy_count < 2
+        RETURN r.name AS regime, strategy_count
+        """
+        sparse_regimes = list(db.execute_and_fetch(sparse_regimes_query))
 
-    return _sanitize_for_json({
-        "orphaned_nodes": orphans,
-        "uncovered_strategies": uncovered_strategies,
-        "sparse_regimes": sparse_regimes,
-    })
+        return _sanitize_for_json({
+            "orphaned_nodes": orphans,
+            "uncovered_strategies": uncovered_strategies,
+            "sparse_regimes": sparse_regimes,
+        })
+    except Exception:
+        return _sanitize_for_json({"orphaned_nodes": [], "uncovered_strategies": [], "sparse_regimes": []})
 
 
 @router.get("/graph/versions")
@@ -1139,53 +1151,60 @@ def post_risk_stress_test(req: StressTestRequest):
 @router.get("/graph/recommendations")
 def get_graph_recommendations():
     """Automated KG improvements: missing edges, contradiction resolutions, coverage gaps."""
-    db = _db()
+    try:
+        db = _db()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Memgraph unavailable: {e}")
+
     recommendations: list[dict] = []
 
-    # 1. Strategies with no concept coverage
-    no_concept_query = """
-    MATCH (s:Strategy) WHERE NOT (s)-[:DERIVED_FROM]->(:Concept)
-    RETURN s.name AS strategy, s.asset_class AS asset_class
-    """
-    no_concept = list(db.execute_and_fetch(no_concept_query))
-    for row in no_concept:
-        recommendations.append({
-            "type": "add_edge",
-            "priority": "high",
-            "reason": f"Strategy {row.get('strategy', '?')} has no concept coverage",
-            "suggestion": f"Add DERIVED_FROM edge between {row.get('strategy', '?')} and a relevant Concept node",
-        })
+    try:
+        # 1. Strategies with no concept coverage
+        no_concept_query = """
+        MATCH (s:Strategy) WHERE NOT (s)-[:DERIVED_FROM]->(:Concept)
+        RETURN s.name AS strategy, s.asset_class AS asset_class
+        """
+        no_concept = list(db.execute_and_fetch(no_concept_query))
+        for row in no_concept:
+            recommendations.append({
+                "type": "add_edge",
+                "priority": "high",
+                "reason": f"Strategy {row.get('strategy', '?')} has no concept coverage",
+                "suggestion": f"Add DERIVED_FROM edge between {row.get('strategy', '?')} and a relevant Concept node",
+            })
 
-    # 2. Active contradictions blocking strategies
-    contra_query = """
-    MATCH (s1:Strategy)-[:DERIVED_FROM]->(c1:Concept)-[:CONTRADICTED_BY]->(c2:Concept)<-[:DERIVED_FROM]-(s2:Strategy)
-    WHERE s1.status = 'active' AND s2.status = 'active'
-    RETURN s1.name AS strategy_a, s2.name AS strategy_b,
-           c1.name AS concept_a, c2.name AS concept_b
-    """
-    contradictions = list(db.execute_and_fetch(contra_query))
-    for row in contradictions:
-        recommendations.append({
-            "type": "resolve_contradiction",
-            "priority": "medium",
-            "reason": f"Active contradiction pair blocks {row.get('strategy_a', '?')} and {row.get('strategy_b', '?')}",
-            "suggestion": f"Suppress {row.get('strategy_a', '?')}|{row.get('strategy_b', '?')} or revisit CONTRADICTED_BY edge",
-        })
+        # 2. Active contradictions blocking strategies
+        contra_query = """
+        MATCH (s1:Strategy)-[:DERIVED_FROM]->(c1:Concept)-[:CONTRADICTED_BY]->(c2:Concept)<-[:DERIVED_FROM]-(s2:Strategy)
+        WHERE s1.status = 'active' AND s2.status = 'active'
+        RETURN s1.name AS strategy_a, s2.name AS strategy_b,
+               c1.name AS concept_a, c2.name AS concept_b
+        """
+        contradictions = list(db.execute_and_fetch(contra_query))
+        for row in contradictions:
+            recommendations.append({
+                "type": "resolve_contradiction",
+                "priority": "medium",
+                "reason": f"Active contradiction pair blocks {row.get('strategy_a', '?')} and {row.get('strategy_b', '?')}",
+                "suggestion": f"Suppress {row.get('strategy_a', '?')}|{row.get('strategy_b', '?')} or revisit CONTRADICTED_BY edge",
+            })
 
-    # 3. Orphaned nodes
-    orphan_query = """
-    MATCH (n) WHERE NOT (n)--()
-    RETURN labels(n) AS labels, n.name AS name
-    LIMIT 20
-    """
-    orphans = list(db.execute_and_fetch(orphan_query))
-    for row in orphans:
-        recommendations.append({
-            "type": "connect_orphan",
-            "priority": "low",
-            "reason": f"Orphaned node {row.get('name', '?')} ({row.get('labels', [])}) has no relationships",
-            "suggestion": f"Connect {row.get('name', '?')} to related Concept or Strategy nodes",
-        })
+        # 3. Orphaned nodes
+        orphan_query = """
+        MATCH (n) WHERE NOT (n)--()
+        RETURN labels(n) AS labels, n.name AS name
+        LIMIT 20
+        """
+        orphans = list(db.execute_and_fetch(orphan_query))
+        for row in orphans:
+            recommendations.append({
+                "type": "connect_orphan",
+                "priority": "low",
+                "reason": f"Orphaned node {row.get('name', '?')} ({row.get('labels', [])}) has no relationships",
+                "suggestion": f"Connect {row.get('name', '?')} to related Concept or Strategy nodes",
+            })
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Memgraph query failed: {e}")
 
     return _sanitize_for_json(recommendations)
 

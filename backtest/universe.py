@@ -22,22 +22,22 @@ class UniverseEntry:
 _GICS_SECTORS: Dict[str, str] = {
     "SPY": "Diversified ETF",
     "QQQ": "Technology",
-    "TLT": "Rates / Treasuries",
+    "XLF": "Financials",
+    "XLE": "Energy",
     "GLD": "Commodities",
+    "TLT": "Rates / Treasuries",
     "BTC-USD": "",
     "ETH-USD": "",
 }
 
-_CRYPTO_VENUE = "kraken"
-_EQUITY_VENUE = "ibkr"
+_CRYPTO_VENUE = "alpaca"
+_EQUITY_VENUE = "alpaca"
 
 
 def _infer_venue_symbol(ticker: str, asset_class: str) -> str:
     if asset_class == "crypto":
         symbol = ticker.upper().replace("-", "").replace("USD", "")
-        if symbol == "BTC":
-            return "XBTUSD"
-        return f"{symbol}USD"
+        return f"{symbol}/USD"
     return ticker.upper()
 
 
@@ -58,17 +58,17 @@ def _create_universe_entry(ticker: str, asset_class: str = "equity_xstock") -> U
 _DEFAULTS: tuple[UniverseEntry, ...] = (
     _create_universe_entry("SPY"),
     _create_universe_entry("QQQ"),
-    _create_universe_entry("TLT", "macro_proxy"),
+    _create_universe_entry("XLF"),
+    _create_universe_entry("XLE"),
     _create_universe_entry("GLD", "macro_proxy"),
-    _create_universe_entry("BTC-USD", "crypto"),
 )
 
 _entries: Dict[str, UniverseEntry] = {e.ticker: e for e in _DEFAULTS}
 
 _UNIVERSE_PRESETS: Dict[str, List[str]] = {
-    "default": ["SPY", "QQQ", "TLT", "GLD", "BTC-USD"],
+    "default": ["SPY", "QQQ", "XLF", "XLE", "GLD"],
     "crypto": ["BTC-USD", "ETH-USD"],
-    "equity": ["SPY", "QQQ", "TLT", "GLD"],
+    "equity": ["SPY", "QQQ", "XLF", "XLE"],
     "macro": ["TLT", "GLD"],
 }
 
@@ -120,12 +120,12 @@ def _validate_routing(asset_class: str, venue: str) -> None:
 
 def _validate_ticker(name: str) -> None:
     if not re.fullmatch(r"[A-Z]{1,5}(-[A-Z]{2,4})?", name.upper()):
-        raise ValueError(f"Ticker {name!r} not ASCII⁄uppercase")
+        raise ValueError(f"Ticker {name!r} not ASCII/uppercase")
 
 
 def _validate_symbol(sym: str) -> None:
     if not re.fullmatch(r"[A-Z0-9]{1,20}", sym.upper()):
-        raise ValueError(f"venue_symbol {sym!r} must be ASCII⁄uppercase")
+        raise ValueError(f"venue_symbol {sym!r} must be ASCII/uppercase")
 
 
 def _validate_sector(sector: str) -> None:

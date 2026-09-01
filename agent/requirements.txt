@@ -1,7 +1,8 @@
-gqlalchemy==1.6.0          # Memgraph Python driver
+gqlalchemy==1.6.0          # Memgraph/Neo4j Python driver
 pgmpy==0.1.26              # Bayesian network inference
 lingam==1.8.3              # VARLiNGAM / DYNOTEARS
 yfinance==0.2.40           # market data
+alpaca-py==0.22.0          # Alpaca Trading + Market Data API
 pandas==2.2.2
 numpy==1.26.4
 scipy==1.13.0

@@ -1,33 +1,33 @@
 version: "3.9"
 
-# ── Vultr production overrides ────────────────────────────────────────────────
+# ── GCP production overrides ────────────────────────────────────────────────
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-# This file REMOVES the frontend service (handled by Vercel)
-# and hardens all services for production.
+# This file hardens all services for production on GCP Compute Engine.
 
 services:
 
-  memgraph:
+  neo4j:
     restart: always
     deploy:
       resources:
         limits:
-          memory: 6G             # more headroom on Vultr 16GB VM
+          memory: 4G
     environment:
-      MEMGRAPH_TELEMETRY_ENABLED: "false"
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD}
+      NEO4J_PLUGINS: '["apoc"]'
     ports:
-      - "127.0.0.1:7687:7687"   # bind to localhost only — not public
-      - "127.0.0.1:7444:7444"
+      - "127.0.0.1:7687:7687"
+      - "127.0.0.1:7474:7474"
 
   postgres:
     restart: always
     ports:
-      - "127.0.0.1:5432:5432"   # localhost only
+      - "127.0.0.1:5432:5432"
 
   redis:
     restart: always
     ports:
-      - "127.0.0.1:6379:6379"   # localhost only
+      - "127.0.0.1:6379:6379"
 
   api:
     restart: always
@@ -37,14 +37,13 @@ services:
       --port 8000
       --workers 2
       --no-access-log
-    volumes: []                  # no hot-reload in prod
+    volumes: []
     ports:
-      - "0.0.0.0:8000:8000"     # public — put Nginx/Traefik in front for HTTPS
+      - "0.0.0.0:8000:8000"
 
   agent-worker:
     restart: always
 
-  # Disable dev-only services in prod
   frontend:
     deploy:
       replicas: 0

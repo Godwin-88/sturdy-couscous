@@ -12,6 +12,13 @@ def sharpe(returns: np.ndarray, rf: float = 0.05) -> float:
     excess = returns - daily_rf
     return float(np.sqrt(252) * excess.mean() / excess.std()) if excess.std() > 0 else 0.0
 
+def sortino(returns: np.ndarray, rf: float = 0.05) -> float:
+    daily_rf = rf / 252
+    excess = returns - daily_rf
+    downside = excess[excess < 0]
+    downside_std = np.sqrt(np.mean(downside**2)) if len(downside) > 0 else 0
+    return float(np.sqrt(252) * excess.mean() / downside_std) if downside_std > 0 else 0.0
+
 
 def calmar(returns: np.ndarray) -> float:
     total = (1 + returns).prod() - 1
@@ -54,21 +61,24 @@ def jobson_korkie(r1: np.ndarray, r2: np.ndarray) -> tuple[float, float]:
     return float(z), float(p)
 
 
-def summary(returns: np.ndarray, benchmark: np.ndarray = None) -> dict:
+# Update the `summary` function signature and body
+def summary(returns: np.ndarray, benchmark: np.ndarray = None, rf: float = 0.05) -> dict:
     result = {
         "total_return":    round(total_return(returns), 4),
-        "sharpe_ratio":    round(sharpe(returns), 3),
+        "sharpe_ratio":    round(sharpe(returns, rf=rf), 3),
+        "sortino_ratio":   round(sortino(returns, rf=rf), 3), # NEW
         "calmar_ratio":    round(calmar(returns), 3),
         "max_drawdown":    round(max_drawdown(returns), 4),
         "ann_volatility":  round(returns.std() * np.sqrt(252), 4),
         "n_days":          len(returns),
     }
-    if benchmark is not None:
+    if benchmark is not None and len(benchmark) > 0:
         z, p = jobson_korkie(returns, benchmark)
         result["jk_z_stat"]       = round(z, 3)
         result["jk_p_value"]      = round(p, 4)
         result["jk_significant"]  = bool(p < 0.05)
     return result
+
 
 
 def profit_factor(trade_pnls: np.ndarray) -> Optional[float]:

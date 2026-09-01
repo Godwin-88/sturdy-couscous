@@ -12,8 +12,11 @@ ENV/
 backend/venv/
 backend/venv311/
 backend/env/
-# Uncomment or add this (critical)
+# Environment variables — never commit secrets
 .env
+.env.local
+.env.*.local
+!.env.example
 
 # Add tool-local directories
 .kilo/

@@ -28,8 +28,10 @@ SECTOR_MAP = {
     "QQQ": "equity_tech",
     "XLF": "equity_financials",
     "XLE": "equity_energy",
-    "BTC": "crypto",
-    "ETH": "crypto",
+    "GLD": "commodities",
+    "TLT": "macro_rates",
+    "BTC-USD": "crypto",
+    "ETH-USD": "crypto",
 }
 
 

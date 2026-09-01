@@ -14,7 +14,7 @@ import httpx
 import numpy as np
 import pandas as pd
 import yfinance as yf
-from gqlalchemy import Memgraph
+from common.graph import get_db
 from lingam import VARLiNGAM
 from loguru import logger
 
@@ -30,10 +30,7 @@ VARLINGAM_LAG     = 4
 
 class ResearchAgent:
     def __init__(self):
-        self.db = Memgraph(
-            host=os.getenv("MEMGRAPH_HOST", "memgraph"),
-            port=int(os.getenv("MEMGRAPH_PORT", 7687))
-        )
+        self.db = get_db()
 
     async def run(self) -> dict[str, Any]:
         nodes_added = 0

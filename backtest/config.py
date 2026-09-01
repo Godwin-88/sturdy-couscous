@@ -15,9 +15,9 @@ class BacktestConfig:
     kg_signal_tickers: tuple[str, ...] = (
         "SPY",
         "QQQ",
-        "TLT",
+        "XLF",
+        "XLE",
         "GLD",
-        "BTC-USD",
     )
 
     # Cadence
@@ -46,8 +46,10 @@ class BacktestConfig:
     max_schema_version: int = 1
 
     # KG
-    memgraph_host: str = os.getenv("MEMGRAPH_HOST", "localhost")
-    memgraph_port: int = int(os.getenv("MEMGRAPH_PORT", "7687"))
+    graph_db_host: str = os.getenv("NEO4J_HOST", os.getenv("MEMGRAPH_HOST", "localhost"))
+    graph_db_port: int = int(os.getenv("NEO4J_PORT", os.getenv("MEMGRAPH_PORT", "7687")))
+    graph_db_user: str = os.getenv("NEO4J_USER", "neo4j")
+    graph_db_password: str = os.getenv("NEO4J_PASSWORD", "")
 
     # KB formula cost model note (backtest-only approximation)
     ibkr_fill_mode: str = "backtest_simulated"
