@@ -319,6 +319,86 @@ export interface OptionPlaceResult {
   mode: string; created_at: string;
 }
 
+export interface OptionLeg {
+  symbol:           string;
+  strike:           number;
+  contract_type:    "call" | "put";
+  side:             "buy_to_open" | "sell_to_open" | "buy_to_close" | "sell_to_close";
+  contracts:        number;
+  mid:              number;
+  delta?:           number | null;
+  bid?:             number | null;
+  ask?:             number | null;
+  spread_pct?:      number | null;
+  open_interest?:   number | null;
+  implied_volatility?: number | null;
+  premium_total?:   number;
+  collateral_required?: number;
+  net_credit?:      number;
+  net_debit?:       number;
+  max_profit?:      number;
+  max_loss?:        number;
+}
+
+export interface OptionSuggestion {
+  strategy:        string;
+  signal_method:   string;
+  regime:          string;
+  regime_weight:   number;
+  confidence:      number;
+  graph_path:      string[];
+  legs:            OptionLeg[];
+  est_premium:     number;
+  max_profit_low:  number;
+  max_loss:        number;
+  max_loss_pct_nav: number | null;
+  risk_reward_pct: number | null;
+  score:           number;
+  loss_aversion_score?: number;
+  rank?:           number;
+  lens?:           string;
+  hedge?:          { hedge_req: boolean; hedge_reason: string };
+  notes:           string[];
+  budget_pct:      number;
+  liquidity_ok:    boolean;
+}
+
+export interface OptionSuggestionRejected {
+  strategy: string; signal_method: string; max_loss: number;
+  max_loss_pct_nav: number; reason: string;
+}
+
+export interface OptionSuggestionsResult {
+  underlying:        string;
+  expiration:        string | null;
+  regime:            string;
+  regime_confidence: number;
+  spot_estimate:     number | null;
+  dte:               number;
+  chain_size:        number;
+  lens:              string;
+  nav:               number;
+  max_loss_cap_pct:  number;
+  active_strategies: string[];
+  suggestions:       OptionSuggestion[];
+  rejected:          OptionSuggestionRejected[];
+}
+
+export interface HedgeState {
+  underlying:       string;
+  regime:           string;
+  confidence:       number;
+  greeks:           { delta: number; gamma: number; theta: number; vega: number };
+  positions:        { symbol: string; cls: string; qty: number; delta: number; gamma: number; theta: number; vega: number; iv?: number }[];
+  spot:             number | null;
+  hedge_shares:     number;
+  band_shares:      number;
+  needs_rebalance:  boolean;
+  reason:           string;
+  proposal:         { symbol: string; side: string; qty: number } | null;
+  tail_sleeve:      { recommended: boolean; reason?: string; budget_usd?: number; suggest?: string; note?: string };
+}
+
 export const optionsApi = {
   underlyings: (q = "") => apiFetch<{ assets: AlpacaAsset[] }>(`/options/underlyings?q=${encodeURIComponent(q)}`),
   expirations: (underlying: string) => apiFetch<{ underlying: string; expirations: string[] }>(`/options/expirations?underlying=${encodeURIComponent(underlying)}`),
@@ -337,8 +417,25 @@ export const optionsApi = {
     return apiFetch<{ underlying: string; rows: OptionContractRow[] }>(`/options/chain?${p.toString()}`);
   },
   snapshot:    (contract: string) => apiFetch<OptionContractRow>(`/options/snapshot?contract=${encodeURIComponent(contract)}`),
+  suggestions: (underlying: string, opts?: { expiration?: string; contract_type?: string; regime?: string; lens?: string; nav?: number }) => {
+    const p = new URLSearchParams({ underlying: underlying.toUpperCase() });
+    if (opts?.expiration) p.set("expiration", opts.expiration);
+    if (opts?.contract_type) p.set("contract_type", opts.contract_type);
+    if (opts?.regime) p.set("regime", opts.regime);
+    if (opts?.lens) p.set("lens", opts.lens);
+    if (opts?.nav != null) p.set("nav", String(opts.nav));
+    return apiFetch<OptionSuggestionsResult>(`/options/suggestions?${p.toString()}`);
+  },
   place:       (req: OptionPlaceRequest) =>
     apiFetch<OptionPlaceResult>("/options/place", { method: "POST", body: JSON.stringify(req) }),
+  hedge:       {
+    state:     (underlying = "SPY") =>
+      apiFetch<{ hedge_state: HedgeState }>(`/options/hedge/state?underlying=${encodeURIComponent(underlying)}`),
+    rebalance: (underlying = "SPY", confirm = false) =>
+      apiFetch<{ status: string; message?: string; order?: Record<string, unknown>; hedge_state: HedgeState }>(
+        `/options/hedge/rebalance?underlying=${encodeURIComponent(underlying)}&confirm=${confirm}`,
+        { method: "POST" }),
+  },
 };
 
 export const marketApi = {

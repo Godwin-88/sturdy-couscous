@@ -7115,3 +7115,236 @@ MERGE (s:Strategy {name: 'DeepVaR Risk Overlay'})
   SET s.signal_method = 'risk', s.tradeable_venue = 'research_only', s.status = 'inactive';
 MERGE (s:Strategy {name: 'Granger Contagion Monitor'})
   SET s.signal_method = 'contagion', s.tradeable_venue = 'research_only', s.status = 'inactive';
+
+// ===== OPTION STRATEGY LIBRARY (Alpaca options paper trading) =====
+MERGE (s:Strategy {name: 'Covered Call Income'})
+  SET s.signal_method = 'covered_call', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Sell OTM call against a long underlying for theta income; REF: Time Decay (Theta), Delta Hedging.',
+      s.param_budget_pct = 0.1, s.param_delta_lo = 0.16, s.param_delta_hi = 0.28,
+      s.param_dte_lo = 30, s.param_dte_hi = 45;
+
+MATCH (s:Strategy {name: 'Covered Call Income'}), (r:Regime {name: 'Neutral'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.85}]->(r);
+MATCH (s:Strategy {name: 'Covered Call Income'}), (r:Regime {name: 'LowVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.7}]->(r);
+MATCH (s:Strategy {name: 'Covered Call Income'}), (c:Concept {name: 'European Call Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Covered Call Income'}), (c:Concept {name: 'Time Decay (Theta)'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Covered Call Income'}), (c:Concept {name: 'Delta Hedging'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MERGE (s:Strategy {name: 'Cash-Secured Put'})
+  SET s.signal_method = 'cash_secured_put', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Sell OTM put backed by cash collateral at a support strike; mean-reversion premium harvest.',
+      s.param_budget_pct = 0.12, s.param_delta_lo = 0.15, s.param_delta_hi = 0.25,
+      s.param_dte_lo = 30, s.param_dte_hi = 45;
+
+MATCH (s:Strategy {name: 'Cash-Secured Put'}), (r:Regime {name: 'MeanReverting'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.85}]->(r);
+MATCH (s:Strategy {name: 'Cash-Secured Put'}), (r:Regime {name: 'Neutral'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.6}]->(r);
+MATCH (s:Strategy {name: 'Cash-Secured Put'}), (c:Concept {name: 'European Put Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Cash-Secured Put'}), (c:Concept {name: 'Variance Risk Premium'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MERGE (s:Strategy {name: 'Bull Call Debit Spread'})
+  SET s.signal_method = 'call_debit_spread', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Buy ATM call, sell higher-strike call; bullish defined-risk direction.',
+      s.param_budget_pct = 0.08, s.param_delta_lo = 0.28, s.param_delta_hi = 0.4,
+      s.param_dte_lo = 21, s.param_dte_hi = 60;
+
+MATCH (s:Strategy {name: 'Bull Call Debit Spread'}), (r:Regime {name: 'Trending'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.75}]->(r);
+MATCH (s:Strategy {name: 'Bull Call Debit Spread'}), (r:Regime {name: 'Recovery'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.65}]->(r);
+MATCH (s:Strategy {name: 'Bull Call Debit Spread'}), (c:Concept {name: 'European Call Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Bull Call Debit Spread'}), (c:Concept {name: 'Delta Hedging'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MERGE (s:Strategy {name: 'Bear Put Debit Spread'})
+  SET s.signal_method = 'put_debit_spread', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Buy ATM put, sell lower-strike put; bearish defined-risk direction.',
+      s.param_budget_pct = 0.08, s.param_delta_lo = 0.28, s.param_delta_hi = 0.4,
+      s.param_dte_lo = 21, s.param_dte_hi = 60;
+
+MATCH (s:Strategy {name: 'Bear Put Debit Spread'}), (r:Regime {name: 'Crisis'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.75}]->(r);
+MATCH (s:Strategy {name: 'Bear Put Debit Spread'}), (r:Regime {name: 'HighVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.6}]->(r);
+MATCH (s:Strategy {name: 'Bear Put Debit Spread'}), (c:Concept {name: 'European Put Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MERGE (s:Strategy {name: 'Put Credit Spread'})
+  SET s.signal_method = 'put_credit_spread', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Sell OTM put, buy further-OTM put; credit collection with defined loss.',
+      s.param_budget_pct = 0.08, s.param_delta_lo = 0.15, s.param_delta_hi = 0.25,
+      s.param_dte_lo = 30, s.param_dte_hi = 45;
+
+MATCH (s:Strategy {name: 'Put Credit Spread'}), (r:Regime {name: 'MeanReverting'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.7}]->(r);
+MATCH (s:Strategy {name: 'Put Credit Spread'}), (r:Regime {name: 'Neutral'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.6}]->(r);
+MATCH (s:Strategy {name: 'Put Credit Spread'}), (r:Regime {name: 'LowVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.55}]->(r);
+MATCH (s:Strategy {name: 'Put Credit Spread'}), (c:Concept {name: 'European Put Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Put Credit Spread'}), (c:Concept {name: 'Variance Risk Premium'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MERGE (s:Strategy {name: 'Iron Condor'})
+  SET s.signal_method = 'iron_condor', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Sell OTM call+put wings; range-bound defined-risk credit.',
+      s.param_budget_pct = 0.08, s.param_delta_lo = 0.15, s.param_delta_hi = 0.25,
+      s.param_dte_lo = 30, s.param_dte_hi = 45;
+
+MATCH (s:Strategy {name: 'Iron Condor'}), (r:Regime {name: 'LowVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.85}]->(r);
+MATCH (s:Strategy {name: 'Iron Condor'}), (r:Regime {name: 'Neutral'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.65}]->(r);
+MATCH (s:Strategy {name: 'Iron Condor'}), (c:Concept {name: 'Put-Call Parity'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MERGE (s:Strategy {name: 'Calendar Spread'})
+  SET s.signal_method = 'calendar_spread', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Sell near-dated ATM, buy far-dated; vega+theta differential.',
+      s.param_budget_pct = 0.06, s.param_delta_lo = 0.35, s.param_delta_hi = 0.45,
+      s.param_dte_lo = 21, s.param_dte_hi = 45;
+
+MATCH (s:Strategy {name: 'Calendar Spread'}), (r:Regime {name: 'LowVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.7}]->(r);
+MATCH (s:Strategy {name: 'Calendar Spread'}), (r:Regime {name: 'Neutral'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.55}]->(r);
+MATCH (s:Strategy {name: 'Calendar Spread'}), (c:Concept {name: 'Time Decay (Theta)'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Calendar Spread'}), (c:Concept {name: 'Vega Risk'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MERGE (s:Strategy {name: 'Diagonal Spread'})
+  SET s.signal_method = 'diagonal_spread', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Buy far-dated, sell near-dated OTM; directional theta harvest.',
+      s.param_budget_pct = 0.06, s.param_delta_lo = 0.25, s.param_delta_hi = 0.4,
+      s.param_dte_lo = 21, s.param_dte_hi = 45;
+
+MATCH (s:Strategy {name: 'Diagonal Spread'}), (r:Regime {name: 'Trending'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.6}]->(r);
+MATCH (s:Strategy {name: 'Diagonal Spread'}), (r:Regime {name: 'Recovery'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.55}]->(r);
+MATCH (s:Strategy {name: 'Diagonal Spread'}), (c:Concept {name: 'Time Decay (Theta)'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MERGE (s:Strategy {name: 'Collar'})
+  SET s.signal_method = 'collar', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Long stock + long protective put + short OTM call; capped hedge for a fee.',
+      s.param_budget_pct = 0.1, s.param_delta_lo = 0.12, s.param_delta_hi = 0.2,
+      s.param_dte_lo = 30, s.param_dte_hi = 60;
+
+MATCH (s:Strategy {name: 'Collar'}), (r:Regime {name: 'HighVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.55}]->(r);
+MATCH (s:Strategy {name: 'Collar'}), (r:Regime {name: 'Recovery'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.5}]->(r);
+MATCH (s:Strategy {name: 'Collar'}), (c:Concept {name: 'Delta Hedging'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Collar'}), (c:Concept {name: 'European Put Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MERGE (s:Strategy {name: 'Protective Put'})
+  SET s.signal_method = 'protective_put', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Long put against long underlying; crisis insurance (corr->1).',
+      s.param_budget_pct = 0.08, s.param_delta_lo = 0.15, s.param_delta_hi = 0.25,
+      s.param_dte_lo = 21, s.param_dte_hi = 45;
+
+MATCH (s:Strategy {name: 'Protective Put'}), (r:Regime {name: 'HighVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.6}]->(r);
+MATCH (s:Strategy {name: 'Protective Put'}), (r:Regime {name: 'Crisis'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.85}]->(r);
+MATCH (s:Strategy {name: 'Protective Put'}), (r:Regime {name: 'SystemicStress'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.9}]->(r);
+MATCH (s:Strategy {name: 'Protective Put'}), (c:Concept {name: 'European Put Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Protective Put'}), (c:Concept {name: 'Delta Hedging'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MERGE (s:Strategy {name: 'Long Straddle'})
+  SET s.signal_method = 'long_straddle', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Buy ATM call+put; long-vol, event-driven directional.',
+      s.param_budget_pct = 0.05, s.param_delta_lo = 0.45, s.param_delta_hi = 0.55,
+      s.param_dte_lo = 7, s.param_dte_hi = 21;
+
+MATCH (s:Strategy {name: 'Long Straddle'}), (r:Regime {name: 'HighVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.65}]->(r);
+MATCH (s:Strategy {name: 'Long Straddle'}), (r:Regime {name: 'Crisis'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.6}]->(r);
+MATCH (s:Strategy {name: 'Long Straddle'}), (c:Concept {name: 'Vega Risk'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Long Straddle'}), (c:Concept {name: 'Gamma Scalping'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MERGE (s:Strategy {name: 'Short Straddle'})
+  SET s.signal_method = 'short_straddle', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Sell ATM call+put; short-vol range income under tight risk.',
+      s.param_budget_pct = 0.05, s.param_delta_lo = 0.45, s.param_delta_hi = 0.55,
+      s.param_dte_lo = 14, s.param_dte_hi = 30;
+
+MATCH (s:Strategy {name: 'Short Straddle'}), (r:Regime {name: 'LowVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.75}]->(r);
+MATCH (s:Strategy {name: 'Short Straddle'}), (r:Regime {name: 'Neutral'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.55}]->(r);
+MATCH (s:Strategy {name: 'Short Straddle'}), (c:Concept {name: 'Vega Risk'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Short Straddle'}), (c:Concept {name: 'Variance Risk Premium'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MERGE (s:Strategy {name: 'Long Strangle'})
+  SET s.signal_method = 'long_strangle', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Buy OTM call+put; cheap long-vol tail.',
+      s.param_budget_pct = 0.04, s.param_delta_lo = 0.2, s.param_delta_hi = 0.3,
+      s.param_dte_lo = 7, s.param_dte_hi = 21;
+
+MATCH (s:Strategy {name: 'Long Strangle'}), (r:Regime {name: 'HighVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.62}]->(r);
+MATCH (s:Strategy {name: 'Long Strangle'}), (r:Regime {name: 'Crisis'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.58}]->(r);
+MATCH (s:Strategy {name: 'Long Strangle'}), (c:Concept {name: 'Vega Risk'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MERGE (s:Strategy {name: 'Put-Spread Crash Hedge'})
+  SET s.signal_method = 'put_spread_hedge', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Buy OTM put, sell deeper-OTM put; pre-funded crash insurance.',
+      s.param_budget_pct = 0.06, s.param_delta_lo = 0.08, s.param_delta_hi = 0.15,
+      s.param_dte_lo = 30, s.param_dte_hi = 60;
+
+MATCH (s:Strategy {name: 'Put-Spread Crash Hedge'}), (r:Regime {name: 'Crisis'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.9}]->(r);
+MATCH (s:Strategy {name: 'Put-Spread Crash Hedge'}), (r:Regime {name: 'SystemicStress'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.95}]->(r);
+MATCH (s:Strategy {name: 'Put-Spread Crash Hedge'}), (r:Regime {name: 'HighVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.6}]->(r);
+MATCH (s:Strategy {name: 'Put-Spread Crash Hedge'}), (c:Concept {name: 'European Put Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Put-Spread Crash Hedge'}), (c:Concept {name: 'Variance Risk Premium'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Put-Spread Crash Hedge'}), (c:Concept {name: 'Delta Hedging'}) MERGE (s)-[:DERIVED_FROM]->(c);
+
+// Contradiction edges (opposite vol / direction views)
+MATCH (a:Strategy {name: 'Iron Condor'}), (b:Strategy {name: 'Long Straddle'}) MERGE (a)-[:CONTRADICTED_BY]->(b);
+MATCH (a:Strategy {name: 'Iron Condor'}), (b:Strategy {name: 'Short Straddle'}) MERGE (a)-[:CONTRADICTED_BY]->(b);
+MATCH (a:Strategy {name: 'Short Straddle'}), (b:Strategy {name: 'Long Straddle'}) MERGE (a)-[:CONTRADICTED_BY]->(b);
+MATCH (a:Strategy {name: 'Short Straddle'}), (b:Strategy {name: 'Long Strangle'}) MERGE (a)-[:CONTRADICTED_BY]->(b);
+MATCH (a:Strategy {name: 'Put Credit Spread'}), (b:Strategy {name: 'Put-Spread Crash Hedge'}) MERGE (a)-[:CONTRADICTED_BY]->(b);
+MATCH (a:Strategy {name: 'Bull Call Debit Spread'}), (b:Strategy {name: 'Put-Spread Crash Hedge'}) MERGE (a)-[:CONTRADICTED_BY]->(b);
+MATCH (a:Strategy {name: 'Covered Call Income'}), (b:Strategy {name: 'Protective Put'}) MERGE (a)-[:CONTRADICTED_BY]->(b);
+MATCH (a:Strategy {name: 'Cash-Secured Put'}), (b:Strategy {name: 'Bull Call Debit Spread'}) MERGE (a)-[:CONTRADICTED_BY]->(b);
+
+
+// ===== HULL CH.11 EXPANSION (Butterfly/Strip/Strap/Strangle/Bear-Call/Box) =====
+MERGE (c:Concept {name: 'Early Assignment Risk'})
+  SET c.description = 'Hull Ch11 BS11.1: American options can be exercised early; \"risk-free\" multi-leg constructs (e.g. box spreads) are not risk-free on American single-stock options.',
+      c.difficulty = 'advanced';
+
+MERGE (s:Strategy {name: 'Long Butterfly'})
+  SET s.signal_method = 'butterfly', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Hull 11.3: buy K1+K3 wings, sell 2x ATM K2; profits if price pins near K2, small max loss elsewhere.',
+      s.param_budget_pct = 0.05, s.param_delta_lo = 0.45, s.param_delta_hi = 0.55,
+      s.param_dte_lo = 14, s.param_dte_hi = 45;
+MATCH (s:Strategy {name: 'Long Butterfly'}), (r:Regime {name: 'Neutral'}) MERGE (s)-[:ACTIVATED_BY {weight:0.7}]->(r);
+MATCH (s:Strategy {name: 'Long Butterfly'}), (r:Regime {name: 'LowVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight:0.65}]->(r);
+MATCH (s:Strategy {name: 'Long Butterfly'}), (c:Concept {name: 'European Call Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Long Butterfly'}), (c:Concept {name: 'Gamma Scalping'}) MERGE (s)-[:DERIVED_FROM]->(c);
+
+MERGE (s:Strategy {name: 'Short Butterfly'})
+  SET s.signal_method = 'short_butterfly', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Hull 11.3: sell K1/K3 wings, buy 2x ATM K2; profits on a significant move either way, small loss on stillness.',
+      s.param_budget_pct = 0.05, s.param_delta_lo = 0.45, s.param_delta_hi = 0.55,
+      s.param_dte_lo = 14, s.param_dte_hi = 45;
+MATCH (s:Strategy {name: 'Short Butterfly'}), (r:Regime {name: 'HighVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight:0.7}]->(r);
+MATCH (s:Strategy {name: 'Short Butterfly'}), (r:Regime {name: 'Crisis'}) MERGE (s)-[:ACTIVATED_BY {weight:0.55}]->(r);
+MATCH (s:Strategy {name: 'Short Butterfly'}), (c:Concept {name: 'Vega Risk'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Short Butterfly'}), (c:Concept {name: 'European Call Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+
+MERGE (s:Strategy {name: 'Strip'})
+  SET s.signal_method = 'strip', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Hull 11.4: 1 ATM call + 2 ATM puts; bearish-tilted big-move bet.',
+      s.param_budget_pct = 0.05, s.param_delta_lo = 0.45, s.param_delta_hi = 0.55,
+      s.param_dte_lo = 7, s.param_dte_hi = 30;
+MATCH (s:Strategy {name: 'Strip'}), (r:Regime {name: 'HighVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight:0.65}]->(r);
+MATCH (s:Strategy {name: 'Strip'}), (r:Regime {name: 'Crisis'}) MERGE (s)-[:ACTIVATED_BY {weight:0.6}]->(r);
+MATCH (s:Strategy {name: 'Strip'}), (c:Concept {name: 'European Call Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Strip'}), (c:Concept {name: 'European Put Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+
+MERGE (s:Strategy {name: 'Strap'})
+  SET s.signal_method = 'strap', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Hull 11.4: 2 ATM calls + 1 ATM put; bullish-tilted big-move bet.',
+      s.param_budget_pct = 0.05, s.param_delta_lo = 0.45, s.param_delta_hi = 0.55,
+      s.param_dte_lo = 7, s.param_dte_hi = 30;
+MATCH (s:Strategy {name: 'Strap'}), (r:Regime {name: 'HighVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight:0.6}]->(r);
+MATCH (s:Strategy {name: 'Strap'}), (r:Regime {name: 'Trending'}) MERGE (s)-[:ACTIVATED_BY {weight:0.55}]->(r);
+MATCH (s:Strategy {name: 'Strap'}), (c:Concept {name: 'European Call Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Strap'}), (c:Concept {name: 'European Put Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+
+MERGE (s:Strategy {name: 'Short Strangle'})
+  SET s.signal_method = 'short_strangle', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Hull 11.4: sell OTM call + sell OTM put; range-bound income, widest break-evens - top vertical combination.',
+      s.param_budget_pct = 0.06, s.param_delta_lo = 0.15, s.param_delta_hi = 0.25,
+      s.param_dte_lo = 21, s.param_dte_hi = 45;
+MATCH (s:Strategy {name: 'Short Strangle'}), (r:Regime {name: 'LowVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight:0.8}]->(r);
+MATCH (s:Strategy {name: 'Short Strangle'}), (r:Regime {name: 'Neutral'}) MERGE (s)-[:ACTIVATED_BY {weight:0.6}]->(r);
+MATCH (s:Strategy {name: 'Short Strangle'}), (c:Concept {name: 'Vega Risk'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Short Strangle'}), (c:Concept {name: 'Time Decay (Theta)'}) MERGE (s)-[:DERIVED_FROM]->(c);
+
+MERGE (s:Strategy {name: 'Bear Call Credit Spread'})
+  SET s.signal_method = 'call_credit_spread', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'active', s.description = 'Hull 11.1/11.2: sell lower-strike call, buy higher-strike call; bearish credit spread (defined risk).',
+      s.param_budget_pct = 0.08, s.param_delta_lo = 0.2, s.param_delta_hi = 0.3,
+      s.param_dte_lo = 21, s.param_dte_hi = 60;
+MATCH (s:Strategy {name: 'Bear Call Credit Spread'}), (r:Regime {name: 'MeanReverting'}) MERGE (s)-[:ACTIVATED_BY {weight:0.6}]->(r);
+MATCH (s:Strategy {name: 'Bear Call Credit Spread'}), (r:Regime {name: 'HighVolatility'}) MERGE (s)-[:ACTIVATED_BY {weight:0.55}]->(r);
+MATCH (s:Strategy {name: 'Bear Call Credit Spread'}), (c:Concept {name: 'European Call Option'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Bear Call Credit Spread'}), (c:Concept {name: 'Time Decay (Theta)'}) MERGE (s)-[:DERIVED_FROM]->(c);
+
+MERGE (s:Strategy {name: 'Box Spread'})
+  SET s.signal_method = 'box_spread', s.strategy_type = 'option', s.tradeable_venue = 'alpaca_options',
+      s.status = 'research_only', s.description = 'Hull 11.3 BS11.1: bull call + bear put at same strikes = theoretically risk-free on European, BUT American early-exercise makes it NOT risk-free - research only, never auto-traded.',
+      s.param_budget_pct = 0.0;
+MATCH (s:Strategy {name: 'Box Spread'}), (c:Concept {name: 'Early Assignment Risk'}) MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Covered Call Income'}), (c:Concept {name: 'Early Assignment Risk'}) MERGE (s)-[:DERIVED_FROM]->(c);
+
+// Contradictions: opposing vol/direction books
+MATCH (a:Strategy {name: 'Short Strangle'}), (b:Strategy {name: 'Long Straddle'}) MERGE (a)-[:CONTRADICTED_BY]->(b);
+MATCH (a:Strategy {name: 'Long Butterfly'}), (b:Strategy {name: 'Short Butterfly'}) MERGE (a)-[:CONTRADICTED_BY]->(b);
+MATCH (a:Strategy {name: 'Strip'}), (b:Strategy {name: 'Short Strangle'}) MERGE (a)-[:CONTRADICTED_BY]->(b);
+MATCH (a:Strategy {name: 'Strap'}), (b:Strategy {name: 'Short Strangle'}) MERGE (a)-[:CONTRADICTED_BY]->(b);
+MATCH (a:Strategy {name: 'Bear Call Credit Spread'}), (b:Strategy {name: 'Bull Call Debit Spread'}) MERGE (a)-[:CONTRADICTED_BY]->(b);

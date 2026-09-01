@@ -26,18 +26,21 @@ try:
     from agent.option_utils import parse_contract_symbol
     from agent.alpaca_client import alpaca
     from agent.options_market import options_provider
+    from agent.option_signal import compute_suggestions
     _ALPACA_AVAILABLE = True
 except ImportError:
     try:
         from option_utils import parse_contract_symbol
         from alpaca_client import alpaca
         from options_market import options_provider
+        from option_signal import compute_suggestions
         _ALPACA_AVAILABLE = True
     except ImportError:
         _ALPACA_AVAILABLE = False
         alpaca = None  # type: ignore[assignment]
         options_provider = None  # type: ignore[assignment]
         parse_contract_symbol = None  # type: ignore[assignment]
+        compute_suggestions = None  # type: ignore[assignment]
 
 router = APIRouter(prefix="/options", tags=["options"])
 
@@ -101,6 +104,85 @@ def get_snapshot(contract: str):
     if not snap:
         raise HTTPException(status_code=404, detail=f"No snapshot for {contract.upper()}")
     return {"contract": contract.upper(), **snap}
+
+
+@router.get("/suggestions")
+def get_suggestions(underlying: str, expiration: str | None = None,
+                    contract_type: str | None = None, regime: str | None = None,
+                    lens: str = "average", nav: float | None = None):
+    """
+    Agent-generated, KG-grounded strategy suggestions for the selected chain.
+
+    `lens` selects the ranking lens: "average" (lambda=2.25, max-loss cap 10% NAV)
+    or "defensive" (lambda=3.5, max-loss cap 5% NAV) — a loss-averse ranking that
+    never surfaces a trade that breaches your loss budget. `nav` is account equity
+    (defaults to INITIAL_CAPITAL_USD). Suggestions are ranked by the loss-aversion
+    score and every card cites its graph trail (DERIVED_FROM concepts).
+    """
+    _require_alpaca()
+    try:
+        out = compute_suggestions(underlying, expiration, contract_type, regime=regime,
+                                  lens=lens, nav=nav)
+    except Exception as e:
+        logger.warning(f"suggestions failed for {underlying}: {e}")
+        raise HTTPException(status_code=502, detail=f"suggestions failed: {e}")
+    return out
+
+
+# ── Dynamic delta hedging (Taleb posture, human-in-the-loop) ────────────────
+
+@router.get("/hedge/state")
+def get_hedge_state(underlying: str = "SPY"):
+    """Portfolio greeks + recommended dynamic delta hedge (read-only)."""
+    _require_alpaca()
+    try:
+        from agent.hedge_agent import hedge_agent
+        return {"hedge_state": hedge_agent.hedge_state(underlying)}
+    except Exception as e:
+        logger.warning(f"hedge state failed: {e}")
+        raise HTTPException(status_code=502, detail=f"hedge state failed: {e}")
+
+
+@router.post("/hedge/rebalance")
+def post_hedge_rebalance(underlying: str = "SPY", confirm: bool = False):
+    """
+    Dry-run (default) or execute the dynamic delta hedge on the paper account.
+
+    confirm=false -> proposal only. confirm=true -> places the underlying
+    equity order on Alpaca paper and records the audit row. Never touches the
+    account without an explicit confirm (T10 human-in-the-loop).
+    """
+    _require_alpaca()
+    try:
+        from agent.hedge_agent import hedge_agent
+        result = hedge_agent.execute(underlying, confirm=bool(confirm))
+        if result.get("status") == "executed":
+            try:
+                order = result.get("order") or {}
+                with _conn() as conn, conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO order_audit
+                          (order_id, strategy, ticker, venue_symbol, venue, direction,
+                           quantity, fill_price, fee_usd, mode, signal_score, raw_response, created_at)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        """,
+                        (
+                            str(order.get("order_id")), "DynamicDeltaHedge",
+                            order.get("symbol"), order.get("symbol"), "alpaca",
+                            order.get("side"), float(order.get("qty") or 0),
+                            float(order.get("filled_avg_price") or 0), 0.0,
+                            os.getenv("TRADING_MODE", "paper"), 0.0,
+                            psycopg2.extras.Json(order), datetime.utcnow(),
+                        ),
+                    )
+                    conn.commit()
+            except Exception as e:
+                logger.error(f"hedge audit insert failed: {e}")
+        return result
+    except Exception as e:
+        logger.warning(f"hedge rebalance failed: {e}")
+        raise HTTPException(status_code=502, detail=f"hedge rebalance failed: {e}")
 @router.post("/place")
 async def place_option_order(req: "PlaceOptionOrderRequest"):
     """Place a manual option order on the Alpaca paper account and record an audit row."""
