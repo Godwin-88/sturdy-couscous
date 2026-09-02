@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { X, Brain, Send, Loader2, BookOpen, FileText, ChevronDown, Trash2 } from "lucide-react";
 import { chatApi, type ChatMessage, type ChatContext } from "@/lib/api";
 import Markdown from "@/components/Markdown";
+import { getScreenContext, screenContextLabel } from "@/lib/screenContext";
 
 /**
  * Financial Engineer chat — a right slide-over available on every screen.
@@ -22,7 +23,8 @@ export default function ScreenChat({ screen }: { screen: string }) {
 
   const loadContext = useCallback(async (screenId: string) => {
     try {
-      const ctx = await chatApi.context(screenId);
+      const pg = getScreenContext(screenId) ?? {};
+      const ctx = await chatApi.context(screenId, pg);
       setContext(ctx);
       return ctx;
     } catch (e) {
@@ -41,7 +43,8 @@ export default function ScreenChat({ screen }: { screen: string }) {
       if (cancelled) return;
       if (ctx) {
         try {
-          const resp = await chatApi.ask(screen, "", []);
+          const pg = getScreenContext(screen) ?? {};
+          const resp = await chatApi.ask(screen, "", [], pg);
           if (!cancelled) {
             setMessages([
               { role: "user", content: `(auto) Break down the ${screen} screen as a financial engineer` },
@@ -70,7 +73,8 @@ export default function ScreenChat({ screen }: { screen: string }) {
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
     setMessages((prev) => [...prev, { role: "user", content: q }]);
     try {
-      const resp = await chatApi.ask(screen, q, history);
+      const pg = getScreenContext(screen) ?? {};
+      const resp = await chatApi.ask(screen, q, history, pg);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: resp.answer, sources: resp.sources, suggestions: resp.suggestions },
@@ -112,6 +116,11 @@ export default function ScreenChat({ screen }: { screen: string }) {
             <div className="flex-1 min-w-0">
               <div className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Financial Engineer</div>
               <div className="text-[10px] font-mono text-slate-500">screen: {screen}</div>
+              {screenContextLabel(getScreenContext(screen)) && (
+                <div className="text-[10px] font-mono text-indigo-300 truncate mt-0.5">
+                  Analyzing: {screenContextLabel(getScreenContext(screen))}
+                </div>
+              )}
             </div>
             <button onClick={clearHistory} title="Clear history" className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200">
               <Trash2 size={13} />

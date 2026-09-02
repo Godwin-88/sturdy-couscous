@@ -437,11 +437,21 @@ export interface ChatContext {
 }
 
 export const chatApi = {
-  context: (screen: string) => apiFetch<ChatContext>(`/chat/context/${screen}`),
-  ask: (screen: string, question: string, history: { role: string; content: string }[]) =>
+  context: (screen: string, pageContext?: Record<string, unknown>) => {
+    const p = new URLSearchParams();
+    const ctx = pageContext ?? {};
+    if (ctx.underlying) p.set("underlying", String(ctx.underlying));
+    if (ctx.expiration) p.set("expiration", String(ctx.expiration));
+    if (ctx.contract_type) p.set("contract_type", String(ctx.contract_type));
+    if (ctx.contract_symbol) p.set("contract_symbol", String(ctx.contract_symbol));
+    if (ctx.strike != null) p.set("strike", String(ctx.strike));
+    const qs = p.toString();
+    return apiFetch<ChatContext>(`/chat/context/${screen}${qs ? `?${qs}` : ""}`);
+  },
+  ask: (screen: string, question: string, history: { role: string; content: string }[], pageContext?: Record<string, unknown>) =>
     apiFetch<ChatAnswer>("/chat/ask", {
       method: "POST",
-      body: JSON.stringify({ screen, question, history }),
+      body: JSON.stringify({ screen, question, history, page_context: pageContext ?? {} }),
     }),
   history: (screen: string) => apiFetch<ChatMessage[]>(`/chat/history/${screen}`),
   clearHistory: (screen: string) =>

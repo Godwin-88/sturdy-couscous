@@ -4,6 +4,7 @@ import { optionsApi, OptionContractRow, OptionSuggestion, OptionLeg, AlpacaAsset
 import Greeks3DVisualization from "@/components/Greeks3DVisualization";
 import OptionDiagrams from "@/components/OptionDiagrams";
 import { fmt$, fmtN } from "@/lib/utils";
+import { setScreenContext } from "@/lib/screenContext";
 import clsx from "clsx";
 
 const MOODS = ["call", "put"] as const;
@@ -74,6 +75,27 @@ export default function OptionsPanel() {
   const [hedgeState, setHedgeState] = useState<HedgeState | null>(null);
   const [loadingHedge, setLoadingHedge] = useState(false);
   const [hedgeMsg, setHedgeMsg] = useState<string | null>(null);
+
+  const [modalOpen, setModalOpen] = useState(false);
+
+  // Publish live page-session context so the Financial Engineer chat anchors
+  // on the same underlying/strike the user is actually viewing (e.g. MCHP).
+  useEffect(() => {
+    setScreenContext("options", {
+      screen: "options",
+      underlying,
+      expiration: expiration || undefined,
+      contract_type: mood,
+      contract_symbol: selected?.symbol ?? undefined,
+      strike: selected?.strike_price ?? undefined,
+      lens,
+      extra: {
+        spot_estimate: sugMeta?.spot_estimate ?? undefined,
+        dte: sugMeta?.dte ?? undefined,
+        chain_size: rows.length,
+      },
+    });
+  }, [underlying, expiration, mood, selected, lens, sugMeta, rows.length]);
 
   // Auto-poll suggestions when a row is selected
   useEffect(() => {
@@ -208,6 +230,14 @@ export default function OptionsPanel() {
     setSelected(legToRow(leg, expiration, underlying));
     setPlaced(null);
     setPlaceErr(null);
+    setModalOpen(true);
+  }
+
+  function openTradeModal(row: OptionContractRow) {
+    setSelected(row);
+    setPlaced(null);
+    setPlaceErr(null);
+    setModalOpen(true);
   }
 
   async function submitOrder() {
@@ -316,19 +346,25 @@ export default function OptionsPanel() {
           ) : rows.length === 0 ? (
             <div className="text-xs text-slate-500 py-4 text-center font-mono">No contracts for this selection</div>
           ) : (
-            <div className="max-h-[46vh] overflow-y-auto border border-slate-700 rounded">
-              <table className="w-full text-xs font-mono">
-                <thead className="sticky top-0 bg-slate-950">
+            <div className="max-h-[46vh] overflow-auto overscroll-x-contain border border-slate-700 rounded">
+              <table className="w-full min-w-[1180px] text-xs font-mono">
+                <thead className="sticky top-0 bg-slate-950 z-10">
                   <tr className="text-slate-500 border-b border-slate-700">
                     <th className="text-left py-1.5 px-2">Strike</th>
+                    <th className="text-right px-2">Contract</th>
+                    <th className="text-right px-2">Last</th>
+                    <th className="text-right px-2">Volume</th>
+                    <th className="text-right px-2">Open Int</th>
                     <th className="text-right px-2">Bid</th>
                     <th className="text-right px-2">Ask</th>
                     <th className="text-right px-2">Mid</th>
                     <th className="text-right px-2">Spread%</th>
                     <th className="text-right px-2">IV</th>
                     <th className="text-right px-2">Delta</th>
+                    <th className="text-right px-2">Gamma</th>
                     <th className="text-right px-2">Theta</th>
-                    <th className="text-right px-2">OI</th>
+                    <th className="text-right px-2">Vega</th>
+                    <th className="text-right px-2 w-20">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -338,18 +374,30 @@ export default function OptionsPanel() {
                     return (
                       <tr key={r.symbol}
                         onClick={() => { setSelected(r); loadSuggestions(); }}
-                        className={clsx("border-b border-slate-800 cursor-pointer hover:bg-slate-800/60",
+                        className={clsx("border-b border-slate-800 cursor-pointer hover:bg-slate-800/60 group",
                           selected?.symbol === r.symbol ? "bg-indigo-600/10 ring-1 ring-inset ring-indigo-500/40" : "",
                           isAtm && selected?.symbol !== r.symbol ? "bg-slate-800/30" : "")}>
-                        <td className="py-1.5 px-2 text-slate-200 font-bold">{fmtN(r.strike_price)}</td>
+                        <td className="py-1.5 px-2 text-slate-200 font-bold sticky left-0 bg-slate-950 group-hover:bg-slate-800 z-[5]">{fmtN(r.strike_price)}</td>
+                        <td className="py-1 px-2 text-right text-slate-400 whitespace-nowrap">{r.symbol}</td>
+                        <td className="py-1 text-right text-slate-300">{r.last != null ? fmt$(r.last) : "-"}</td>
+                        <td className="py-1 text-right text-slate-400">{r.volume != null ? fmtN(r.volume) : "-"}</td>
+                        <td className="py-1 text-right text-slate-400">{r.open_interest != null ? fmtN(r.open_interest) : "-"}</td>
                         <td className="py-1 text-right text-emerald-400">{r.bid != null ? fmt$(r.bid) : "-"}</td>
                         <td className="py-1 text-right text-red-400">{r.ask != null ? fmt$(r.ask) : "-"}</td>
                         <td className="py-1 text-right text-slate-300">{mid ? fmt$(mid) : "-"}</td>
                         <td className="py-1 text-right text-slate-400">{r.spread_pct != null ? `${(r.spread_pct * 100).toFixed(1)}%` : "-"}</td>
                         <td className="py-1 text-right text-slate-300">{r.implied_volatility != null ? `${(r.implied_volatility * 100).toFixed(0)}%` : "-"}</td>
-                        <td className="py-1 text-right text-slate-300">{r.greeks?.delta != null ? r.greeks.delta.toFixed(2) : "-"}</td>
+                        <td className="py-1 text-right text-slate-300">{r.greeks?.delta != null ? r.greeks.delta.toFixed(3) : "-"}</td>
+                        <td className="py-1 text-right text-slate-400">{r.greeks?.gamma != null ? r.greeks.gamma.toFixed(4) : "-"}</td>
                         <td className="py-1 text-right text-slate-300">{r.greeks?.theta != null ? fmt$(r.greeks.theta) : "-"}</td>
-                        <td className="py-1 text-right text-slate-400">{r.open_interest != null ? fmtN(r.open_interest) : "-"}</td>
+                        <td className="py-1 text-right text-slate-400">{r.greeks?.vega != null ? r.greeks.vega.toFixed(2) : "-"}</td>
+                        <td className="py-1 px-2 text-right">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openTradeModal(r); }}
+                            className="px-2 py-0.5 rounded bg-emerald-600/30 border border-emerald-500/40 text-[10px] font-bold text-emerald-300 hover:bg-emerald-600/50 transition-colors whitespace-nowrap">
+                            Trade
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -510,6 +558,176 @@ export default function OptionsPanel() {
             placeErr={placeErr}
             onSubmit={submitOrder}
           />
+        </div>
+      </div>
+
+      {/* Order Confirmation Modal — completes the paper-trading user story */}
+      {modalOpen && selected && (
+        <OrderModal
+          selected={selected}
+          underlying={underlying}
+          side={side}
+          setSide={setSide}
+          intent={intent}
+          setIntent={setIntent}
+          qty={qty}
+          setQty={setQty}
+          orderType={orderType}
+          setOrderType={setOrderType}
+          limitPrice={limitPrice}
+          setLimitPrice={setLimitPrice}
+          placing={placing}
+          placed={placed}
+          placeErr={placeErr}
+          matching={suggestions.find(s => s.legs.some(l => l.symbol === selected.symbol)) ?? null}
+          onClose={() => setModalOpen(false)}
+          onSubmit={submitOrder}
+        />
+      )}
+    </div>
+  );
+}
+
+function OrderModal({
+  selected, underlying, side, setSide, intent, setIntent, qty, setQty,
+  orderType, setOrderType, limitPrice, setLimitPrice, placing, placed, placeErr,
+  matching, onClose, onSubmit,
+}: {
+  selected: OptionContractRow;
+  underlying: string;
+  side: "buy" | "sell";
+  setSide: (s: "buy" | "sell") => void;
+  intent: "buy_to_open" | "sell_to_open" | "buy_to_close" | "sell_to_close";
+  setIntent: (i: "buy_to_open" | "sell_to_open" | "buy_to_close" | "sell_to_close") => void;
+  qty: number;
+  setQty: (q: number) => void;
+  orderType: "market" | "limit";
+  setOrderType: (t: "market" | "limit") => void;
+  limitPrice: string;
+  setLimitPrice: (p: string) => void;
+  placing: boolean;
+  placed: { order_id: string; status: string; contract: string; fill: number | null; mode: string } | null;
+  placeErr: string | null;
+  matching: OptionSuggestion | null;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  const mid = ((selected.bid ?? 0) + (selected.ask ?? 0)) / 2;
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl border border-slate-600 bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700 bg-slate-950">
+          <ArrowRightLeft size={15} className="text-emerald-400" />
+          <span className="text-sm font-semibold text-slate-100">Confirm Option Trade</span>
+          <button onClick={onClose} className="ml-auto p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200">
+            <XCircle size={16} />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {/* Contract summary */}
+          <div className="text-xs font-mono text-slate-200 bg-slate-950 border border-slate-700 rounded px-3 py-2">
+            <div className="text-slate-100 font-bold">{selected.symbol}</div>
+            <div className="text-slate-500">
+              {selected.contract_type.toUpperCase()} x{selected.multiplier} · {selected.expiration_date} · Strike {fmtN(selected.strike_price)} · {underlying}
+            </div>
+          </div>
+
+          {/* Live risk summary */}
+          <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+            <div className="rounded bg-slate-950 border border-slate-700 px-2 py-1.5 text-slate-300">
+              Mid <b className="text-slate-100">{mid ? fmt$(mid) : "-"}</b>
+            </div>
+            <div className="rounded bg-slate-950 border border-slate-700 px-2 py-1.5 text-slate-300">
+              Spread% <b className={clsx((selected.spread_pct ?? 0) > 0.05 ? "text-red-400" : "text-slate-100")}>{selected.spread_pct != null ? `${(selected.spread_pct * 100).toFixed(1)}%` : "-"}</b>
+            </div>
+            <div className="rounded bg-slate-950 border border-slate-700 px-2 py-1.5 text-slate-300">
+              Δ <b className="text-slate-100">{selected.greeks?.delta != null ? selected.greeks.delta.toFixed(3) : "-"}</b> · Γ <b className="text-slate-100">{selected.greeks?.gamma != null ? selected.greeks.gamma.toFixed(4) : "-"}</b>
+            </div>
+            <div className="rounded bg-slate-950 border border-slate-700 px-2 py-1.5 text-slate-300">
+              IV <b className="text-slate-100">{selected.implied_volatility != null ? `${(selected.implied_volatility * 100).toFixed(0)}%` : "-"}</b> · OI <b className="text-slate-100">{selected.open_interest != null ? fmtN(selected.open_interest) : "-"}</b>
+            </div>
+          </div>
+
+          {/* Matching suggestion risk (if any) */}
+          {matching && (
+            <div className="rounded border border-violet-800/50 bg-violet-950/10 px-3 py-2 text-[11px] font-mono text-slate-300 space-y-0.5">
+              <div className="text-violet-300 uppercase tracking-widest text-[10px]">Strategy: {matching.strategy}</div>
+              <div>maxP <b className="text-emerald-400">{fmt$(matching.max_profit_low)}</b> · maxL <b className="text-red-400">{fmt$(matching.max_loss)}</b> · RR <b className="text-slate-100">{matching.risk_reward_pct != null ? matching.risk_reward_pct.toFixed(2) : "-"}</b></div>
+              <div>premium <b className="text-slate-100">{fmt$(matching.est_premium)}</b> · budget <b className="text-slate-100">{matching.budget_pct.toFixed(1)}%</b>{matching.liquidity_ok ? <span className="text-emerald-400"> · liq ✓</span> : <span className="text-amber-400"> · liq low</span>}</div>
+            </div>
+          )}
+
+          {/* Order controls */}
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1">
+              <span className="text-[10px] text-slate-500 uppercase">Side</span>
+              <select value={side} onChange={e => setSide(e.target.value as "buy" | "sell")}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs font-mono text-slate-200">
+                <option value="buy">BUY</option>
+                <option value="sell">SELL</option>
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] text-slate-500 uppercase">Intent</span>
+              <select value={intent} onChange={e => setIntent(e.target.value as typeof intent)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs font-mono text-slate-200">
+                <option value="buy_to_open">BUY TO OPEN</option>
+                <option value="sell_to_open">SELL TO OPEN</option>
+                <option value="buy_to_close">BUY TO CLOSE</option>
+                <option value="sell_to_close">SELL TO CLOSE</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1">
+              <span className="text-[10px] text-slate-500 uppercase">Contracts</span>
+              <input type="number" min={1} value={qty} onChange={e => setQty(Math.max(1, Number(e.target.value) || 1))}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs font-mono text-slate-200" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] text-slate-500 uppercase">Type</span>
+              <select value={orderType} onChange={e => setOrderType(e.target.value as "market" | "limit")}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs font-mono text-slate-200">
+                <option value="market">MARKET</option>
+                <option value="limit">LIMIT</option>
+              </select>
+            </label>
+          </div>
+
+          {orderType === "limit" && (
+            <label className="space-y-1 block">
+              <span className="text-[10px] text-slate-500 uppercase">Limit Price (per contract)</span>
+              <input value={limitPrice} onChange={e => setLimitPrice(e.target.value)}
+                placeholder={mid.toFixed(2)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs font-mono text-slate-200 placeholder:text-slate-600" />
+            </label>
+          )}
+
+          {/* Status banner */}
+          {placed && (
+            <div className="flex items-center gap-1.5 text-xs font-mono text-emerald-400 bg-emerald-950/30 border border-emerald-800 rounded p-2">
+              <CheckCircle2 size={12} />
+              {placed.contract} {placed.status.toUpperCase()} {placed.fill != null ? fmt$(placed.fill) : ""} {placed.mode.toUpperCase()} id {placed.order_id}
+            </div>
+          )}
+          {placeErr && (
+            <div className="flex items-center gap-1.5 text-xs font-mono text-red-400 bg-red-950/30 border border-red-800 rounded p-2">
+              <XCircle size={12} /> {placeErr}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button onClick={onClose} disabled={placing}
+              className="flex-1 px-3 py-2 rounded bg-slate-800 border border-slate-600 text-xs font-bold text-slate-300 hover:bg-slate-700 disabled:opacity-50">
+              Cancel
+            </button>
+            <button onClick={onSubmit} disabled={placing}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded bg-emerald-600/30 border border-emerald-500/40 text-xs font-bold text-emerald-300 hover:bg-emerald-600/50 disabled:opacity-50">
+              {placing ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />} Execute on Alpaca Paper
+            </button>
+          </div>
         </div>
       </div>
     </div>

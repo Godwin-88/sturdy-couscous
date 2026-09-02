@@ -208,6 +208,23 @@ def graphrag_retrieve(query: str, top_n: int = 8, hops: int = 2) -> dict:
                 f"{len(uniq_sections)} sections, {len(formulas)} formulas, {len(strategies)} strategies")
     return {"concepts": concepts, "sections": uniq_sections,
             "formulas": formulas, "strategies": strategies, "sources": sources}
+def _fmt_page_context(page_ctx: dict) -> str:
+    """Compact, human-readable summary of what the user is viewing."""
+    if not page_ctx:
+        return "(none — generic screen analysis)"
+    lines = []
+    for key in ("underlying", "expiration", "contract_type", "contract_symbol", "strike", "lens"):
+        val = page_ctx.get(key)
+        if val is None:
+            continue
+        lines.append(f"- {key}: {val}")
+    extra = page_ctx.get("extra")
+    if isinstance(extra, dict):
+        for k, v in list(extra.items())[:6]:
+            lines.append(f"- {k}: {v}")
+    return "\n".join(lines) if lines else "(none)"
+
+
 def synthesize(context: dict, question: str = "") -> dict:
     """Call the LLM to produce a grounded financial-engineer answer.
 
@@ -218,6 +235,7 @@ def synthesize(context: dict, question: str = "") -> dict:
     screen_data = context.get("screen_data", {})
     retrieval = context.get("retrieval", {})
     history = context.get("history", [])[-6:]
+    page_context = context.get("page_context", {}) or {}
 
     # Build a compact, numeric screen snapshot
     def _fmt(v, default="-"):
@@ -255,6 +273,8 @@ def synthesize(context: dict, question: str = "") -> dict:
     )
     user_prompt = (
         f"SCREEN: {screen}\n\n"
+        f"## Page context (what the user is currently analyzing)\n"
+        f"{_fmt_page_context(page_context)}\n\n"
         f"## Live screen data\n{screen_snap}\n\n"
         f"## Grounded reference graph (books, concepts, formulas)\n{rag_snap}\n\n"
         f"## Conversation so far\n{hist_snap or '(none)'}\n\n"

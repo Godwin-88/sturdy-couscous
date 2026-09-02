@@ -54,20 +54,27 @@ def _conn():
     )
 
 
-def _live_screen_data(screen: str) -> dict:
+def _live_screen_data(screen: str, params: dict | None = None) -> dict:
     """Assemble a compact, numeric snapshot of whatever the screen shows.
 
     Best-effort; each call is guarded and degrades to empty rather than raising.
+    ``params`` carries page-session context (e.g. the currently-viewed option
+    underlying/expiry/type) so options data is anchored on what the user sees.
     """
     base_url = f"http://localhost:{os.getenv('API_PORT', '8000')}"
     out: dict = {}
+    params = params or {}
 
     def _get(path: str, key: str) -> None:
         try:
-            resp = httpx.get(f"{base_url}{path}", timeout=6.0)
+            resp = httpx.get(f"{base_url}{path}", timeout=25.0)
             if resp.status_code == 200:
                 out[key] = resp.json()
+            else:
+                out[key] = None
+                logger.debug(f"chat context {path}: http {resp.status_code}")
         except Exception as err:
+            out[key] = None
             logger.debug(f"chat context {path}: {err}")
 
     _get("/agent/status", "agent_status")
@@ -80,9 +87,19 @@ def _live_screen_data(screen: str) -> dict:
     if screen in ("options", "dashboard", "risk"):
         _get("/alpaca/account", "alpaca_account")
         _get("/alpaca/positions", "alpaca_positions")
-        _get("/options/hedge/state", "hedge_state")
+        # Per-underlying hedge state (matches the page's selected underlying).
+        hedge_underlying = (params.get("underlying") or "SPY").upper()
+        _get(f"/options/hedge/state?underlying={hedge_underlying}", "hedge_state")
+
         if screen == "options":
-            _get("/options/suggestions?underlying=SPY&contract_type=call", "options_suggestions")
+            # Anchor the suggestions on the page's actual underlying/expiry/type.
+            opt_underlying = (params.get("underlying") or "SPY").upper()
+            opt_exp = params.get("expiration") or ""
+            opt_type = params.get("contract_type") or "call"
+            sugg_path = f"/options/suggestions?underlying={opt_underlying}&contract_type={opt_type}"
+            if opt_exp:
+                sugg_path += f"&expiration={opt_exp}"
+            _get(sugg_path, "options_suggestions")
 
     if screen == "intelligence":
         _get("/agent/regime-forecast", "regime_forecast")
@@ -100,14 +117,22 @@ class AskRequest(BaseModel):
     screen: str = "dashboard"
     question: str = ""
     history: list[dict] = []
+    page_context: dict = {}
 
 
 @router.get("/context/{screen}")
-def chat_context(screen: str):
+def chat_context(screen: str, underlying: str | None = None,
+                 expiration: str | None = None, contract_type: str | None = None,
+                 contract_symbol: str | None = None, strike: float | None = None):
     """Return the full context bundle for a screen (live data + GraphRAG)."""
     screen = screen.lower().strip("/")
+    params = {k: v for k, v in {
+        "underlying": underlying, "expiration": expiration,
+        "contract_type": contract_type, "contract_symbol": contract_symbol,
+        "strike": strike,
+    }.items() if v is not None}
     hint = SCREEN_HINTS.get(screen, "trading strategy risk analysis")
-    cache_key = f"chat:context:{screen}"
+    cache_key = f"chat:context:{screen}:" + ",".join(f"{k}={v}" for k, v in sorted(params.items()))
 
     r = _redis()
     cached = r.get(cache_key)
@@ -121,7 +146,7 @@ def chat_context(screen: str):
         retrieval = {"concepts": [], "sections": [], "formulas": [],
                      "strategies": [], "sources": []}
 
-    live = _live_screen_data(screen)
+    live = _live_screen_data(screen, params)
 
     bundle = {
         "screen": screen,
@@ -139,8 +164,15 @@ def chat_context(screen: str):
 def chat_ask(req: AskRequest):
     """Ask the financial engineer a question grounded in the screen + books."""
     screen = req.screen.lower().strip("/")
+    page_ctx = req.page_context or {}
     hint = SCREEN_HINTS.get(screen, "trading strategy risk analysis")
-    query = f"{hint} {req.question}" if req.question else hint
+
+    # Anchor the retrieval + prompt on what the user is currently viewing.
+    anchor = " ".join(str(v) for v in [
+        page_ctx.get("underlying"), page_ctx.get("contract_type"),
+        page_ctx.get("contract_symbol"),
+    ] if v)
+    query = f"{hint} {anchor} {req.question}" if (req.question or anchor) else hint
 
     try:
         retrieval = graphrag_retrieve(query, top_n=8, hops=2)
@@ -149,8 +181,9 @@ def chat_ask(req: AskRequest):
         retrieval = {"concepts": [], "sections": [], "formulas": [],
                      "strategies": [], "sources": []}
 
-    live = _live_screen_data(screen)
-    context = {"screen": screen, "screen_data": live, "retrieval": retrieval, "history": req.history}
+    live = _live_screen_data(screen, page_ctx)
+    context = {"screen": screen, "screen_data": live, "retrieval": retrieval,
+               "history": req.history, "page_context": page_ctx}
     result = synthesize(context, question=req.question)
 
     # Persist conversation
