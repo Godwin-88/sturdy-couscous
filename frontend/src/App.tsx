@@ -85,8 +85,8 @@ export default function App() {
     }).then(() => alert("Evidence pinned!")).catch(() => alert("Failed to pin evidence"));
   };
 
-  const handleOpNav = (tab: Tab) => {
-    setOpTab(tab);
+  const handleOpNav = (tab: string) => {
+    setOpTab(tab as Tab);
     navigate("/");
   };
 
@@ -170,7 +170,8 @@ export default function App() {
           <Route path="/analytics" element={<AnalyticsRoute />} />
           <Route path="/hypothesis" element={<HypothesisRoute />} />
           <Route path="/hypothesis/new" element={<NewHypothesisRoute />} />
-          <Route path="/" element={<OperationsShell opTab={opTab} />} />
+          <Route path="/signals" element={<OperationsShell opTab="signals" onNavigate={handleOpNav} />} />
+          <Route path="/" element={<OperationsShell opTab={opTab} onNavigate={handleOpNav} />} />
         </Routes>
       </main>
 
@@ -180,10 +181,10 @@ export default function App() {
   );
 }
 
-function OperationsShell({ opTab }: { opTab: string }) {
+function OperationsShell({ opTab, onNavigate }: { opTab: string; onNavigate?: (tab: string) => void }) {
   return (
     <>
-      {opTab === "dashboard" && <DashboardTab />}
+      {opTab === "dashboard" && <DashboardTab onNavigate={onNavigate} />}
       {opTab === "graph"     && <GraphTab />}
       {opTab === "signals"   && <SignalsTab />}
       {opTab === "options"   && <OptionsTab />}
@@ -218,7 +219,7 @@ function NewHypothesisRoute() {
   );
 }
 
-function DashboardTab() {
+function DashboardTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   return (
     <div className="h-full grid grid-cols-[340px_1fr] gap-3 p-3 overflow-hidden">
       <div className="flex flex-col gap-3 overflow-y-auto min-h-0">
@@ -227,7 +228,7 @@ function DashboardTab() {
         <div className="flex-1 min-h-[240px]"><AgentLog /></div>
       </div>
       <div className="flex flex-col gap-3 overflow-y-auto min-h-0">
-        <div className="shrink-0"><AlpacaPanel /></div>
+        <div className="shrink-0"><AlpacaPanel onNavigate={onNavigate} /></div>
         <div className="shrink-0"><OptionPnlPanel /></div>
         <div className="shrink-0"><PnLDashboard /></div>
         <div className="flex-1 min-h-[200px]"><DashboardGraph /></div>

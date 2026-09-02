@@ -212,6 +212,8 @@ async def place_option_order(req: "PlaceOptionOrderRequest"):
         position_intent=req.position_intent,
         order_type=req.order_type,
         limit_price=req.limit_price,
+        order_class=req.order_class,
+        legs=req.legs or None,
     )
     if result.status == "error":
         raise HTTPException(status_code=502, detail=str(result.raw.get("error", "option order failed")))
@@ -221,6 +223,8 @@ async def place_option_order(req: "PlaceOptionOrderRequest"):
     raw = {
         "contract_symbol": symbol,
         "underlying_symbol": root,
+        "legs": req.legs or [{"symbol": symbol, "side": req.side,
+                              "position_intent": req.position_intent, "qty": req.qty}],
         "expiration_date": str(expiry),
         "contract_type": "call" if right == "C" else "put",
         "strike_price": strike,
@@ -273,3 +277,6 @@ class PlaceOptionOrderRequest(BaseModel):
     order_type: str = "market"              # market or limit
     limit_price: float | None = None
     label: str = "manual"                   # or an agent strategy name
+    order_class: str = "simple"             # simple | vertical | mleg
+    legs: list[dict] | None = None          # multi-leg spread legs:
+                                            #   [{"symbol", "side", "qty", "position_intent"}]

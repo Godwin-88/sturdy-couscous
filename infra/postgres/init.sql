@@ -218,12 +218,15 @@ CREATE TABLE IF NOT EXISTS backtest_templates (
 -- Durable signal archive for export
 CREATE TABLE IF NOT EXISTS signal_archive (
     id                       SERIAL PRIMARY KEY,
-    signal_id                UUID NOT NULL,
+    signal_id                UUID NOT NULL UNIQUE,
     cycle_id                 UUID,
     timestamp                TIMESTAMPTZ,
     strategy                 TEXT,
     ticker                   TEXT,
     venue                    TEXT,
+    venue_symbol             TEXT,
+    asset_class              TEXT,
+    regime                   TEXT,
     direction                TEXT,
     score                    FLOAT,
     quant_score              FLOAT,
@@ -232,8 +235,10 @@ CREATE TABLE IF NOT EXISTS signal_archive (
     macro_overlay            FLOAT,
     kg_formula_contribution  FLOAT,
     contradiction_blocked    BOOLEAN,
+    graph_path               JSONB,
     kelly_fraction           FLOAT,
     var_contribution_pct     FLOAT,
+    order_id                 UUID,
     fill_price               FLOAT,
     fill_timestamp           TIMESTAMPTZ,
     slippage_bps             FLOAT,
@@ -243,6 +248,7 @@ CREATE TABLE IF NOT EXISTS signal_archive (
 CREATE INDEX IF NOT EXISTS idx_signal_archive_ticker ON signal_archive(ticker);
 CREATE INDEX IF NOT EXISTS idx_signal_archive_strategy ON signal_archive(strategy);
 CREATE INDEX IF NOT EXISTS idx_signal_archive_timestamp ON signal_archive(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_signal_archive_order ON signal_archive(order_id);
 
 -- KG version snapshots
 CREATE TABLE IF NOT EXISTS kg_versions (

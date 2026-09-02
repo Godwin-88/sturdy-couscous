@@ -461,12 +461,13 @@ class Orchestrator:
 
     async def _cache_signals(self, signals: list):
         r = aioredis.from_url(self._redis_url())
-        await r.set("graphalpha:latest_signals", json.dumps(signals), ex=600)
+        await r.set("graphalpha:latest_signals", json.dumps(signals, default=str), ex=600)
         await r.publish("graphalpha:events", json.dumps({
             "event":     "signals_updated",
             "count":     len(signals),
             "timestamp": datetime.utcnow().isoformat(),
-        }))
+            "signals":   signals,
+        }, default=str))
         await r.aclose()
 
     async def _cache_news(self, news_result: dict):
@@ -533,14 +534,16 @@ class Orchestrator:
             with psycopg2.connect(conn_str) as conn:
                 with conn.cursor() as cur:
                     for sig in signals:
+                        gpath = sig.get("graph_path") or []
                         cur.execute("""
                             INSERT INTO signal_archive
                                 (signal_id, cycle_id, timestamp, strategy, ticker, venue,
-                                 direction, score, quant_score, sentiment_score, news_overlay,
-                                 macro_overlay, kg_formula_contribution, contradiction_blocked,
+                                 venue_symbol, asset_class, regime, direction, score,
+                                 quant_score, sentiment_score, news_overlay, macro_overlay,
+                                 kg_formula_contribution, contradiction_blocked, graph_path,
                                  kelly_fraction, var_contribution_pct)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            ON CONFLICT DO NOTHING
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (signal_id) DO NOTHING
                         """, (
                             sig.get("signal_id", str(uuid.uuid4())),
                             cycle_id,
@@ -548,6 +551,9 @@ class Orchestrator:
                             sig.get("strategy", ""),
                             sig.get("ticker", ""),
                             sig.get("venue", ""),
+                            sig.get("venue_symbol", ""),
+                            sig.get("asset_class", ""),
+                            sig.get("regime", ""),
                             sig.get("direction", ""),
                             float(sig.get("score", 0.0)),
                             float(sig.get("quant_score", 0.0)),
@@ -556,6 +562,7 @@ class Orchestrator:
                             float(sig.get("macro_overlay", 0.0)),
                             float(sig.get("kg_formula_contribution", 0.0)),
                             bool(sig.get("contradiction_blocked", False)),
+                            psycopg2.extras.Json(gpath) if gpath else None,
                             float(sig.get("kelly_fraction", 0.0)) if sig.get("kelly_fraction") else None,
                             float(sig.get("var_contribution_pct", 0.0)) if sig.get("var_contribution_pct") else None,
                         ))

@@ -11,7 +11,7 @@ type AlpacaState =
   | { kind: "unconfigured" }
   | { kind: "paper"; account: AlpacaAccount; positions: AlpacaPosition[] };
 
-export default function AlpacaPanel() {
+export default function AlpacaPanel({ onNavigate }: { onNavigate?: (tab: string) => void } = {}) {
   const navigate = useNavigate();
   const { data: account, error: acctErr, loading: acctLoading, refresh: refreshAccount } = usePolling<AlpacaAccount>(
     () => alpacaApi.account(),
@@ -26,7 +26,10 @@ export default function AlpacaPanel() {
     ? { kind: "unconfigured" }
     : { kind: "paper", account, positions: positions ?? [] };
 
-  const goPlaceOrder = () => navigate("/signals");
+  const goPlaceOrder = () => {
+    if (onNavigate) { onNavigate("signals"); return; }
+    navigate("/signals");
+  };
 
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden transition-all duration-200 hover:border-slate-500 hover:shadow-lg hover:shadow-indigo-500/10 hover:-translate-y-0.5 cursor-pointer">

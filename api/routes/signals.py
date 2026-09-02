@@ -25,6 +25,7 @@ class PlaceOrderRequest(BaseModel):
     order_type: str = "market"  # "market" or "limit"
     limit_price: float | None = None
     venue: str = "alpaca"
+    signal_id: str | None = None  # optional link back to a suggested signal
 
 
 @router.get("")
@@ -41,6 +42,34 @@ def get_signals(limit: int = 50):
                     "fill_price","mode","signal_score","created_at"]
             rows = cur.fetchall()
     return [dict(zip(cols, r)) for r in rows]
+
+
+@router.get("/suggested")
+def get_suggested_signals(limit: int = 100, ticker: str | None = None):
+    """All signals suggested by the agent, durably stored in signal_archive.
+
+    `signal_id` is the schema-v1 signal UUID from the live agent cycle, and
+    `order_id` is populated once the signal has been used to place an order
+    (so the UI can link a suggestion to its execution).
+    """
+    sql = """
+        SELECT signal_id, cycle_id, timestamp, strategy, ticker, venue,
+               venue_symbol, asset_class, regime, direction, score,
+               quant_score, sentiment_score, news_overlay, macro_overlay,
+               kg_formula_contribution, contradiction_blocked, graph_path,
+               kelly_fraction, var_contribution_pct, order_id,
+               fill_price, fill_timestamp, slippage_bps, created_at
+        FROM signal_archive
+        WHERE (%(ticker)s IS NULL OR ticker = %(ticker)s)
+        ORDER BY timestamp DESC NULLS LAST
+        LIMIT %(limit)s
+    """
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"limit": limit, "ticker": ticker})
+            cols = [d[0] for d in cur.description]
+            rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    return rows
 
 
 @router.get("/live")
@@ -128,6 +157,13 @@ def place_order(req: PlaceOrderRequest):
                 req.quantity, round(fill_price, 4), round(fee_usd, 4),
                 mode, signal_score, venue, now,
             ))
+            # Link this order back to the suggested signal (if it came from one)
+            if req.signal_id:
+                cur.execute("""
+                    UPDATE signal_archive
+                    SET order_id = %s, fill_price = %s, fill_timestamp = %s
+                    WHERE signal_id = %s
+                """, (order_id, round(fill_price, 4), now, req.signal_id))
             conn.commit()
 
     return {
@@ -140,5 +176,6 @@ def place_order(req: PlaceOrderRequest):
         "quantity": req.quantity,
         "fill_price": round(fill_price, 4),
         "fee_usd": round(fee_usd, 4),
+        "signal_id": req.signal_id,
         "created_at": now.isoformat(),
     }

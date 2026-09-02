@@ -8,6 +8,32 @@ interface AgentEvent {
   event?:     string;
   timestamp?: string;
   count?:     number;
+  // Structured live agent signal (schema v1 published to graphalpha:events)
+  ticker?:          string;
+  strategy?:        string;
+  direction?:       string;
+  score?:           number;
+  regime?:          string;
+  asset_class?:     string;
+  venue?:           string;
+  venue_symbol?:    string;
+  graph_path?:      unknown[];
+  contradiction_blocked?: boolean;
+  signals?:         AgentSignal[];
+  [key: string]: unknown;
+}
+
+interface AgentSignal {
+  ticker?:          string;
+  strategy?:        string;
+  direction?:       string;
+  score?:           number;
+  regime?:          string;
+  asset_class?:     string;
+  venue?:           string;
+  venue_symbol?:    string;
+  graph_path?:      unknown[];
+  contradiction_blocked?: boolean;
   [key: string]: unknown;
 }
 
@@ -161,7 +187,7 @@ function EventRow({ msg, type }: { msg: AgentEvent; type: FilterType }) {
     )}>
       <span className="text-slate-500 shrink-0 pt-0.5">{time}</span>
       {icon}
-      <span className={clsx("break-all", textClass)}>
+      <span className={clsx("break-all whitespace-pre-line", textClass)}>
         {text ?? formatEvent(msg)}
       </span>
     </div>
@@ -169,8 +195,28 @@ function EventRow({ msg, type }: { msg: AgentEvent; type: FilterType }) {
 }
 
 function formatEvent(msg: AgentEvent): string {
-  if (msg.event === "signals_updated") return `${msg.count ?? "?"} signals generated`;
+  if (msg.event === "signals_updated") {
+    if (Array.isArray(msg.signals) && msg.signals.length > 0) {
+      const lines = msg.signals.map((s, i) => `${i + 1}. ${formatSignalText(s)}`);
+      return `${msg.count ?? msg.signals.length} signals generated:\n${lines.join("\n")}`;
+    }
+    return `${msg.count ?? "?"} signals generated`;
+  }
   if (msg.event === "regime_change")   return `Regime → ${msg.regime ?? "unknown"}`;
   if (msg.event === "order_filled")    return `Order filled: ${msg.ticker ?? ""} ${msg.direction ?? ""} ${msg.quantity ?? ""}`;
+  // Raw structured agent signal (schema v1) — render as real text.
+  if (msg.ticker && msg.strategy) return formatSignalText(msg);
   try { return JSON.stringify(msg); } catch { return String(msg); }
+}
+
+function formatSignalText(s: AgentSignal): string {
+  const dir = (s.direction ?? "").toUpperCase() || "?";
+  const ticker = s.ticker ?? s.venue_symbol ?? "?";
+  const score = s.score != null ? ` ${s.score >= 0 ? "+" : ""}${s.score.toFixed(3)}` : " score?";
+  const regime = s.regime ? ` · ${s.regime}` : "";
+  const venue = s.venue ? ` · ${s.venue}${s.asset_class ? `/${s.asset_class}` : ""}` : "";
+  const blocked = s.contradiction_blocked ? " · BLOCKED" : "";
+  const gpath = Array.isArray(s.graph_path) && s.graph_path.length > 0
+    ? ` · path:${s.graph_path.join("→")}` : "";
+  return `${dir} ${ticker} · ${s.strategy ?? "strategy?"} · score${score}${regime}${venue}${blocked}${gpath}`;
 }

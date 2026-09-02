@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { agentApi, researchApi, signalsApi, Signal, SignalLineage, RejectedSignals, ExecutionFill } from "@/lib/api";
+import { agentApi, researchApi, signalsApi, Signal, SignalLineage, RejectedSignals, ExecutionFill, SuggestedSignal } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
 import { fmt$, relTime } from "@/lib/utils";
-import { RefreshCw, ChevronDown, ChevronRight, BookOpen, BarChart, Brain, Search, X, AlertCircle, Plus, Download, Radio, Wallet, ExternalLink, Activity, Clock } from "lucide-react";
+import { RefreshCw, ChevronDown, ChevronRight, BookOpen, BarChart, Brain, Search, X, AlertCircle, Plus, Download, Radio, Wallet, ExternalLink, Activity, Clock, Zap, TrendingUp, Ban } from "lucide-react";
 import clsx from "clsx";
 import OrderDetailDrawer from "@/components/OrderDetailDrawer";
 
-type SubTab = "all" | "rejected" | "fills";
+type SubTab = "all" | "suggested" | "rejected" | "fills";
 
 function isOptionTicker(ticker: string): boolean {
   return /^[A-Z]{1,5}\d{6}[CP]\d{8}$/.test(ticker);
@@ -40,7 +40,11 @@ export default function SignalsTable() {
   );
   const [rejected, setRejected] = useState<RejectedSignals | null>(null);
   const [fills, setFills] = useState<ExecutionFill[] | null>(null);
+  const [suggested, setSuggested] = useState<SuggestedSignal[] | null>(null);
   const [subLoading, setSubLoading] = useState(false);
+
+  // Place Order modal state — can be prefilled from a suggested signal
+  const [placeInitial, setPlaceInitial] = useState<{ ticker: string; direction: "buy" | "sell"; quantity?: string; signal_id?: string | null } | null>(null);
 
   // Expanded lineage state
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -73,8 +77,28 @@ export default function SignalsTable() {
     }
   };
 
+  // Open the place-order modal prefilled from a suggested signal (equity or option).
+  const placeFromSignal = (s: SuggestedSignal) => {
+    const ticker = s.venue_symbol || s.ticker || "";
+    if (!ticker) return;
+    setPlaceInitial({
+      ticker,
+      direction: (s.direction === "sell" ? "sell" : "buy") as "buy" | "sell",
+      quantity: "1",
+      signal_id: s.signal_id,
+    });
+    setPlaceOpen(true);
+  };
+
   const switchSubTab = async (tab: SubTab) => {
     setSubTab(tab);
+    if (tab === "suggested" && suggested === null) {
+      setSubLoading(true);
+      try {
+        const s = await signalsApi.suggested(200);
+        setSuggested(s);
+      } finally { setSubLoading(false); }
+    }
     if (tab === "rejected" && !rejected) {
       setSubLoading(true);
       try {
@@ -92,9 +116,10 @@ export default function SignalsTable() {
   };
 
   const subTabs: { id: SubTab; label: string }[] = [
-    { id: "all",      label: "All Orders" },
-    { id: "rejected", label: "Rejected" },
-    { id: "fills",    label: "Fills" },
+    { id: "all",       label: "Order History" },
+    { id: "suggested", label: "Suggested Signals" },
+    { id: "rejected",  label: "Rejected" },
+    { id: "fills",     label: "Fills" },
   ];
 
   return (
@@ -127,7 +152,7 @@ export default function SignalsTable() {
               {v.name}
             </span>
           ))}
-          <button onClick={() => setPlaceOpen(true)}
+          <button onClick={() => { setPlaceInitial(null); setPlaceOpen(true); }}
             className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono bg-emerald-800/60 border border-emerald-700/50 text-emerald-300 hover:bg-emerald-700">
             <Plus size={10} /> Order
           </button>
@@ -267,6 +292,87 @@ export default function SignalsTable() {
           </table>
         )}
 
+        {subTab === "suggested" && (
+          <div className="p-4">
+            {subLoading && suggested === null ? (
+              <div className="text-xs text-slate-500 animate-pulse text-center py-8">Loading suggested signals...</div>
+            ) : suggested && suggested.length > 0 ? (
+              <div className="space-y-2">
+                {suggested.map(s => {
+                  const isOpt = isOptionTicker(s.venue_symbol || s.ticker || "");
+                  const optDetails = isOpt ? parseOptionDetails(s.venue_symbol || s.ticker || "") : null;
+                  const dte = optDetails ? dteFromExpiry(optDetails.expiry) : null;
+                  const dir = (s.direction === "sell" ? "SELL" : "BUY");
+                  const placed = !!s.order_id;
+                  return (
+                    <div key={s.signal_id}
+                      className={clsx("rounded-lg border p-3",
+                        isOpt ? "border-violet-800/60 bg-violet-950/20" : "border-slate-700 bg-slate-800/40")}>
+                      <div className="flex items-center gap-2 text-xs">
+                        {isOpt ? <Activity size={12} className="text-violet-400 shrink-0" />
+                               : <Zap size={12} className={s.score != null && s.score >= 0 ? "text-emerald-400 shrink-0" : "text-red-400 shrink-0"} />}
+                        <span className="font-semibold text-slate-100">{s.strategy || "—"}</span>
+                        <span className="text-slate-500 font-mono text-[10px]">· {s.regime || ""}</span>
+                        {placed ? (
+                          <span className="ml-auto text-[10px] font-mono text-emerald-400 bg-emerald-900/40 px-1.5 py-0.5 rounded">EXECUTED</span>
+                        ) : (
+                          <span className="ml-auto text-[10px] font-mono text-amber-400 bg-amber-900/30 px-1.5 py-0.5 rounded">SUGGESTED</span>
+                        )}
+                      </div>
+                      <div className="mt-1.5 flex items-center gap-2 text-xs font-mono">
+                        <TrendingUp size={11} className="text-slate-500" />
+                        <span className={clsx("font-bold", dir === "BUY" ? "text-emerald-400" : "text-red-400")}>{dir}</span>
+                        <span className="font-bold text-slate-100">{s.venue_symbol || s.ticker}</span>
+                        {isOpt && optDetails && (
+                          <>
+                            <span className="text-[10px] text-violet-300">{optDetails.type === "C" ? "CALL" : "PUT"}</span>
+                            <span className="text-[10px] text-slate-400">K={optDetails.strike.toFixed(2)}</span>
+                            {dte != null && <span className="text-[10px] text-slate-400">DTE {dte}</span>}
+                          </>
+                        )}
+                        <span className="text-slate-500">· asset {s.asset_class || "equity_xstock"}</span>
+                      </div>
+                      <div className="mt-1 text-[11px] text-slate-400 font-mono leading-relaxed">
+                        <span>Score <b className={s.score != null && s.score >= 0 ? "text-emerald-300" : "text-red-300"}>{s.score != null ? s.score.toFixed(3) : "—"}</b></span>
+                        <span className="mx-1 text-slate-600">·</span>
+                        <span>quant <b className="text-slate-300">{s.quant_score?.toFixed(3) ?? "—"}</b></span>
+                        <span className="mx-1 text-slate-600">·</span>
+                        <span>sentiment <b className="text-slate-300">{s.sentiment_score?.toFixed(3) ?? "—"}</b></span>
+                        <span className="mx-1 text-slate-600">·</span>
+                        <span>KG <b className="text-slate-300">{s.kg_formula_contribution?.toFixed(3) ?? "—"}</b></span>
+                        {s.kelly_fraction != null && <><span className="mx-1 text-slate-600">·</span><span>Kelly <b className="text-slate-300">{s.kelly_fraction.toFixed(3)}</b></span></>}
+                      </div>
+                      {s.graph_path && s.graph_path.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] font-mono text-indigo-300">
+                          <BookOpen size={10} className="text-indigo-400" />
+                          {s.graph_path.map((p, i) => (
+                            <span key={p} className="flex items-center gap-1">
+                              {i > 0 && <span className="text-slate-600">→</span>}
+                              <span className="bg-indigo-950/50 border border-indigo-800/60 rounded px-1 py-0.5">{p}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="mt-2 flex items-center gap-2">
+                        <button onClick={() => placeFromSignal(s)} disabled={!!placed}
+                          className={clsx("flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold font-mono border",
+                            placed ? "bg-slate-800 text-slate-600 border-slate-700 cursor-not-allowed"
+                                   : "bg-emerald-700/60 border-emerald-600/60 text-emerald-200 hover:bg-emerald-600")}>
+                          <Plus size={10} /> {placed ? "Executed" : "Place on Alpaca Paper"}
+                        </button>
+                        {s.order_id && <span className="text-[10px] font-mono text-emerald-400">order {s.order_id.slice(0, 8)}…</span>}
+                        <span className="text-[10px] font-mono text-slate-500 ml-auto">{relTime((s.timestamp ?? s.created_at) ?? "")}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-xs text-slate-500 text-center py-8">No suggested signals yet — the agent will record each suggested signal here.</div>
+            )}
+          </div>
+        )}
+
         {subTab === "rejected" && (
           <div className="p-4">
             {subLoading ? (
@@ -348,7 +454,11 @@ export default function SignalsTable() {
 
       {/* Place Order Modal */}
       {placeOpen && (
-        <PlaceOrderModal onClose={() => setPlaceOpen(false)} onSuccess={() => { refresh(); setPlaceOpen(false); }} />
+        <PlaceOrderModal
+          initial={placeInitial}
+          onClose={() => setPlaceOpen(false)}
+          onSuccess={() => { refresh(); setPlaceOpen(false); setPlaceInitial(null); }}
+        />
       )}
 
       {/* Detail Drawer */}
@@ -374,10 +484,10 @@ export default function SignalsTable() {
 }
 
 // ── Place Order Modal (Unified: Equity + Options) ──────────────────────────────
-function PlaceOrderModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [ticker, setTicker] = useState("");
-  const [direction, setDirection] = useState<"buy" | "sell">("buy");
-  const [quantity, setQuantity] = useState("0.01");
+function PlaceOrderModal({ onClose, onSuccess, initial }: { onClose: () => void; onSuccess: () => void; initial?: { ticker: string; direction: "buy" | "sell"; quantity?: string; signal_id?: string | null } | null }) {
+  const [ticker, setTicker] = useState(initial?.ticker ?? "");
+  const [direction, setDirection] = useState<"buy" | "sell">(initial?.direction ?? "buy");
+  const [quantity, setQuantity] = useState(initial?.quantity ?? "0.01");
   const [orderType, setOrderType] = useState<"market" | "limit">("market");
   const [limitPrice, setLimitPrice] = useState("");
   const [venue, setVenue] = useState("alpaca");
@@ -395,25 +505,20 @@ function PlaceOrderModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     setError(null);
     setResult(null);
     try {
+      const payload = {
+        ticker: ticker.trim().toUpperCase(),
+        direction,
+        quantity: Number(quantity),
+        order_type: orderType,
+        limit_price: orderType === "limit" ? Number(limitPrice) || null : null,
+        venue,
+        signal_id: initial?.signal_id ?? null,
+      };
       if (isOpt) {
-        const res = await signalsApi.placeOrder({
-          ticker: ticker.trim().toUpperCase(),
-          direction,
-          quantity: Number(quantity),
-          order_type: orderType,
-          limit_price: orderType === "limit" ? Number(limitPrice) || null : null,
-          venue,
-        });
+        const res = await signalsApi.placeOrder(payload);
         setResult(res);
       } else {
-        const res = await signalsApi.placeOrder({
-          ticker: ticker.trim().toUpperCase(),
-          direction,
-          quantity: Number(quantity),
-          order_type: orderType,
-          limit_price: orderType === "limit" ? Number(limitPrice) || null : null,
-          venue,
-        });
+        const res = await signalsApi.placeOrder(payload);
         setResult(res);
       }
       onSuccess();
