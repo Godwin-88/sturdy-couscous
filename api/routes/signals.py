@@ -1,10 +1,11 @@
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import psycopg2
 import os
+import redis
 from loguru import logger
 
 router = APIRouter(prefix="/signals", tags=["signals"])
@@ -26,6 +27,10 @@ class PlaceOrderRequest(BaseModel):
     limit_price: float | None = None
     venue: str = "alpaca"
     signal_id: str | None = None  # optional link back to a suggested signal
+
+    # ── Two-phase commit (WebMCP agent surface) ─────────────────────────────
+    preview: bool = False  # when True, do NOT execute — return a proposal_token
+    proposal_token: str | None = None  # required to confirm a previewed order
 
 
 @router.get("")
@@ -101,6 +106,94 @@ def place_order(req: PlaceOrderRequest):
     venue = req.venue
     fill_price = 0.0
     fee_usd = 0.0
+
+    # ── Two-phase commit: proposal token authority (Redis-backed) ────────────
+    _r = redis.Redis(
+        host=os.getenv("REDIS_HOST", "redis"),
+        port=int(os.getenv("REDIS_PORT", 6379)),
+        decode_responses=True,
+    )
+
+    def _proposal_key(token: str) -> str:
+        return f"graphalpha:proposals:{token}"
+
+    if req.preview:
+        # Generate a proposal token, persist intent (10 min TTL), do NOT execute.
+        token = str(uuid.uuid4())
+        proposal = {
+            "ticker": req.ticker.upper(),
+            "direction": req.direction,
+            "quantity": req.quantity,
+            "order_type": req.order_type,
+            "limit_price": req.limit_price,
+            "venue": req.venue,
+            "signal_id": req.signal_id,
+            "created_at": now.isoformat(),
+            "expires_at": (datetime.utcnow().replace(microsecond=0) + timedelta(minutes=10)).isoformat(),
+        }
+        _r.setex(_proposal_key(token), 600, json.dumps(proposal))
+        # Reference price for notional / risk preview: limit price or last close fallback.
+        ref_price = req.limit_price or 100.0
+        try:
+            import yfinance as yf
+            h = yf.Ticker(req.ticker.upper()).history(period="1d", interval="1m")
+            if not h.empty:
+                ref_price = float(h["Close"].iloc[-1])
+        except Exception:
+            pass
+        return {
+            "preview": True,
+            "proposal_token": token,
+            "order": {
+                "ticker": proposal["ticker"],
+                "direction": proposal["direction"],
+                "quantity": proposal["quantity"],
+                "order_type": proposal["order_type"],
+                "limit_price": proposal["limit_price"],
+                "venue": proposal["venue"],
+                "signal_id": proposal["signal_id"],
+            },
+            "risk_preview": {
+                "ref_price": round(ref_price, 2),
+                "estimated_notional_usd": round(abs(proposal["quantity"]) * ref_price, 2),
+                "estimated_fee_usd": round(abs(proposal["quantity"]) * ref_price * 0.0026, 2),
+                "max_loss_est_usd": round(abs(proposal["quantity"]) * ref_price, 2),
+                "note": "Preview only — no execution. Echo proposal_token back to confirm.",
+            },
+            "expires_at": proposal["expires_at"],
+            "created_at": now.isoformat(),
+        }
+
+    if req.proposal_token:
+        raw = _r.get(_proposal_key(req.proposal_token))
+        if not raw:
+            raise HTTPException(status_code=410, detail="Proposal token expired or already used")
+        try:
+            prop = json.loads(raw)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid proposal payload")
+        expected = {
+            "ticker": req.ticker.upper(),
+            "direction": req.direction,
+            "quantity": req.quantity,
+            "order_type": req.order_type,
+            "venue": req.venue,
+        }
+        actual = {
+            "ticker": prop.get("ticker"),
+            "direction": prop.get("direction"),
+            "quantity": prop.get("quantity"),
+            "order_type": prop.get("order_type"),
+            "venue": prop.get("venue"),
+        }
+        if actual != expected:
+            raise HTTPException(status_code=409, detail="Order intent does not match the proposal token")
+        # One-time use: consume the token before executing.
+        _r.delete(_proposal_key(req.proposal_token))
+        if prop.get("limit_price"):
+            req.limit_price = float(prop["limit_price"])
+        if prop.get("signal_id"):
+            req.signal_id = str(prop["signal_id"])
 
     # Alpaca: real paper orders when configured, simulation otherwise
     if venue == "alpaca":

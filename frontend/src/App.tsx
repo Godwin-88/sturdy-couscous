@@ -4,7 +4,7 @@ import clsx from "clsx";
 import {
   Activity, GitBranch, BarChart2, Table2, Radio, ShieldAlert, Brain,
   FlaskConical, LayoutDashboard, Terminal, Download, Search,
-  Lightbulb, Zap, Shield, Edit3, ChevronDown, ChevronUp,
+  Lightbulb, Zap, Shield, Edit3, ChevronDown, ChevronUp, Bot,
 } from "lucide-react";
 import Sigma from "sigma";
 import Graph from "graphology";
@@ -32,7 +32,9 @@ import SimulateModal       from "@/components/SimulateModal";
 import SignalLineageModal  from "@/components/SignalLineageModal";
 import RecommendationsPanel from "@/components/RecommendationsPanel";
 import ScreenChat from "@/components/ScreenChat";
+import AgentCoPilot from "@/components/AgentCoPilot";
 import { agentApi, researchApi, hypothesisApi } from "@/lib/api";
+import { registerWebMCPTools, unregisterWebMCPTools, WEBMCP_TOOL_COUNT } from "@/webmcp/tools";
 import { LABEL_COLOR } from "@/lib/utils";
 
 type Tab = "dashboard" | "graph" | "signals" | "backtest" | "risk" | "intelligence" | "options";
@@ -57,6 +59,7 @@ export default function App() {
   const location = useLocation();
   const [opTab, setOpTab] = useState<Tab>("dashboard");
   const appRef = useRef<HTMLDivElement>(null);
+  const [copilotOpen, setCopilotOpen] = useState(false);
 
   const isAnalyticsRoute  = location.pathname.startsWith("/analytics");
   const isHypothesisRoute = location.pathname.startsWith("/hypothesis");
@@ -89,6 +92,12 @@ export default function App() {
     setOpTab(tab as Tab);
     navigate("/");
   };
+
+  // WebMCP tool registration — once on mount, unregister on unmount.
+  useEffect(() => {
+    registerWebMCPTools();
+    return () => unregisterWebMCPTools();
+  }, []);
 
   return (
     <div ref={appRef} className="flex h-screen bg-slate-950 overflow-hidden">
@@ -158,7 +167,14 @@ export default function App() {
           );
         })}
 
-        <div className="mt-auto px-4 py-3 border-t border-slate-800">
+        <div className="mt-auto px-4 py-3 border-t border-slate-800 space-y-2">
+          <button
+            onClick={() => setCopilotOpen(true)}
+            className="flex items-center gap-2 w-full px-3 py-2 text-xs font-mono rounded-lg border border-emerald-600/40 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-900/40"
+          >
+            <Bot size={13} /> Agent CoPilot
+            <span className="ml-auto text-[10px] text-emerald-400/70">{WEBMCP_TOOL_COUNT} tools</span>
+          </button>
           <div className="flex items-center gap-1.5 text-xs font-mono text-slate-500">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />paper mode
           </div>
@@ -177,6 +193,8 @@ export default function App() {
 
       {/* Global Financial Engineer chat — screen-aware, right slide-over */}
       <ScreenChat screen={currentScreen} />
+      {/* Agent CoPilot — WebMCP event echo + two-phase order approval */}
+      <AgentCoPilot open={copilotOpen} onClose={() => setCopilotOpen(false)} />
     </div>
   );
 }

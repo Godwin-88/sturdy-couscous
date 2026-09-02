@@ -1378,6 +1378,54 @@ export interface MultipleTestingContext {
   suggested_correction:  string;
 }
 
+// ── WebMCP agent-surface API (Part B) ──────────────────────────────────────────
+
+export interface GraphQueryResult {
+  rows: Record<string, unknown>[];
+  count: number;
+}
+
+export interface OrderProposal {
+  preview: boolean;
+  proposal_token: string;
+  order: {
+    ticker: string;
+    direction: string;
+    quantity: number;
+    order_type: string;
+    limit_price: number | null;
+    venue: string;
+    signal_id: string | null;
+  };
+  risk_preview: {
+    ref_price: number;
+    estimated_notional_usd: number;
+    estimated_fee_usd: number;
+    max_loss_est_usd: number;
+    note: string;
+  };
+  expires_at: string;
+  created_at: string;
+}
+
+export const webmcpApi = {
+  queryGraph: (cypher: string, params?: Record<string, unknown>) =>
+    apiFetch<GraphQueryResult>("/graph/query", { method: "POST", body: JSON.stringify({ cypher, params: params ?? {} }) }),
+  proposeOrder: (req: {
+    ticker: string; direction: "buy" | "sell"; quantity: number;
+    order_type?: string; limit_price?: number | null; venue?: string; signal_id?: string | null;
+  }) =>
+    apiFetch<OrderProposal>("/signals/place", { method: "POST", body: JSON.stringify({ ...req, preview: true }) }),
+  submitOrder: (req: {
+    ticker: string; direction: "buy" | "sell"; quantity: number;
+    proposal_token: string; order_type?: string; limit_price?: number | null; venue?: string; signal_id?: string | null;
+  }) =>
+    apiFetch<{ order_id: string; status: string; mode: string; venue: string; ticker: string; direction: string; quantity: number; fill_price: number; fee_usd: number; created_at: string }>(
+      "/signals/place", { method: "POST", body: JSON.stringify(req) }),
+  activeStrategies: (regime: string) =>
+    apiFetch<{ strategies: string[] }>(`/graph/eligible-strategies?regime=${encodeURIComponent(regime)}`),
+};
+
 // ── Hypothesis Board API ────────────────────────────────────────────────────────
 
 export const hypothesisApi = {

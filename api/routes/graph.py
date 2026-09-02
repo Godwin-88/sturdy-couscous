@@ -1,10 +1,27 @@
 import os
+import re
 import redis
 import json
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 from common.graph import get_db
 
 router = APIRouter(prefix="/graph", tags=["graph"])
+
+
+class GraphQueryRequest(BaseModel):
+    """Read-only Cypher query. Mutating Cypher is rejected."""
+    cypher: str
+    params: dict = {}
+
+
+# ── Read-only guard: reject any mutation or procedure call ──────────────────
+_FORBIDDEN = re.compile(
+    r"\b(MERGE|CREATE|DELETE|DETACH|SET|REMOVE|DROP|FOREACH|CALL)\b"
+    r"|\b(db|apoc|algo|gds)\.[A-Za-z_]+"
+    r"|\bUSING\s+PERIODIC\s+COMMIT\b",
+    re.IGNORECASE,
+)
 
 def _db():
     return get_db()
@@ -15,6 +32,44 @@ def _redis():
         port=int(os.getenv("REDIS_PORT", 6379)),
         decode_responses=True,
     )
+
+
+@router.post("/query")
+def graph_query(req: GraphQueryRequest):
+    """Read-only Cypher query for the WebMCP agent tool surface.
+
+    The _FORBIDDEN guard rejects MERGE/CREATE/DELETE/SET/DROP/FOREACH/CALL and
+    any procedure access (db.*, apoc.*, gds.*), so agents can traverse the
+    knowledge graph but never mutate it.
+    """
+    if not req.cypher.strip():
+        raise HTTPException(status_code=422, detail="Empty cypher query")
+    if _FORBIDDEN.search(req.cypher):
+        raise HTTPException(
+            status_code=403,
+            detail="Read-only guard: mutating Cypher (MERGE/CREATE/DELETE/SET/CALL/db.*) is not allowed",
+        )
+    db = _db()
+    try:
+        rows = list(db.execute_and_fetch(req.cypher, req.params or {}))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Cypher error: {e}")
+    # Serialize Neo4j values (Node/Relationship/ints/Date) to JSON-safe primitives.
+    def _js(v):
+        if hasattr(v, "element_id"):  # gqlalchemy Node
+            return {"_id": str(getattr(v, "element_id", "")),
+                    "labels": list(getattr(v, "labels", [])),
+                    "properties": _js(getattr(v, "_properties", getattr(v, "properties", {})))}
+        if hasattr(v, "items"):  # list/tuple
+            return [_js(x) for x in v]
+        if isinstance(v, dict):
+            return {k: _js(x) for k, x in v.items()}
+        if hasattr(v, "iso_format"):  # Neo4j temporal
+            return str(v)
+        if isinstance(v, float) and (v != v):  # NaN
+            return None
+        return v
+    return {"rows": [_js(r) for r in rows], "count": len(rows)}
 
 
 def _safe_db_call(fn, *args, **kwargs):
