@@ -41,6 +41,25 @@ CREATE TABLE IF NOT EXISTS order_audit (
 CREATE INDEX IF NOT EXISTS idx_order_audit_created ON order_audit(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_order_audit_ticker  ON order_audit(ticker);
 
+-- ── Financial Engineer chat history (per-screen assistant) ───────────────────
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    screen      VARCHAR(40) NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_screen ON chat_sessions(screen, created_at);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id  UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    screen      VARCHAR(40) NOT NULL,
+    role        VARCHAR(10) NOT NULL CHECK (role IN ('user', 'assistant')),
+    content     TEXT NOT NULL,
+    sources     JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at);
+
 CREATE TABLE IF NOT EXISTS portfolio_state (
     id              SERIAL PRIMARY KEY,
     cash_balance    NUMERIC(18,2) NOT NULL,

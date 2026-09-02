@@ -398,6 +398,56 @@ export interface OptionPnl {
   net_option_pnl_usd: number;
 }
 
+// ── Financial Engineer Chat API ───────────────────────────────────────────────
+
+export interface ChatSource {
+  book?: string;
+  chapter?: string;
+  section?: string;
+  concept?: string;
+  formula?: string;
+  strategy?: string;
+}
+
+export interface ChatMessage {
+  role: string;
+  content: string;
+  sources?: ChatSource[];
+  suggestions?: string[];
+}
+
+export interface ChatAnswer {
+  answer: string;
+  sources: ChatSource[];
+  suggestions: string[];
+}
+
+export interface ChatContext {
+  screen: string;
+  hint: string;
+  live: Record<string, unknown>;
+  retrieval: {
+    concepts: { name: string }[];
+    sections: { book: string; chapter: string; title: string; body: string }[];
+    formulas: { id: string; expression: string }[];
+    strategies: { name: string; signal_method: string }[];
+    sources: ChatSource[];
+  };
+  generated_at: string;
+}
+
+export const chatApi = {
+  context: (screen: string) => apiFetch<ChatContext>(`/chat/context/${screen}`),
+  ask: (screen: string, question: string, history: { role: string; content: string }[]) =>
+    apiFetch<ChatAnswer>("/chat/ask", {
+      method: "POST",
+      body: JSON.stringify({ screen, question, history }),
+    }),
+  history: (screen: string) => apiFetch<ChatMessage[]>(`/chat/history/${screen}`),
+  clearHistory: (screen: string) =>
+    apiFetch<{ deleted: boolean }>(`/chat/history/${screen}`, { method: "DELETE" }),
+};
+
 export interface HedgeState {
   underlying:       string;
   regime:           string;

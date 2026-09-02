@@ -31,6 +31,7 @@ import ContradictionManager from "@/components/ContradictionManager";
 import SimulateModal       from "@/components/SimulateModal";
 import SignalLineageModal  from "@/components/SignalLineageModal";
 import RecommendationsPanel from "@/components/RecommendationsPanel";
+import ScreenChat from "@/components/ScreenChat";
 import { agentApi, researchApi, hypothesisApi } from "@/lib/api";
 import { LABEL_COLOR } from "@/lib/utils";
 
@@ -60,6 +61,13 @@ export default function App() {
   const isAnalyticsRoute  = location.pathname.startsWith("/analytics");
   const isHypothesisRoute = location.pathname.startsWith("/hypothesis");
   const isAnalysisRoute   = isAnalyticsRoute || isHypothesisRoute;
+
+  // Derive the current "screen" id for the Financial Engineer chat context.
+  const currentScreen = isAnalyticsRoute
+    ? "analytics"
+    : isHypothesisRoute
+      ? "hypothesis"
+      : opTab;
 
   const handleCreateHypothesis = (series: ContextMenuSeries) => {
     navigate(`/hypothesis/new?series=${encodeURIComponent(series.id)}&ticker=${encodeURIComponent(series.ticker)}`);
@@ -165,6 +173,9 @@ export default function App() {
           <Route path="/" element={<OperationsShell opTab={opTab} />} />
         </Routes>
       </main>
+
+      {/* Global Financial Engineer chat — screen-aware, right slide-over */}
+      <ScreenChat screen={currentScreen} />
     </div>
   );
 }
