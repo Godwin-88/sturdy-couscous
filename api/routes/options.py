@@ -216,7 +216,12 @@ async def place_option_order(req: "PlaceOptionOrderRequest"):
         legs=req.legs or None,
     )
     if result.status == "error":
-        raise HTTPException(status_code=502, detail=str(result.raw.get("error", "option order failed")))
+        # Map the broker-side error to a meaningful HTTP status (403 for
+        # account eligibility, 400 for validation, 502 for transient).
+        code = getattr(result, "http_status", 502) or 502
+        if not isinstance(code, int) or code < 400 or code > 599:
+            code = 502
+        raise HTTPException(status_code=code, detail=str(result.raw.get("error", "option order failed")))
 
     now = datetime.utcnow()
     order_id = str(uuid.uuid4())

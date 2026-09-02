@@ -462,8 +462,10 @@ def _build_legs(strat: dict, rows_c: list[dict], rows_p: list[dict], underlying:
         if debit <= 0:
             return None
         width_m = abs(float(k3["strike_price"]) - float(k1["strike_price"])) * MULT
-        legs = [_leg(k1, "buy_to_open"), _leg(k2, "sell_to_open"),
-                _leg(k2, "sell_to_open"), _leg(k3, "buy_to_open")]
+        k1l = _leg(k1, "buy_to_open"); k1l["contracts"] = 1
+        k2l = _leg(k2, "sell_to_open"); k2l["contracts"] = 2  # Alpaca ratio_qty=2
+        k3l = _leg(k3, "buy_to_open"); k3l["contracts"] = 1
+        legs = [k1l, k2l, k3l]
         legs[0]["max_profit"] = round(width_m - debit, 2)
         legs[0]["max_loss"] = round(debit, 2)
         legs[0]["net_debit"] = round(debit, 2)
@@ -485,8 +487,10 @@ def _build_legs(strat: dict, rows_c: list[dict], rows_p: list[dict], underlying:
         if credit <= 0:
             return None
         width_m = abs(float(k3["strike_price"]) - float(k1["strike_price"])) * MULT
-        legs = [_leg(k1, "sell_to_open"), _leg(k2, "buy_to_open"),
-                _leg(k2, "buy_to_open"), _leg(k3, "sell_to_open")]
+        k1l = _leg(k1, "sell_to_open"); k1l["contracts"] = 1
+        k2l = _leg(k2, "buy_to_open"); k2l["contracts"] = 2
+        k3l = _leg(k3, "sell_to_open"); k3l["contracts"] = 1
+        legs = [k1l, k2l, k3l]
         legs[0]["max_profit"] = round(credit, 2)
         legs[0]["max_loss"] = round(width_m - credit, 2)
         legs[0]["net_credit"] = round(credit, 2)
@@ -499,7 +503,9 @@ def _build_legs(strat: dict, rows_c: list[dict], rows_p: list[dict], underlying:
         if c is None or p is None:
             return None
         debit = (_mid(c) + 2 * _mid(p)) * MULT
-        legs = [_leg(c, "buy_to_open"), _leg(p, "buy_to_open"), _leg(p, "buy_to_open")]
+        cl = _leg(c, "buy_to_open"); cl["contracts"] = 1
+        pl = _leg(p, "buy_to_open"); pl["contracts"] = 2  # 2 puts in a strip
+        legs = [cl, pl]
         legs[0]["max_profit"] = round(0.0, 2)
         legs[0]["max_loss"] = round(debit, 2)
         legs[0]["net_debit"] = round(debit, 2)
@@ -512,7 +518,9 @@ def _build_legs(strat: dict, rows_c: list[dict], rows_p: list[dict], underlying:
         if c is None or p is None:
             return None
         debit = (2 * _mid(c) + _mid(p)) * MULT
-        legs = [_leg(c, "buy_to_open"), _leg(c, "buy_to_open"), _leg(p, "buy_to_open")]
+        cl = _leg(c, "buy_to_open"); cl["contracts"] = 2  # 2 calls in a strap
+        pl = _leg(p, "buy_to_open"); pl["contracts"] = 1
+        legs = [cl, pl]
         legs[0]["max_profit"] = round(0.0, 2)
         legs[0]["max_loss"] = round(debit, 2)
         legs[0]["net_debit"] = round(debit, 2)
@@ -604,6 +612,115 @@ def _build_legs(strat: dict, rows_c: list[dict], rows_p: list[dict], underlying:
     return None
 
 
+def _build_cards(rows_c: list[dict], rows_p: list[dict], kg: list[dict],
+                 underlying: str, expiration: str, contract_type: str,
+                 regime: str, confidence: float, dte: int,
+                 nav: float, max_loss_cap_pct: float, lambda_: float,
+                 lens: str) -> tuple[list[dict], list[dict]]:
+    """Run the KG strategy library against a single chain.
+
+    Returns (cards, rejected). Each card is tagged with the expiration /
+    contract_type it was built from so the caller can dedupe across chains
+    and surface the alt-expiry variants to the user as comparable plays.
+    """
+    cards: list[dict] = []
+    rejected: list[dict] = []
+    chain_label = f"{dte}DTE/{contract_type}"
+
+    for strat in kg:
+        method = strat["method"]
+        try:
+            legs = _build_legs(strat, rows_c, rows_p, underlying)
+        except Exception:
+            legs = None
+        if not legs:
+            continue
+        if len(legs) == 4:
+            notes = [f"Condor {legs[0]['strike']}/{legs[1]['strike']} calls + "
+                     f"{legs[2]['strike']}/{legs[3]['strike']} puts"]
+        elif len(legs) == 2:
+            notes = [f"Long {legs[0]['strike']} {legs[0]['contract_type']} / "
+                     f"short {legs[1]['strike']} {legs[1]['contract_type']}"]
+        else:
+            notes = [f"Trade {underlying} {legs[0]['strike']} {legs[0]['contract_type']}"]
+        if legs[0].get("collateral_required"):
+            notes.append(f"Collateral required: {legs[0]['collateral_required']:.0f}")
+        if legs[0].get("net_credit") is not None:
+            notes.append(f"Net credit: {legs[0]['net_credit']:.0f}")
+        if legs[0].get("net_debit") is not None:
+            notes.append(f"Net debit: {legs[0]['net_debit']:.0f}")
+        max_loss = float(legs[0].get("max_loss") or 0.0)
+        max_profit = float(legs[0].get("max_profit") or 0.0)
+        raw_score = _score(method, legs[0], strat["weight"], _iv_rank(legs[0], rows_c + rows_p),
+                           dte, all(_liquidity(l) for l in legs))
+        # ── Loss-aversion hard gate (leave the account, not the strategy) ─────
+        max_loss_pct_nav = (max_loss / nav) * 100.0 if nav > 0 and max_loss > 0 else 0.0
+        if max_loss_pct_nav > max_loss_cap_pct:
+            rejected.append({
+                "strategy": strat["name"], "signal_method": method,
+                "max_loss": round(max_loss, 2),
+                "max_loss_pct_nav": round(max_loss_pct_nav, 2),
+                "reason": f"max loss {max_loss_pct_nav:.1f}% > {max_loss_cap_pct:.0f}% NAV cap ({lens} lens)",
+                "expiration": expiration,
+                "contract_type": contract_type,
+            })
+            continue
+        card = _card(strat["name"], method, strat["weight"], strat["budget_pct"],
+                     regime, confidence, strat["concepts"], legs,
+                     max_loss, max_profit, raw_score, notes, nav=nav)
+        card["loss_aversion_score"] = round(
+            _loss_aversion_score(raw_score, max_loss, nav, lambda_), 1)
+        card["lens"] = lens
+        card["hedge"] = _hedge_requirement(method, legs, regime)
+        # Tag with the chain this card was built from — the UI uses this to
+        # surface "compare with next-nearest expiry" without re-querying.
+        card["expiration"] = expiration
+        card["contract_type"] = contract_type
+        card["dte"] = dte
+        card["chain_label"] = chain_label
+        card["chain_source"] = "primary"
+        cards.append(card)
+
+    return cards, rejected
+
+
+def _nearby_expirations(underlying: str, primary: str, n: int = 2) -> list[str]:
+    """Return up to `n` additional expirations nearest to `primary`.
+
+    Used by compute_suggestions to evaluate the same KG strategies against
+    near-expiry chains so the user can compare plays at 2 DTE vs 9 DTE vs
+    16 DTE side-by-side. Excludes 0-DTE and the primary itself.
+    """
+    if not primary:
+        return []
+    try:
+        all_exps = options_provider.get_expirations(underlying) or []
+    except Exception:
+        return []
+    primary_dte = _dte(primary)
+    out: list[tuple[int, str]] = []
+    for e in all_exps:
+        if e == primary:
+            continue
+        ed = _dte(e)
+        if ed < 1:
+            continue
+        out.append((abs(ed - primary_dte), e))
+    out.sort(key=lambda t: t[0])
+    return [e for _, e in out[:n]]
+
+
+def _dedupe_cards(cards: list[dict]) -> list[dict]:
+    """Drop duplicate (strategy, expiration, contract_type) cards, keep best."""
+    best: dict[tuple[str, str, str], dict] = {}
+    for c in cards:
+        key = (c.get("strategy", ""), c.get("expiration", ""), c.get("contract_type", ""))
+        prev = best.get(key)
+        if prev is None or c.get("loss_aversion_score", 0) > prev.get("loss_aversion_score", 0):
+            best[key] = c
+    return list(best.values())
+
+
 def compute_suggestions(underlying: str, expiration: str | None,
                         contract_type: str | None, regime: str | None = None,
                         confidence: float = 0.0,
@@ -668,58 +785,80 @@ def compute_suggestions(underlying: str, expiration: str | None,
     dte = _dte(expiration or "")
 
     kg = _kg_option_strategies(regime)
-    cards: list[dict] = []
-    rejected: list[dict] = []
+    primary_ct = (contract_type or "call").lower()
+    cards, rejected = _build_cards(
+        rows_c, rows_p, kg, underlying, expiration or "", primary_ct,
+        regime, confidence, dte, nav, max_loss_cap_pct, lambda_, lens,
+    )
 
-    for strat in kg:
-        method = strat["method"]
+    # ── Nearby-strike + nearby-expiry expansion ────────────────────────────────
+    # Evaluate the same KG strategy library against the next-nearest expiries
+    # so the user can compare e.g. 2-DTE vs 9-DTE vs 16-DTE plays for the same
+    # underlying side-by-side. This is what makes the strategy filter chips
+    # actually useful — without it, most queries return a single card.
+    alt_exps = _nearby_expirations(underlying, expiration or "", n=2)
+    primary_idx = 0
+    for alt_idx, alt_exp in enumerate(alt_exps, start=1):
         try:
-            legs = _build_legs(strat, rows_c, rows_p, underlying)
+            alt_rows = _chain_rows(underlying, alt_exp, contract_type)
         except Exception:
-            legs = None
-        if not legs:
             continue
-        if len(legs) == 4:
-            notes = [f"Condor {legs[0]['strike']}/{legs[1]['strike']} calls + "
-                     f"{legs[2]['strike']}/{legs[3]['strike']} puts"]
-        elif len(legs) == 2:
-            notes = [f"Long {legs[0]['strike']} {legs[0]['contract_type']} / "
-                     f"short {legs[1]['strike']} {legs[1]['contract_type']}"]
-        else:
-            notes = [f"Trade {underlying} {legs[0]['strike']} {legs[0]['contract_type']}"]
-        if legs[0].get("collateral_required"):
-            notes.append(f"Collateral required: {legs[0]['collateral_required']:.0f}")
-        if legs[0].get("net_credit") is not None:
-            notes.append(f"Net credit: {legs[0]['net_credit']:.0f}")
-        if legs[0].get("net_debit") is not None:
-            notes.append(f"Net debit: {legs[0]['net_debit']:.0f}")
-        max_loss = float(legs[0].get("max_loss") or 0.0)
-        max_profit = float(legs[0].get("max_profit") or 0.0)
-        raw_score = _score(method, legs[0], strat["weight"], _iv_rank(legs[0], rows),
-                           dte, all(_liquidity(l) for l in legs))
-        # ── Loss-aversion hard gate (leave the account, not the strategy) ─────
-        max_loss_pct_nav = (max_loss / nav) * 100.0 if nav > 0 and max_loss > 0 else 0.0
-        if max_loss_pct_nav > max_loss_cap_pct:
-            rejected.append({
-                "strategy": strat["name"], "signal_method": method,
-                "max_loss": round(max_loss, 2),
-                "max_loss_pct_nav": round(max_loss_pct_nav, 2),
-                "reason": f"max loss {max_loss_pct_nav:.1f}% > {max_loss_cap_pct:.0f}% NAV cap ({lens} lens)",
-            })
+        if not alt_rows:
             continue
-        card = _card(strat["name"], method, strat["weight"], strat["budget_pct"],
-                     regime, confidence, strat["concepts"], legs,
-                     max_loss, max_profit, raw_score, notes, nav=nav)
-        card["loss_aversion_score"] = round(
-            _loss_aversion_score(raw_score, max_loss, nav, lambda_), 1)
-        card["lens"] = lens
-        card["hedge"] = _hedge_requirement(method, legs, regime)
-        cards.append(card)
+        alt_rows.sort(key=lambda r: float(r.get("strike_price") or 0))
+        alt_c = [r for r in alt_rows if (r.get("contract_type") or "").lower() == "call"]
+        alt_p = [r for r in alt_rows if (r.get("contract_type") or "").lower() == "put"]
+        alt_dte = _dte(alt_exp)
+        alt_cards, alt_rej = _build_cards(
+            alt_c, alt_p, kg, underlying, alt_exp, primary_ct,
+            regime, confidence, alt_dte, nav, max_loss_cap_pct, lambda_, lens,
+        )
+        for c in alt_cards:
+            c["chain_source"] = f"alt_expiry_{alt_idx}"
+        cards.extend(alt_cards)
+        rejected.extend(alt_rej)
+
+    # Also try the OPPOSITE contract type on the primary expiry (e.g. user
+    # picked a call, but the regime favors puts). Gives one more comparison
+    # axis without re-hitting the network twice.
+    opposite_ct = "put" if primary_ct == "call" else "call"
+    try:
+        opp_rows = _chain_rows(underlying, expiration or "", opposite_ct)
+    except Exception:
+        opp_rows = []
+    if opp_rows:
+        opp_rows.sort(key=lambda r: float(r.get("strike_price") or 0))
+        opp_c = [r for r in opp_rows if (r.get("contract_type") or "").lower() == "call"]
+        opp_p = [r for r in opp_rows if (r.get("contract_type") or "").lower() == "put"]
+        opp_cards, opp_rej = _build_cards(
+            opp_c, opp_p, kg, underlying, expiration or "", opposite_ct,
+            regime, confidence, dte, nav, max_loss_cap_pct, lambda_, lens,
+        )
+        for c in opp_cards:
+            c["chain_source"] = "alt_type"
+        cards.extend(opp_cards)
+        rejected.extend(opp_rej)
+
+    # Dedupe (strategy, expiration, contract_type) — keep the highest-ranked.
+    cards = _dedupe_cards(cards)
+    primary_idx = len(cards)
 
     # ── Rank by the LOSS-AVERSION lens, not raw EV ─────────────────────────────
-    cards.sort(key=lambda c: c["loss_aversion_score"], reverse=True)
+    # Primary-chain cards float to the top, then alt-expiry, then alt-type.
+    _source_rank = {"primary": 0, "alt_expiry_1": 1, "alt_expiry_2": 2, "alt_type": 3}
+    cards.sort(key=lambda c: (
+        _source_rank.get(c.get("chain_source", "primary"), 9),
+        -float(c.get("loss_aversion_score", 0)),
+    ))
     for i, c in enumerate(cards, start=1):
         c["rank"] = i
+
+    # Cap to the top MAX_SUGGESTIONS so the UI doesn't get a wall of cards.
+    # Primary chain always shows; alternates compete on loss-aversion score.
+    MAX_SUGGESTIONS = int(os.getenv("OPTION_MAX_SUGGESTIONS", "10"))
+    primary_count = sum(1 for c in cards if c.get("chain_source") == "primary")
+    truncated = cards[:MAX_SUGGESTIONS]
+    alt_count = len(truncated) - primary_count
 
     out: dict[str, Any] = {
         "underlying": underlying,
@@ -733,8 +872,11 @@ def compute_suggestions(underlying: str, expiration: str | None,
         "nav": nav,
         "max_loss_cap_pct": max_loss_cap_pct,
         "active_strategies": [s["name"] for s in kg],
-        "suggestions": cards,
+        "suggestions": truncated,
         "rejected": rejected,
+        "alt_expirations": alt_exps,
+        "alt_count": alt_count,
+        "primary_count": primary_count,
     }
     _suggestions_cache[cache_key] = (time.time(), out)
     return out

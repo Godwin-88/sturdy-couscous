@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { Search, Activity, ArrowRightLeft, Loader2, CheckCircle2, XCircle, Brain, RefreshCw, Shield, Clock, AlertTriangle, Zap, ChevronRight } from "lucide-react";
+import { Search, Activity, ArrowRightLeft, Loader2, CheckCircle2, XCircle, Brain, RefreshCw, Shield, Clock, AlertTriangle, Zap, ChevronRight, Filter } from "lucide-react";
 import { optionsApi, OptionContractRow, OptionSuggestion, OptionLeg, AlpacaAsset, HedgeState } from "@/lib/api";
 import Greeks3DVisualization from "@/components/Greeks3DVisualization";
 import OptionDiagrams from "@/components/OptionDiagrams";
@@ -8,6 +8,44 @@ import { setScreenContext } from "@/lib/screenContext";
 import clsx from "clsx";
 
 const MOODS = ["call", "put"] as const;
+
+// Regime catalogue — kept in sync with agent/regime_agent.py:194-237.
+// "auto" (empty string) = use whatever RegimeAgent currently reports.
+const REGIME_CHOICES: { value: string; label: string }[] = [
+  { value: "",              label: "Auto (current)" },
+  { value: "Trending",      label: "Trending" },
+  { value: "MeanReverting", label: "Mean Reverting" },
+  { value: "LowVolatility", label: "Low Volatility" },
+  { value: "HighVolatility",label: "High Volatility" },
+  { value: "Recovery",      label: "Recovery" },
+  { value: "Crisis",        label: "Crisis" },
+  { value: "SystemicStress",label: "Systemic Stress" },
+];
+
+type WireLeg = {
+  symbol: string;
+  side: "buy" | "sell";
+  qty: number;
+  position_intent: "buy_to_open" | "sell_to_open" | "buy_to_close" | "sell_to_close";
+};
+
+/**
+ * Collapse legs that share the same symbol+side+intent into a single
+ * OptionLegRequest with summed qty. Required for ratio structures (butterfly,
+ * strip, strap) where the agent emits the same option twice with qty=1 to
+ * represent a 2x ratio — Alpaca's MLEG validator rejects duplicate symbols,
+ * so the wire format must have one entry per symbol with ratio_qty=2.
+ */
+function consolidateLegs(legs: WireLeg[]): WireLeg[] {
+  const byKey = new Map<string, WireLeg>();
+  for (const l of legs) {
+    const k = `${l.symbol}|${l.side}|${l.position_intent}`;
+    const prev = byKey.get(k);
+    if (prev) prev.qty += l.qty;
+    else byKey.set(k, { ...l });
+  }
+  return Array.from(byKey.values());
+}
 
 function expiryFromSymbol(sym: string): string {
   // SPY250904C00770000 -> 2025-09-04
@@ -65,12 +103,14 @@ export default function OptionsPanel() {
   const [placeErr, setPlaceErr] = useState<string | null>(null);
 
   const [suggestions, setSuggestions] = useState<OptionSuggestion[]>([]);
-  const [sugMeta, setSugMeta] = useState<{ regime: string; regime_confidence: number; spot_estimate: number | null; dte: number; active_strategies: string[]; lens: string; max_loss_cap_pct: number; nav: number } | null>(null);
+  const [sugMeta, setSugMeta] = useState<{ regime: string; regime_confidence: number; spot_estimate: number | null; dte: number; active_strategies: string[]; lens: string; max_loss_cap_pct: number; nav: number; alt_expirations: string[]; alt_count: number; primary_count: number } | null>(null);
   const [loadingSug, setLoadingSug] = useState(false);
   const [sugErr, setSugErr] = useState<string | null>(null);
   const [rejected, setRejected] = useState<{ strategy: string; max_loss_pct_nav: number; reason: string }[]>([]);
 
   const [lens, setLens] = useState<"average" | "defensive">("defensive");
+  const [regimeOverride, setRegimeOverride] = useState<string>("");
+  const [strategyFilter, setStrategyFilter] = useState<string>("");
 
   const [hedgeState, setHedgeState] = useState<HedgeState | null>(null);
   const [loadingHedge, setLoadingHedge] = useState(false);
@@ -95,9 +135,11 @@ export default function OptionsPanel() {
         spot_estimate: sugMeta?.spot_estimate ?? undefined,
         dte: sugMeta?.dte ?? undefined,
         chain_size: rows.length,
+        regime: regimeOverride || sugMeta?.regime || undefined,
+        strategy_filter: strategyFilter || undefined,
       },
     });
-  }, [underlying, expiration, mood, selected, lens, sugMeta, rows.length]);
+  }, [underlying, expiration, mood, selected, lens, sugMeta, rows.length, regimeOverride, strategyFilter]);
 
   // Auto-poll suggestions when a row is selected
   useEffect(() => {
@@ -106,7 +148,7 @@ export default function OptionsPanel() {
       loadSuggestions();
     }, 15_000);
     return () => clearInterval(interval);
-  }, [selected, underlying, expiration, mood, lens]);
+  }, [selected, underlying, expiration, mood, lens, regimeOverride]);
 
   async function searchUnderlyings() {
     setSearching(true);
@@ -169,7 +211,12 @@ export default function OptionsPanel() {
     setLoadingSug(true);
     setSugErr(null);
     try {
-      const res = await optionsApi.suggestions(underlying, { expiration: expiration || undefined, contract_type: mood, lens });
+      const res = await optionsApi.suggestions(underlying, {
+        expiration: expiration || undefined,
+        contract_type: mood,
+        lens,
+        regime: regimeOverride || undefined,
+      });
       setSuggestions(res.suggestions ?? []);
       setRejected((res.rejected ?? []).map(r => ({ strategy: r.strategy, max_loss_pct_nav: r.max_loss_pct_nav, reason: r.reason })));
       setSugMeta({
@@ -181,7 +228,14 @@ export default function OptionsPanel() {
         lens: res.lens,
         max_loss_cap_pct: res.max_loss_cap_pct,
         nav: res.nav,
+        alt_expirations: (res as { alt_expirations?: string[] }).alt_expirations ?? [],
+        alt_count: (res as { alt_count?: number }).alt_count ?? 0,
+        primary_count: (res as { primary_count?: number }).primary_count ?? res.suggestions?.length ?? 0,
       });
+      // If the active strategy filter no longer matches any returned card,
+      // clear it so the user isn't staring at an empty filtered list.
+      const names = new Set((res.suggestions ?? []).map(s => s.strategy));
+      setStrategyFilter(prev => (prev && !names.has(prev) ? "" : prev));
     } catch (e) {
       setSugErr(String(e));
       setSuggestions([]);
@@ -192,8 +246,17 @@ export default function OptionsPanel() {
 
   function toggleLens() {
     setLens(prev => (prev === "defensive" ? "average" : "defensive"));
-    // re-compute w/ the new lens; the backend caches per (chain,lens) for 60s
     setTimeout(loadSuggestions, 0);
+  }
+
+  function changeRegime(next: string) {
+    setRegimeOverride(next);
+    setStrategyFilter(""); // strategy mix changes with regime — clear stale filter
+    setTimeout(loadSuggestions, 0);
+  }
+
+  function changeStrategyFilter(next: string) {
+    setStrategyFilter(prev => (prev === next ? "" : next));
   }
 
   async function loadHedge() {
@@ -265,8 +328,26 @@ export default function OptionsPanel() {
 
   async function submitOrder() {
     if (!selected) return;
+    if (orderClass === "vertical" && spreadLegs.length < 2) {
+      setPlaceErr("Vertical spread needs at least 2 legs — switch to SIMPLE or pick a multi-leg suggestion.");
+      return;
+    }
     setPlacing(true); setPlaced(null); setPlaceErr(null);
     try {
+      // Consolidate legs by symbol with summed qty. The agent sometimes builds
+      // butterfly/strip/strap structures where the same symbol appears with a
+      // ratio (e.g. sell 2x K2). Alpaca's MLEG validator rejects duplicate
+      // symbols, so we collapse to one OptionLegRequest per symbol with the
+      // combined ratio_qty.
+      const wireLegs = orderClass === "vertical"
+        ? consolidateLegs(spreadLegs.map(l => ({
+            symbol: l.symbol,
+            side: (l.side.startsWith("buy") ? "buy" : "sell") as "buy" | "sell",
+            qty: Math.max(1, Number(l.contracts ?? 1) || 1),
+            position_intent: l.side as "buy_to_open" | "sell_to_open" | "buy_to_close" | "sell_to_close",
+          })))
+        : undefined;
+
       const res = await optionsApi.place({
         contract_symbol: selected.symbol,
         qty,
@@ -276,14 +357,7 @@ export default function OptionsPanel() {
         limit_price: orderType === "limit" && limitPrice ? Number(limitPrice) : null,
         label: "ui-manual",
         order_class: orderClass,
-        legs: orderClass === "vertical"
-          ? spreadLegs.map(l => ({
-              symbol: l.symbol,
-              side: l.side.startsWith("buy") ? "buy" : "sell",
-              qty: 1, // ratio_qty per leg; top-level qty = number of spreads
-              position_intent: l.side,
-            }))
-          : undefined,
+        legs: wireLegs,
       });
       setPlaced({
         order_id: res.order_id,
@@ -511,9 +585,37 @@ export default function OptionsPanel() {
             )}
             {sugMeta && (
               <span className="ml-2 text-[10px] font-mono text-slate-400">
-                regime {sugMeta.regime} ({sugMeta.regime_confidence.toFixed(2)}) · {sugMeta.dte} DTE · spot {sugMeta.spot_estimate != null ? fmt$(sugMeta.spot_estimate) : "-"} · {sugMeta.lens} lens
+                regime <b className={clsx(regimeOverride ? "text-amber-300" : "text-slate-200")}>
+                  {regimeOverride || sugMeta.regime}
+                </b> ({sugMeta.regime_confidence.toFixed(2)}) · {sugMeta.dte} DTE · spot {sugMeta.spot_estimate != null ? fmt$(sugMeta.spot_estimate) : "-"} · {sugMeta.lens} lens
+                {sugMeta.alt_count > 0 && (
+                  <span className="ml-1 text-violet-300" title={`Also evaluating KG strategies against: ${sugMeta.alt_expirations.join(", ")}`}>
+                    · +{sugMeta.alt_count} alt-expiry play{sugMeta.alt_count === 1 ? "" : "s"}
+                  </span>
+                )}
               </span>
             )}
+            {/* Regime override — re-scores the strategy library via the KG ACTIVATED_BY edges. */}
+            <label className="flex items-center gap-1 text-[10px] font-mono text-slate-400" title="Override the current regime to re-score this chain under a different market state.">
+              <Filter size={10} className="text-slate-500" />
+              <span className="uppercase text-slate-500">Regime:</span>
+              <select
+                value={regimeOverride}
+                onChange={e => changeRegime(e.target.value)}
+                disabled={!selected || loadingSug}
+                className={clsx(
+                  "rounded border px-1.5 py-0.5 text-[10px] font-mono outline-none",
+                  regimeOverride
+                    ? "bg-amber-950/40 border-amber-500/50 text-amber-200 hover:border-amber-400"
+                    : "bg-slate-950 border-slate-700 text-slate-300 hover:border-slate-500",
+                  "disabled:opacity-50"
+                )}
+              >
+                {REGIME_CHOICES.map(r => (
+                  <option key={r.value || "auto"} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </label>
             <button onClick={toggleLens} title="Loss-aversion lens (defensive = max-loss cap 5% NAV, lambda 3.5; average = cap 10%, lambda 2.25)"
               className={clsx("flex items-center gap-1.5 px-2.5 py-1 rounded border text-[10px] font-bold",
                 lens === "defensive" ? "bg-rose-600/30 border-rose-500/40 text-rose-300 hover:bg-rose-600/50"
@@ -551,9 +653,59 @@ export default function OptionsPanel() {
                     loss-aversion gates: max loss ≤ {sugMeta.max_loss_cap_pct.toFixed(0)}% of NAV ({sugMeta.nav ? fmt$(sugMeta.nav) : "-"}) — anything bigger is rejected
                   </div>
                 )}
-                {suggestions.map((s) => (
-                  <StrategyCard key={s.strategy} s={s} sugMeta={sugMeta} onOpenTicket={() => openSuggestionInTicket(s)} />
+                {/* Client-side strategy filter — narrows cards to one strategy family without re-hitting the API. */}
+                {(() => {
+                  const unique = Array.from(new Set(suggestions.map(s => s.strategy)));
+                  if (suggestions.length === 0) return null;
+                  return (
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span className="text-[10px] text-slate-500 uppercase">Strategy:</span>
+                      <button
+                        onClick={() => changeStrategyFilter("")}
+                        className={clsx(
+                          "text-[10px] font-mono px-1.5 py-0.5 rounded border",
+                          strategyFilter === ""
+                            ? "bg-indigo-600/30 border-indigo-500/50 text-indigo-200"
+                            : "bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800"
+                        )}
+                      >
+                        All ({suggestions.length})
+                      </button>
+                      {unique.map(name => {
+                        const cnt = suggestions.filter(s => s.strategy === name).length;
+                        const active = strategyFilter === name;
+                        return (
+                          <button
+                            key={name}
+                            onClick={() => changeStrategyFilter(name)}
+                            className={clsx(
+                              "text-[10px] font-mono px-1.5 py-0.5 rounded border",
+                              active
+                                ? "bg-violet-600/30 border-violet-500/50 text-violet-200"
+                                : "bg-slate-950 border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-500"
+                            )}
+                          >
+                            {name} ({cnt})
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+                {(strategyFilter
+                  ? suggestions.filter(s => s.strategy === strategyFilter)
+                  : suggestions
+                ).map((s) => (
+                  <StrategyCard
+                    key={`${s.strategy}-${(s as OptionSuggestion & { expiration?: string }).expiration ?? ""}-${(s as OptionSuggestion & { contract_type?: string }).contract_type ?? ""}-${s.rank ?? 0}`}
+                    s={s}
+                    sugMeta={sugMeta}
+                    onOpenTicket={() => openSuggestionInTicket(s)}
+                  />
                 ))}
+                {strategyFilter && suggestions.filter(s => s.strategy === strategyFilter).length === 0 && (
+                  <div className="text-[10px] font-mono text-slate-500">No cards for {strategyFilter} in this regime — try a different filter.</div>
+                )}
                 {rejected.length > 0 && (
                   <div className="rounded border border-amber-900/60 bg-amber-950/10 p-2">
                     <div className="text-[10px] font-mono text-amber-300 uppercase tracking-widest mb-1">
@@ -830,6 +982,30 @@ function StrategyCard({ s, sugMeta, onOpenTicket }: { s: OptionSuggestion; sugMe
           </span>
         )}
         <span className="text-xs font-bold text-slate-100">{s.strategy}</span>
+        {(s as OptionSuggestion & { chain_label?: string }).chain_label && (
+          <span
+            className={clsx(
+              "text-[10px] font-mono px-1.5 py-0.5 rounded",
+              (s as OptionSuggestion & { chain_source?: string }).chain_source === "primary"
+                ? "bg-slate-800 text-slate-400 border border-slate-700"
+                : (s as OptionSuggestion & { chain_source?: string }).chain_source === "alt_type"
+                ? "bg-amber-950/40 text-amber-300 border border-amber-800/60"
+                : "bg-violet-950/40 text-violet-300 border border-violet-800/60"
+            )}
+            title={
+              (s as OptionSuggestion & { chain_source?: string }).chain_source === "primary"
+                ? "Built from the chain you selected"
+                : (s as OptionSuggestion & { chain_source?: string }).chain_source === "alt_type"
+                ? "Built from the opposite contract type on the same expiry"
+                : "Built from a nearby expiry — comparable play"
+            }
+          >
+            {(s as OptionSuggestion & { chain_label?: string }).chain_label}
+            {(s as OptionSuggestion & { chain_source?: string }).chain_source !== "primary" && (
+              <span className="ml-1 opacity-70">alt</span>
+            )}
+          </span>
+        )}
         <span className="text-[10px] font-mono text-slate-500 uppercase">{s.signal_method}</span>
         {s.hedge?.hedge_req && (
           <span className="text-[10px] font-mono text-rose-300 bg-rose-950/40 border border-rose-800 rounded px-1.5 py-0.5" title={s.hedge.hedge_reason}>

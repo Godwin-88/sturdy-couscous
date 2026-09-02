@@ -41,7 +41,9 @@ Rules:
 - Discipline: do not recommend placing trades unless explicitly asked; frame hedging/risk in
   Taleb-style tail-risk terms (dynamic delta hedging, defined-risk structures, loss aversion).
 - If the data is empty or unconfigured, say so plainly and say what would be needed.
-- Keep answers under ~260 words unless the user asks for depth.
+- Structure longer answers with markdown headings and bullet lists; never truncate mid-thought.
+- For an auto-breakdown of a screen, write ~500-700 words across Setup, Portfolio/Hedge Context,
+  Risks, and Actionable Takeaways. Only shorten if the screen is genuinely sparse.
 """
 
 
@@ -231,25 +233,38 @@ def synthesize(context: dict, question: str = "") -> dict:
     context keys: {screen, screen_data, retrieval, history}
     Returns {answer, sources, suggestions}.
     """
+    import json as _json
     screen = context.get("screen", "")
     screen_data = context.get("screen_data", {})
     retrieval = context.get("retrieval", {})
     history = context.get("history", [])[-6:]
     page_context = context.get("page_context", {}) or {}
 
-    # Build a compact, numeric screen snapshot
-    def _fmt(v, default="-"):
+    # Build a compact, numeric screen snapshot.
+    # IMPORTANT: nested dicts/lists MUST go through json.dumps with whitespace,
+    # otherwise the str() repr collapses keys/numbers together and downstream
+    # LLM tokenizers mangle $ and ** markers in the assistant reply.
+    def _fmt(v):
         if v is None:
-            return default
+            return "-"
+        if isinstance(v, bool):
+            return "true" if v else "false"
         if isinstance(v, float):
             return f"{v:,.2f}"
-        return str(v)
+        if isinstance(v, int):
+            return f"{v:,}"
+        if isinstance(v, (dict, list)):
+            try:
+                return _json.dumps(v, separators=(", ", ": "), default=str)[:1200]
+            except Exception:
+                return str(v)[:600]
+        return str(v)[:600]
 
     data_lines = []
     sd = screen_data or {}
     if isinstance(sd, dict):
         for k, v in list(sd.items())[:24]:
-            data_lines.append(f"- {k}: {_fmt(v) if not isinstance(v, list) else f'{len(v)} items'}")
+            data_lines.append(f"- {k}: {_fmt(v)}")
     screen_snap = "\n".join(data_lines) if data_lines else "(no screen data)"
 
     rag_lines = []
@@ -287,7 +302,7 @@ def synthesize(context: dict, question: str = "") -> dict:
             {"role": "user", "content": user_prompt},
         ],
         "temperature": 0.3,
-        "max_tokens": 700,
+        "max_tokens": int(os.getenv("FE_MAX_TOKENS", "2000")),
     }
     headers = {"Authorization": f"Bearer {LLM_KEY}", "Content-Type": "application/json"}
 
