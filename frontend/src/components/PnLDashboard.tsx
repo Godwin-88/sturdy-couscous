@@ -30,7 +30,7 @@ export default function PnLDashboard() {
   const navHistory = buildNavHistory(signals ?? [], portfolio?.nav ?? 10000);
 
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
+    <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden transition-all duration-200 hover:border-slate-500 hover:shadow-lg hover:shadow-emerald-500/10 hover:-translate-y-0.5 cursor-pointer">
       {/* Market data strip */}
       {quotes && quotes.length > 0 && (
         <div className="flex items-center border-b border-slate-700 bg-slate-950 overflow-x-auto">

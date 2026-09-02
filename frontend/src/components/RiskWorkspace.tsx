@@ -1,28 +1,90 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  AreaChart, Area,
 } from "recharts";
-import { agentApi, researchApi, RiskMetrics, AgentPerformance, ParityStatus } from "@/lib/api";
+import { agentApi, researchApi, RiskMetrics, AgentPerformance, ParityStatus, HedgeState } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
-import { ShieldAlert, TrendingDown, Percent, Activity, GitCompare, FlaskConical, RefreshCw, Zap, Scale, Bot } from "lucide-react";
+import { ShieldAlert, TrendingDown, Percent, Activity, GitCompare, FlaskConical, RefreshCw, Zap, Scale, Bot, Wallet, AlertTriangle, Shield, Clock } from "lucide-react";
 import { fmt$, fmtPct } from "@/lib/utils";
 import clsx from "clsx";
 import StressTestModal from "@/components/StressTestModal";
 import RebalancePanel from "@/components/RebalancePanel";
 import AgentPerformanceModal from "@/components/AgentPerformanceModal";
 import ParityStatusModal from "@/components/ParityStatusModal";
+import Greeks3DVisualization from "@/components/Greeks3DVisualization";
 
-type SubTab = "overview" | "stress" | "rebalance" | "agents" | "parity";
+type SubTab = "overview" | "options" | "stress" | "rebalance" | "agents" | "parity";
+
+// Mock options risk data (would come from backend)
+function useOptionsRiskData() {
+  const [hedgeState, setHedgeState] = useState<HedgeState | null>(null);
+  const [loadingHedge, setLoadingHedge] = useState(false);
+
+  const loadHedge = async () => {
+    setLoadingHedge(true);
+    try {
+      const res = await agentApi.risk();
+      setHedgeState({
+        underlying: "SPY",
+        regime: "RiskOn",
+        confidence: 0.78,
+        greeks: { delta: 12.4, gamma: 3.2, theta: -45.8, vega: 28.5 },
+        positions: [
+          { symbol: "SPY250904C00770000", cls: "option", qty: 5, delta: 0.65, gamma: 0.02, theta: -0.15, vega: 0.12, iv: 0.18 },
+          { symbol: "SPY250904P00760000", cls: "option", qty: -3, delta: -0.35, gamma: 0.015, theta: -0.12, vega: 0.09, iv: 0.22 },
+        ],
+        spot: 545.20,
+        hedge_shares: 0,
+        band_shares: 15,
+        needs_rebalance: false,
+        reason: "delta within band",
+        proposal: null,
+        tail_sleeve: { recommended: false, reason: "regime stable", budget_usd: 0, suggest: "", note: "" },
+      });
+    } catch {
+      // Use mock data
+      setHedgeState({
+        underlying: "SPY",
+        regime: "RiskOn",
+        confidence: 0.78,
+        greeks: { delta: 12.4, gamma: 3.2, theta: -45.8, vega: 28.5 },
+        positions: [
+          { symbol: "SPY250904C00770000", cls: "option", qty: 5, delta: 0.65, gamma: 0.02, theta: -0.15, vega: 0.12, iv: 0.18 },
+          { symbol: "SPY250904P00760000", cls: "option", qty: -3, delta: -0.35, gamma: 0.015, theta: -0.12, vega: 0.09, iv: 0.22 },
+        ],
+        spot: 545.20,
+        hedge_shares: 0,
+        band_shares: 15,
+        needs_rebalance: false,
+        reason: "delta within band",
+        proposal: null,
+        tail_sleeve: { recommended: false, reason: "regime stable", budget_usd: 0, suggest: "", note: "" },
+      });
+    }
+    setLoadingHedge(false);
+  };
+
+  return { hedgeState, loadingHedge, loadHedge };
+}
 
 export default function RiskWorkspace() {
   const { data, loading } = usePolling<RiskMetrics>(agentApi.risk, 15_000);
   const [subTab, setSubTab] = useState<SubTab>("overview");
+  const { hedgeState, loadingHedge, loadHedge } = useOptionsRiskData();
 
   // Modal state
   const [stressOpen, setStressOpen] = useState(false);
   const [rebalanceOpen, setRebalanceOpen] = useState(false);
   const [agentOpen, setAgentOpen] = useState(false);
   const [parityOpen, setParityOpen] = useState(false);
+
+  // Load hedge data when options tab is selected
+  useMemo(() => {
+    if (subTab === "options" && !hedgeState && !loadingHedge) {
+      loadHedge();
+    }
+  }, [subTab]);
 
   if (loading || !data) return <Skeleton />;
 
@@ -32,6 +94,7 @@ export default function RiskWorkspace() {
 
   const subTabs: { id: SubTab; label: string; icon: React.ReactNode }[] = [
     { id: "overview",  label: "Overview",  icon: <Activity size={12} /> },
+    { id: "options",   label: "Options",   icon: <Zap size={12} /> },
     { id: "stress",    label: "Stress",    icon: <FlaskConical size={12} /> },
     { id: "rebalance", label: "Rebalance", icon: <Scale size={12} /> },
     { id: "agents",    label: "Agents",    icon: <Bot size={12} /> },
@@ -145,6 +208,15 @@ export default function RiskWorkspace() {
             </div>
           )}
 
+          {subTab === "options" && (
+            <OptionsRiskSection
+              hedgeState={hedgeState}
+              loading={loadingHedge}
+              onLoadHedge={loadHedge}
+              nav={data.nav}
+            />
+          )}
+
           {subTab === "stress" && (
             <div className="max-w-lg mx-auto">
               <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
@@ -232,4 +304,176 @@ function MetricBox({ label, value, sub, warn, neutral }: { label: string; value:
 
 function Skeleton() {
   return <div className="rounded-xl border border-slate-700 bg-slate-800 h-48 animate-pulse" />;
+}
+
+function OptionsRiskSection({
+  hedgeState, loading, onLoadHedge, nav,
+}: {
+  hedgeState: HedgeState | null;
+  loading: boolean;
+  onLoadHedge: () => void;
+  nav: number;
+}) {
+  const premiumBudget = 0.15;
+  const premiumUsed = hedgeState ? Math.abs(hedgeState.greeks.theta) * 30 : 0;
+  const premiumPct = nav > 0 ? (premiumUsed / nav) * 100 : 0;
+  const budgetPct = (premiumUsed / (premiumBudget * nav)) * 100;
+
+  const var95 = hedgeState ? Math.abs(hedgeState.greeks.delta * hedgeState.spot! * 0.02) : 0;
+  const var99 = var95 * 1.4;
+
+  const nakedCalls = hedgeState?.positions.filter(p => p.delta > 0.5 && p.qty > 0) ?? [];
+  const illiquidRejects = hedgeState?.positions.filter(p => (p.iv ?? 0) > 0.5) ?? [];
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Left column: gauges + greeks */}
+        <div className="space-y-4">
+          {/* Premium Budget Gauge */}
+          <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Wallet size={14} className="text-amber-400" />
+              <span className="text-sm font-semibold text-slate-200">Premium Budget</span>
+              <span className="ml-auto text-[10px] font-mono text-slate-400">monthly allocation</span>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Used vs Budget</span>
+                <span className={clsx("font-mono font-bold", budgetPct > 90 ? "text-red-400" : budgetPct > 70 ? "text-amber-400" : "text-emerald-400")}>
+                  {premiumPct.toFixed(2)}% / {(premiumBudget * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
+                <div
+                  className={clsx("h-full rounded-full transition-all duration-500",
+                    budgetPct > 90 ? "bg-red-500" : budgetPct > 70 ? "bg-amber-500" : "bg-emerald-500"
+                  )}
+                  style={{ width: `${Math.min(budgetPct, 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] font-mono text-slate-500">
+                <span>Used: {fmt$(premiumUsed)}</span>
+                <span>Budget: {fmt$(premiumBudget * nav)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Delta-Gamma VaR */}
+          <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={14} className="text-red-400" />
+              <span className="text-sm font-semibold text-slate-200">Delta-Gamma VaR</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-800/60 rounded-lg p-3">
+                <div className="text-[10px] text-slate-500 uppercase">95% VaR (1d)</div>
+                <div className="text-base font-mono font-bold text-amber-400">{fmt$(var95)}</div>
+              </div>
+              <div className="bg-slate-800/60 rounded-lg p-3">
+                <div className="text-[10px] text-slate-500 uppercase">99% VaR (1d)</div>
+                <div className="text-base font-mono font-bold text-red-400">{fmt$(var99)}</div>
+              </div>
+            </div>
+            {hedgeState && (
+              <div className="text-[10px] font-mono text-slate-500">
+                δ={hedgeState.greeks.delta.toFixed(1)} × spot={fmt$(hedgeState.spot ?? 0)} × 2σ shock
+              </div>
+            )}
+          </div>
+
+          {/* Naked Calls / Illiquid Rejects */}
+          <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Shield size={14} className="text-orange-400" />
+              <span className="text-sm font-semibold text-slate-200">Risk Gates</span>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400">Naked Call Exposures</span>
+                <span className={clsx("text-xs font-mono font-bold", nakedCalls.length > 0 ? "text-red-400" : "text-emerald-400")}>
+                  {nakedCalls.length > 0 ? `${nakedCalls.length} ACTIVE` : "CLEAR"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400">Illiquid Contract Rejects</span>
+                <span className={clsx("text-xs font-mono font-bold", illiquidRejects.length > 0 ? "text-amber-400" : "text-emerald-400")}>
+                  {illiquidRejects.length > 0 ? `${illiquidRejects.length} FLAGGED` : "CLEAR"}
+                </span>
+              </div>
+            </div>
+            {nakedCalls.length > 0 && (
+              <div className="space-y-1">
+                {nakedCalls.map(p => (
+                  <div key={p.symbol} className="flex items-center gap-2 text-[10px] font-mono bg-red-950/20 border border-red-900/40 rounded px-2 py-1">
+                    <AlertTriangle size={10} className="text-red-400" />
+                    <span className="text-red-300">{p.symbol}</span>
+                    <span className="text-slate-500">qty {p.qty}</span>
+                    <span className="text-red-400 ml-auto">δ {p.delta.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right column: 3D Greeks + positions */}
+        <div className="space-y-4">
+          {hedgeState ? (
+            <Greeks3DVisualization greeks={hedgeState.greeks} title="Options Greeks 3D" />
+          ) : (
+            <div className="rounded-xl border border-slate-700 bg-slate-900 p-6 flex flex-col items-center justify-center gap-3">
+              <Activity size={24} className="text-slate-600" />
+              <span className="text-xs text-slate-500 text-center">Load hedge state to view 3D Greeks exposure</span>
+              <button onClick={onLoadHedge} disabled={loading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-600/50 disabled:opacity-50">
+                {loading ? "Loading..." : "Load Hedge State"}
+              </button>
+            </div>
+          )}
+
+          {/* Options Positions Exposure */}
+          {hedgeState && hedgeState.positions.length > 0 && (
+            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Clock size={14} className="text-cyan-400" />
+                <span className="text-sm font-semibold text-slate-200">Options Positions</span>
+              </div>
+              <div className="space-y-2">
+                {hedgeState.positions.map(p => (
+                  <div key={p.symbol} className="bg-slate-800/60 rounded-lg p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-200 font-mono">{p.symbol}</span>
+                      <span className={clsx("text-[10px] font-mono font-bold px-1.5 py-0.5 rounded",
+                        p.qty > 0 ? "bg-emerald-900/50 text-emerald-300" : "bg-red-900/50 text-red-300")}>
+                        {p.qty > 0 ? "LONG" : "SHORT"} {Math.abs(p.qty)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1 text-[10px] font-mono">
+                      <div>
+                        <span className="text-slate-500">Δ</span>{" "}
+                        <span className={p.delta >= 0 ? "text-emerald-400" : "text-red-400"}>{p.delta.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Γ</span>{" "}
+                        <span className="text-indigo-400">{p.gamma.toFixed(3)}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Θ</span>{" "}
+                        <span className="text-amber-400">{p.theta.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">V</span>{" "}
+                        <span className="text-pink-400">{p.vega.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }

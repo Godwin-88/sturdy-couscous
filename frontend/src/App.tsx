@@ -19,9 +19,10 @@ import BacktestWorkspace   from "@/components/BacktestWorkspace";
 import ContradictionsPanel from "@/components/ContradictionsPanel";
 import RiskWorkspace       from "@/components/RiskWorkspace";
 import IntelligencePanel   from "@/components/IntelligencePanel";
-  import AlpacaPanel         from "@/components/AlpacaPanel";
-import OptionsPanel         from "@/components/OptionsPanel";
-import AnalyticsPanel      from "@/components/AnalyticsPanel";
+  import AlpacaPanel        from "@/components/AlpacaPanel";
+import OptionsPanel       from "@/components/OptionsPanel";
+import OptionPnlPanel     from "@/components/OptionPnlPanel";
+import AnalyticsPanel     from "@/components/AnalyticsPanel";
 import ContextMenu, { type ContextMenuSeries } from "@/components/ContextMenu";
 import HypothesisBoard     from "@/components/HypothesisBoard";
 import CypherConsole       from "@/components/CypherConsole";
@@ -214,10 +215,11 @@ function DashboardTab() {
         <ContradictionsPanel />
         <div className="flex-1 min-h-[240px]"><AgentLog /></div>
       </div>
-      <div className="flex flex-col gap-3 overflow-hidden min-h-0">
-        <AlpacaPanel />
-        <PnLDashboard />
-        <div className="flex-1 min-h-0"><DashboardGraph /></div>
+      <div className="flex flex-col gap-3 overflow-y-auto min-h-0">
+        <div className="shrink-0"><AlpacaPanel /></div>
+        <div className="shrink-0"><OptionPnlPanel /></div>
+        <div className="shrink-0"><PnLDashboard /></div>
+        <div className="flex-1 min-h-[200px]"><DashboardGraph /></div>
       </div>
     </div>
   );

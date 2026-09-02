@@ -36,6 +36,7 @@ from research_agent import ResearchAgent
 from news_agent import NewsAgent
 from macro_calendar import MacroCalendarAgent
 from kg_signal_generator import KGSignalGenerator
+from hedge_agent import HedgeAgent
 from common.schema_validator import validate_signal
 from jsonschema import ValidationError as SchemaValidationError
 from common.versioning import validate_schema_version
@@ -86,6 +87,7 @@ class Orchestrator:
         self.news_agent      = NewsAgent()
         self.macro_agent     = MacroCalendarAgent()
         self.kg_signals      = KGSignalGenerator()
+        self.hedge_agent     = HedgeAgent()
         self.portfolio_peak  = 0.0
         self.halted          = False
         self._tick           = 0
@@ -270,6 +272,36 @@ class Orchestrator:
                                            "note": "execution handled by C++ risk-engine"})
                 if self.halted:
                     logger.warning("Agent HALTED — drawdown limit exceeded")
+
+            # ── Step 5b: HedgeAgent advisor (paper-options protection) ───────
+            # Dynamic delta hedge + tail sleeve + option P&L, human-in-the-loop
+            # (dry-run by default; never trades without explicit confirm).
+            try:
+                hedge_state = await self.hedge_agent.hedge_state()
+                option_pnl  = await self.hedge_agent.option_pnl()
+                audit["hedge"] = {
+                    "regime": hedge_state.get("regime"),
+                    "needs_rebalance": hedge_state.get("needs_rebalance"),
+                    "proposal": hedge_state.get("proposal"),
+                    "greeks": hedge_state.get("greeks"),
+                    "tail_sleeve": hedge_state.get("tail_sleeve"),
+                    "net_premium_usd": option_pnl.get("net_premium_usd"),
+                    "net_option_pnl_usd": option_pnl.get("net_option_pnl_usd"),
+                    "contracts": option_pnl.get("contracts"),
+                }
+                audit["steps"].append({"agent": "HedgeAgent", "status": "ok",
+                                       "needs_rebalance": hedge_state.get("needs_rebalance"),
+                                       "net_option_pnl_usd": option_pnl.get("net_option_pnl_usd")})
+                logger.info(
+                    f"HedgeAgent: needs_rebalance={hedge_state.get('needs_rebalance')} "
+                    f"delta={hedge_state.get('greeks', {}).get('delta')} "
+                    f"net_premium={option_pnl.get('net_premium_usd')} "
+                    f"option_pnl={option_pnl.get('net_option_pnl_usd')}"
+                )
+            except Exception as e:
+                logger.warning(f"HedgeAgent failed: {e}")
+                audit["steps"].append({"agent": "HedgeAgent", "status": "error",
+                                       "error": str(e)})
 
             # ── Step 6: Circuit breaker check ─────────────────────────────────
             portfolio = await self._get_portfolio_state()

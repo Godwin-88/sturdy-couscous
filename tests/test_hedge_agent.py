@@ -1,16 +1,23 @@
-"""HedgeAgent unit tests — dynamic delta hedging, Taleb posture, dry-run safety.
+"""HedgeAgent unit tests - dynamic delta hedging, Taleb posture, dry-run safety.
 
 Verifies portfolio-greek aggregation math (equity delta + option contracts x100),
 hedge-share computation, regime-scaled bands (tighter in stress), the tail-sleeve
-recommendation, and the human-in-the-loop gate (confirm=False never executes).
+recommendation, the human-in-the-loop gate (confirm=False never executes), and the
+new option_pnl (premium income vs hedge cost) report.
 
-Uses inline mocks (no network/keys required): the module-level options_provider
-is swapped for a snapshot stub so portfolio_greeks() aggregation is exercised.
+The agent is now async (it awaits the Alpaca coroutines) so the tests wrap each
+call in asyncio.run and stub the network via monkeypatched async fakes.
 """
+import asyncio
+
 import pytest
 
 import agent.hedge_agent as hmod
 from agent.hedge_agent import HedgeAgent, _BAND_MULT
+
+
+def _run(coro):
+    return asyncio.run(coro)
 
 
 def _agent_with_greeks(delta: float, gamma: float = 0.0, theta: float = 0.0,
@@ -22,20 +29,31 @@ def _agent_with_greeks(delta: float, gamma: float = 0.0, theta: float = 0.0,
                                "vega": vega, "implied_volatility": 0.2}}
 
     hmod.options_provider = _SnapProvider()
+
+    async def _fake_positions():
+        return positions if positions is not None else [
+            {"symbol": "SPY", "qty": 100, "avg_entry_price": 760.0,
+             "current_price": 762.0, "market_value": 76200.0},
+            {"symbol": "SPY260904C00770000", "qty": 1, "avg_entry_price": 3.0,
+             "current_price": 2.5, "market_value": 250.0},
+        ]
+
+    async def _fake_regime():
+        return {"regime": regime, "confidence": 0.8}
+
+    async def _fake_spot(underlying):
+        return 762.0
+
     ha = HedgeAgent()
-    ha._option_positions = lambda: (positions if positions is not None else [
-        {"symbol": "SPY", "qty": 100, "avg_entry_price": 760.0, "market_value": 76000.0},
-        {"symbol": "SPY260904C00770000", "qty": 1, "avg_entry_price": 3.0, "market_value": 300.0},
-    ])
-    ha.regime = lambda: {"regime": regime, "confidence": 0.8}
-    ha.spot = lambda underlying: 762.0
+    ha._fetch_positions = _fake_positions
+    ha.regime          = _fake_regime
+    ha.spot            = _fake_spot
     return ha
 
 
 def test_portfolio_greeks_equity_plus_option():
     ha = _agent_with_greeks(delta=0.5, gamma=0.01, theta=-2.0, vega=0.8)
-    g = ha.portfolio_greeks()
-    # equity 100 shares => +100 delta; option 1x100x0.5 = +50 delta
+    g = _run(ha.portfolio_greeks())
     assert g["greeks"]["delta"] == pytest.approx(150.0)
     assert g["greeks"]["gamma"] == pytest.approx(1.0)
     assert g["greeks"]["theta"] == pytest.approx(-200.0)
@@ -46,29 +64,27 @@ def test_portfolio_greeks_equity_plus_option():
 def test_short_option_negates_greeks():
     ha = _agent_with_greeks(delta=0.5, gamma=0.01, theta=-2.0, vega=0.8,
                             positions=[{"symbol": "SPY260904C00770000", "qty": -1,
-                                        "avg_entry_price": 3.0, "market_value": -300.0}])
-    g = ha.portfolio_greeks()
+                                        "avg_entry_price": 3.0, "current_price": 2.5,
+                                        "market_value": -250.0}])
+    g = _run(ha.portfolio_greeks())
     assert g["greeks"]["delta"] == pytest.approx(-50.0)
     assert g["greeks"]["gamma"] == pytest.approx(-1.0)
 
 
 def test_hedge_shares_math_and_band():
-    # +150 delta @ 762 spot => sell 150/762 = 0.197 shares -> rounded -0.20,
-    # below min 1 share -> no hedge needed.
     ha = _agent_with_greeks(delta=0.5, gamma=0.01)
-    st = ha.hedge_state("SPY")
+    st = _run(ha.hedge_state("SPY"))
     assert st["hedge_shares"] == pytest.approx(-0.20, abs=1e-2)
     assert st["needs_rebalance"] is False
     assert st["proposal"] is None
 
 
 def test_hedge_triggers_on_big_delta():
-    # 20 long ATM options x 0.6 delta x 100 = +1200 delta @ 762 => ~1.57 shares
-    # to sell -> exceeds min_shares(1) => rebalance proposed.
     ha = _agent_with_greeks(delta=0.6,
                             positions=[{"symbol": "SPY260904C00770000", "qty": 20,
-                                        "avg_entry_price": 3.0, "market_value": 6000.0}])
-    st = ha.hedge_state("SPY")
+                                        "avg_entry_price": 3.0, "current_price": 2.5,
+                                        "market_value": 5000.0}])
+    st = _run(ha.hedge_state("SPY"))
     assert st["needs_rebalance"] is True
     assert st["proposal"]["side"] == "sell"
     assert st["proposal"]["qty"] >= 1
@@ -79,21 +95,21 @@ def test_stress_regime_tightens_band_and_triggers_sooner():
     assert _BAND_MULT["HighVolatility"] == 0.5
     assert _BAND_MULT["Crisis"] == 0.25
     assert _BAND_MULT["Crisis"] < _BAND_MULT["Neutral"]
-    # 4 contracts x 0.6 => +240 delta -> ~0.31 shares. Not > min(1) even in
-    # Crisis; use the high-exposure fixture to assert the trigger instead.
     ha_stress = _agent_with_greeks(delta=0.6, regime="Crisis",
                             positions=[{"symbol": "SPY260904C00770000", "qty": 20,
-                                        "avg_entry_price": 3.0, "market_value": 6000.0}])
-    st = ha_stress.hedge_state("SPY")
+                                        "avg_entry_price": 3.0, "current_price": 2.5,
+                                        "market_value": 5000.0}])
+    st = _run(ha_stress.hedge_state("SPY"))
     assert st["needs_rebalance"] is True
-    assert st["band_shares"] < 20.0  # tighter band in stress
+    assert st["band_shares"] < 20.0
 
 
 def test_execute_requires_confirm():
     ha = _agent_with_greeks(delta=0.6,
                             positions=[{"symbol": "SPY260904C00770000", "qty": 20,
-                                        "avg_entry_price": 3.0, "market_value": 6000.0}])
-    res = ha.execute("SPY", confirm=False)
+                                        "avg_entry_price": 3.0, "current_price": 2.5,
+                                        "market_value": 5000.0}])
+    res = _run(ha.execute("SPY", confirm=False))
     assert res["status"] == "dry_run"
     assert "confirm=true" in res["message"]
 
@@ -107,7 +123,25 @@ def test_tail_sleeve_stress_only():
     assert "puts" in stress["suggest"].lower()
 
 
-# ── Public args sanity (no crash; defensive path) ─────────────────────────────
+def test_option_pnl_income_vs_cost():
+    positions = [
+        {"symbol": "SPY", "qty": 100, "avg_entry_price": 760.0,
+         "current_price": 762.0, "market_value": 76200.0},
+        {"symbol": "SPY260904P00750000", "qty": 1, "avg_entry_price": 4.0,
+         "current_price": 3.0, "market_value": 300.0},
+        {"symbol": "SPY260904C00770000", "qty": -1, "avg_entry_price": 2.0,
+         "current_price": 2.5, "market_value": -250.0},
+    ]
+    ha = _agent_with_greeks(delta=0.5, positions=positions)
+    pnl = _run(ha.option_pnl())
+    assert pnl["contracts"] == 2
+    assert pnl["premium_income_usd"] == pytest.approx(200.0)
+    assert pnl["premium_cost_usd"] == pytest.approx(400.0)
+    assert pnl["net_premium_usd"] == pytest.approx(-200.0)
+    assert pnl["unrealized_pnl_usd"] == pytest.approx(-150.0)
+    assert pnl["hedge_sleeve_mv_usd"] == pytest.approx(76200.0)
+
+
 def test_singleton_exists():
     assert hmod.hedge_agent is not None
     assert hmod.hedge_agent.min_shares > 0

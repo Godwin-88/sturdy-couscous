@@ -1,25 +1,29 @@
 """
 Hedge Agent — dynamic delta hedging + Taleb-style tail-hedge sleeve.
 
-Watches the LIVE portfolio greeks (aggregated delta/gamma/theta/vega across all
-Alpaca option positions, plus equity positions with delta=shares) and:
+Watches the LIVE portfolio greeks (aggregated delta/gamma/theta/vega across
+all Alpaca positions — equities contribute delta=shares, options contribute
+contracts x 100 x greeks from live snapshots) and:
 
   1. DYNAMIC DELTA HEDGE
-       hedge_shares = -portfolio_delta / underlying_price
+        hedge_shares = -portfolio_delta / underlying_price
      Proposes an underlying share offset whenever |hedge_shares| >= min_shares
      or the portfolio delta breaches a regime-scaled band. DRY-RUN FIRST: an
      explicit confirm=True is required before any paper order is placed
-     (T10 human-agent interaction: the trader always sees the hedge before it
-     touches the account).
+     (T10 human-agent interaction).
 
-  2. TAIL SLEEVE (Taleb / REF Module-5 fat tails)
-     When short-gamma exposure is material and the regime is HighVolatility /
-     Crisis / SystemicStress, recommend a ladder of cheap OTM puts (e.g. -5% /
-     -8%) sized to a hedge budget funded from collected premium.
+  2. TAIL SLEEVE (Taleb / REF Model Failure and Crises)
+     When short-gamma is material and regime is HighVolatility / Crisis /
+     SystemicStress, recommend a ladder of cheap OTM puts (-5% / -8%) funded
+     from collected premium.
 
-Greeks come from live Alpaca option snapshots; underlying spot from the last
-equity bar close. All methods are defensive (never raise): on any failure they
-return a zero/empty state, so the hedge agent can never take down the loop.
+  3. OPTION P&L (income vs hedge cost)
+     option_pnl() reports collected premium on short options, debit paid on
+     long options, mark-to-market P&L, and the equity hedge-sleeve notional.
+
+All methods are async-safe (they await the Alpaca coroutines) and defensive
+(never raise): on failure they return a zero/empty state so the hedge agent
+can never take down the agent loop.
 """
 from __future__ import annotations
 
@@ -60,54 +64,59 @@ _BAND_MULT = {
 TAIL_BUDGET_PCT = float(os.getenv("OPTION_TAIL_BUDGET_PCT", "0.02"))
 
 
+def _is_option_symbol(symbol: str) -> bool:
+    """OCC option symbols are 16+ chars (or contain '-' for some venues)."""
+    stripped = str(symbol or "").upper().lstrip("$")
+    return ("-" in symbol) or len(stripped) > 6
+
+
 class HedgeAgent:
-    """Portfolio-greek aggregation + dynamic delta hedge + tail sleeve."""
+    """Portfolio-greek aggregation + dynamic delta hedge + tail sleeve + P&L."""
 
     def __init__(self) -> None:
         self.min_shares = HEDGE_MIN_SHARES
         self.band_shares = HEDGE_BAND_SHARES
 
-    # ── Position / greek ingestion ─────────────────────────────────────────
+    # ── Position ingestion ─────────────────────────────────────────────────
 
-    def _option_positions(self) -> list[dict]:
+    async def _fetch_positions(self) -> list[dict]:
+        """Await live Alpaca positions; normalise to a flat dict list."""
+        if not (alpaca and alpaca.is_configured()):
+            return []
         try:
-            positions = alpaca.get_positions() if alpaca and alpaca.is_configured() else []
+            positions = await alpaca.get_positions()
         except Exception as e:
             logger.warning(f"hedge_agent: get_positions failed: {e}")
             return []
-        if isinstance(positions, list):
-            return [
-                {
-                    "symbol": str(p.get("symbol") or ""),
-                    "qty": float(p.get("qty") or 0),
-                    "avg_entry_price": float(p.get("avg_entry_price") or 0),
-                    "market_value": float(p.get("market_value") or 0),
-                }
-                for p in positions
-                if p.get("symbol")
-            ]
-        if isinstance(positions, dict) and positions.get("status"):
-            # unconfigured/error response
+        if not isinstance(positions, list):
             return []
-        return []
+        return [
+            {
+                "symbol": str(p.get("symbol") or ""),
+                "qty": float(p.get("qty") or 0),
+                "avg_entry_price": float(p.get("avg_entry_price") or 0),
+                "current_price": float(p.get("current_price") or 0),
+                "market_value": float(p.get("market_value") or 0),
+            }
+            for p in positions
+            if p.get("symbol")
+        ]
 
-    def portfolio_greeks(self) -> dict[str, Any]:
+    # ── Portfolio greeks ───────────────────────────────────────────────────
+
+    async def portfolio_greeks(self) -> dict[str, Any]:
         """Aggregate delta/gamma/theta/vega across live Alpaca positions.
 
-        Equity positions contribute delta = qty (1 share = 1 delta), gamma=0.
-        Option positions contribute contracts x 100 x greeks from live snapshots.
+        Equity positions contribute delta=qty (1 share = 1 delta), gamma=0.
+        Option positions contribute contracts x 100 x greeks from snapshots.
         """
         agg = {"delta": 0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0}
         detail: list[dict] = []
-        for pos in self._option_positions():
+        for pos in await self._fetch_positions():
             symbol, qty = pos["symbol"], pos["qty"]
             if qty == 0 or not symbol:
                 continue
-            stripped = symbol.upper().lstrip("$")
-            # Options are OCC-style (16+ chars, or contain '-' for some venues);
-            # equities are plain symbols.
-            is_option = ("-" in symbol) or len(stripped) > 6
-            if not is_option:
+            if not _is_option_symbol(symbol):
                 agg["delta"] += qty
                 detail.append({"symbol": symbol, "cls": "equity",
                                "qty": qty, "delta": qty, "gamma": 0.0,
@@ -135,12 +144,11 @@ class HedgeAgent:
             agg[k] = round(agg[k], 4)
         return {"greeks": agg, "positions": detail}
 
-    # ── Regime band ─────────────────────────────────────────────────────────
+    # ── Regime band ────────────────────────────────────────────────────────
 
-    def regime(self) -> dict:
+    async def regime(self) -> dict:
         try:
-            import asyncio
-            return asyncio.run(current_regime())
+            return await current_regime()
         except Exception as e:
             logger.warning(f"hedge_agent: regime lookup failed: {e}")
             return {"regime": "Neutral", "confidence": 0.0}
@@ -148,26 +156,26 @@ class HedgeAgent:
     def band_multiplier(self, regime: str) -> float:
         return _BAND_MULT.get(regime, 1.0)
 
-    # ── Spot ────────────────────────────────────────────────────────────────
+    # ── Spot ───────────────────────────────────────────────────────────────
 
-    def spot(self, underlying: str) -> float | None:
+    async def spot(self, underlying: str) -> float | None:
         try:
-            bars = alpaca.get_bars(underlying.upper(), limit=2) if alpaca else []
+            bars = await alpaca.get_bars(underlying.upper(), limit=2) if alpaca else []
             if bars:
                 return float(bars[-1]["c"])
         except Exception as e:
             logger.warning(f"hedge_agent: spot failed for {underlying}: {e}")
         return None
 
-    # ── Hedge state / proposal ──────────────────────────────────────────────
+    # ── Hedge state / proposal ─────────────────────────────────────────────
 
-    def hedge_state(self, underlying: str = "SPY") -> dict[str, Any]:
+    async def hedge_state(self, underlying: str = "SPY") -> dict[str, Any]:
         """Current portfolio greeks + recommended dynamic delta hedge."""
-        pg = self.portfolio_greeks()
-        regime_state = self.regime()
+        pg = await self.portfolio_greeks()
+        regime_state = await self.regime()
         regime = regime_state.get("regime", "Neutral")
         mult = self.band_multiplier(regime)
-        spot = self.spot(underlying)
+        spot = await self.spot(underlying)
         net_delta = pg["greeks"]["delta"]
         hedge_shares = -net_delta / spot if spot else 0.0
         band = self.band_shares * mult
@@ -218,12 +226,12 @@ class HedgeAgent:
                     "overnight in crisis (REF: Model Failure and Crises)",
         }
 
-    def rebalance_proposal(self, underlying: str = "SPY") -> dict:
-        return {"dry_run": True, "hedge_state": self.hedge_state(underlying)}
+    async def rebalance_proposal(self, underlying: str = "SPY") -> dict:
+        return {"dry_run": True, "hedge_state": await self.hedge_state(underlying)}
 
-    def execute(self, underlying: str = "SPY", confirm: bool = False) -> dict[str, Any]:
+    async def execute(self, underlying: str = "SPY", confirm: bool = False) -> dict[str, Any]:
         """Dry-run by default; with confirm=True places the paper underlying order."""
-        st = self.hedge_state(underlying)
+        st = await self.hedge_state(underlying)
         if not confirm:
             return {"status": "dry_run",
                     "message": "pass confirm=true to execute (human-in-the-loop)",
@@ -232,9 +240,8 @@ class HedgeAgent:
         if not pp or pp.get("qty", 0) <= 0:
             return {"status": "no_rebalance_needed", "hedge_state": st}
         try:
-            import asyncio
-            res = asyncio.run(alpaca.place_order(
-                pp["symbol"], pp["side"], float(pp["qty"]), "market"))
+            res = await alpaca.place_order(
+                pp["symbol"], pp["side"], float(pp["qty"]), "market")
             return {"status": "executed", "order": {
                 "symbol": res.symbol, "side": pp["side"], "qty": pp["qty"],
                 "order_id": res.order_id, "status": res.status,
@@ -243,6 +250,55 @@ class HedgeAgent:
         except Exception as e:
             logger.error(f"hedge execute failed: {e}")
             return {"status": "error", "error": str(e), "hedge_state": st}
+
+    # ── Option P&L (income vs hedge cost) ──────────────────────────────────
+
+    async def option_pnl(self, underlying: str = "SPY") -> dict[str, Any]:
+        """Live option P&L: premium income vs debit cost, mark, hedge sleeve."""
+        positions = await self._fetch_positions()
+        options = [p for p in positions if _is_option_symbol(p["symbol"])]
+        equities = [p for p in positions if not _is_option_symbol(p["symbol"])]
+
+        premium_income = 0.0   # credit collected on short options
+        premium_cost = 0.0     # debit paid on long options
+        unrealized_pnl = 0.0   # mark-to-market on option positions
+        contracts = 0
+        underlyings: set[str] = set()
+
+        for p in options:
+            qty, entry = p["qty"], p["avg_entry_price"]
+            cur = p["current_price"]
+            notional = qty * entry * MULT
+            if qty < 0:
+                premium_income += abs(qty) * entry * MULT       # sold premium
+                unrealized_pnl += (entry - cur) * abs(qty) * MULT
+            else:
+                premium_cost += qty * entry * MULT
+                unrealized_pnl += (cur - entry) * qty * MULT
+            contracts += abs(qty)
+            try:
+                from agent.option_utils import parse_contract_symbol
+                root, _, _, _ = parse_contract_symbol(p["symbol"])
+                underlyings.add(str(root))
+            except Exception:
+                pass
+
+        # Equity hedge sleeve notional (the delta-hedge shares held).
+        hedge_sleeve_mv = sum(p["market_value"] for p in equities if p["market_value"] > 0)
+
+        return {
+            "underlying": underlying.upper(),
+            "option_positions": len(options),
+            "equity_positions": len(equities),
+            "contracts": contracts,
+            "underlyings": sorted(underlyings),
+            "premium_income_usd": round(premium_income, 2),
+            "premium_cost_usd": round(premium_cost, 2),
+            "net_premium_usd": round(premium_income - premium_cost, 2),
+            "unrealized_pnl_usd": round(unrealized_pnl, 2),
+            "hedge_sleeve_mv_usd": round(hedge_sleeve_mv, 2),
+            "net_option_pnl_usd": round(premium_income - premium_cost + unrealized_pnl, 2),
+        }
 
 
 hedge_agent = HedgeAgent()

@@ -3,11 +3,33 @@ import { useNavigate } from "react-router-dom";
 import { agentApi, researchApi, signalsApi, Signal, SignalLineage, RejectedSignals, ExecutionFill } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
 import { fmt$, relTime } from "@/lib/utils";
-import { RefreshCw, ChevronDown, ChevronRight, BookOpen, BarChart, Brain, Search, X, AlertCircle, Plus, Download, Radio, Wallet, ExternalLink } from "lucide-react";
+import { RefreshCw, ChevronDown, ChevronRight, BookOpen, BarChart, Brain, Search, X, AlertCircle, Plus, Download, Radio, Wallet, ExternalLink, Activity, Clock } from "lucide-react";
 import clsx from "clsx";
 import OrderDetailDrawer from "@/components/OrderDetailDrawer";
 
 type SubTab = "all" | "rejected" | "fills";
+
+function isOptionTicker(ticker: string): boolean {
+  return /^[A-Z]{1,5}\d{6}[CP]\d{8}$/.test(ticker);
+}
+
+function parseOptionDetails(ticker: string): { underlying: string; expiry: string; type: "C" | "P"; strike: number } | null {
+  const m = ticker.match(/^([A-Z]{1,5})(\d{6})([CP])(\d{8})$/);
+  if (!m) return null;
+  const [, , yymmdd, cp, strikeRaw] = m;
+  return {
+    underlying: m[1],
+    expiry: `20${yymmdd.slice(0, 2)}-${yymmdd.slice(2, 4)}-${yymmdd.slice(4, 6)}`,
+    type: cp as "C" | "P",
+    strike: parseInt(strikeRaw, 10) / 1000,
+  };
+}
+
+function dteFromExpiry(expiry: string): number {
+  const exp = new Date(expiry);
+  const now = new Date();
+  return Math.max(0, Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+}
 
 export default function SignalsTable() {
   const navigate = useNavigate();
@@ -137,23 +159,26 @@ export default function SignalsTable() {
             <thead className="sticky top-0 bg-slate-800 z-10">
               <tr className="text-slate-400">
                 <th className="py-2 px-2 w-6" />
-                {["Time","Strategy","Ticker","Side","Qty","Fill $","Score","Mode","Actions"].map(h => (
+                {["Time","Strategy","Ticker","Type","Side","Qty","Fill $","Δ","Prem","DTE","Score","Mode","Actions"].map(h => (
                   <th key={h} className={clsx("py-2 px-3 font-medium text-[10px] uppercase tracking-wider",
-                    ["Qty","Fill $","Score"].includes(h) ? "text-right" : "text-left"
+                    ["Qty","Fill $","Δ","Prem","DTE","Score"].includes(h) ? "text-right" : "text-left"
                   )}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {(!data || data.length === 0) && (
-                <tr><td colSpan={10} className="text-center py-8 text-slate-500">No orders yet — agent is generating signals</td></tr>
+                <tr><td colSpan={14} className="text-center py-8 text-slate-500">No orders yet — agent is generating signals</td></tr>
               )}
               {(data ?? []).map(s => {
                 const isExpanded = expanded === s.strategy;
                 const lg = lineage[s.strategy];
                 const isLoadingLg = lineageLoading === s.strategy;
+                const isOpt = isOptionTicker(s.ticker);
+                const optDetails = isOpt ? parseOptionDetails(s.ticker) : null;
+                const dte = optDetails ? dteFromExpiry(optDetails.expiry) : null;
                 return [
-                  <tr key={s.order_id} className="border-t border-slate-800 hover:bg-slate-800/60">
+                  <tr key={s.order_id} className={clsx("border-t border-slate-800 hover:bg-slate-800/60", isOpt && "bg-violet-950/10")}>
                     <td className="py-1.5 px-2">
                       <button onClick={() => toggleLineage(s.strategy)}
                         className="p-0.5 rounded text-slate-500 hover:text-indigo-400" title="View KG lineage">
@@ -162,12 +187,40 @@ export default function SignalsTable() {
                     </td>
                     <td className="py-1.5 px-3 text-slate-500">{relTime(s.created_at)}</td>
                     <td className="py-1.5 px-3 text-slate-300 max-w-[140px] truncate" title={s.strategy}>{s.strategy}</td>
-                    <td className="py-1.5 px-3 text-slate-100 font-bold">{s.ticker}</td>
+                    <td className="py-1.5 px-3 text-slate-100 font-bold">
+                      <div className="flex items-center gap-1.5">
+                        {isOpt && <Activity size={10} className="text-violet-400 shrink-0" />}
+                        <span className="truncate">{isOpt && optDetails ? optDetails.underlying : s.ticker}</span>
+                      </div>
+                    </td>
+                    <td className="py-1.5 px-3">
+                      {isOpt && optDetails ? (
+                        <span className={clsx("text-[10px] font-bold px-1 py-0.5 rounded",
+                          optDetails.type === "C" ? "bg-emerald-900/50 text-emerald-300" : "bg-red-900/50 text-red-300")}>
+                          {optDetails.type === "C" ? "CALL" : "PUT"}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-500">EQUITY</span>
+                      )}
+                    </td>
                     <td className={clsx("py-1.5 px-3 font-bold", s.direction === "buy" ? "text-emerald-400" : "text-red-400")}>
                       {s.direction.toUpperCase()}
                     </td>
                     <td className="py-1.5 px-3 text-right text-slate-300">{s.quantity.toFixed(4)}</td>
                     <td className="py-1.5 px-3 text-right text-slate-300">{s.fill_price ? fmt$(s.fill_price) : "—"}</td>
+                    <td className="py-1.5 px-3 text-right text-violet-300">
+                      {isOpt && optDetails ? <span className="text-[10px]">{optDetails.strike.toFixed(1)}</span> : "—"}
+                    </td>
+                    <td className="py-1.5 px-3 text-right text-amber-300">
+                      {isOpt ? <span className="text-[10px]">{s.fill_price ? fmt$(s.fill_price) : "—"}</span> : "—"}
+                    </td>
+                    <td className="py-1.5 px-3 text-right">
+                      {dte != null ? (
+                        <span className={clsx("text-[10px] font-bold", dte <= 7 ? "text-red-400" : dte <= 30 ? "text-amber-400" : "text-slate-300")}>
+                          {dte}d
+                        </span>
+                      ) : "—"}
+                    </td>
                     <td className={clsx("py-1.5 px-3 text-right font-bold",
                       (s.signal_score ?? 0) > 0 ? "text-emerald-400" : "text-red-400")}>
                       {(s.signal_score ?? 0) >= 0 ? "+" : ""}{(s.signal_score ?? 0).toFixed(3)}
@@ -197,7 +250,7 @@ export default function SignalsTable() {
                   </tr>,
                   isExpanded && (
                     <tr key={`${s.order_id}-lineage`} className="bg-slate-950/80">
-                      <td colSpan={10} className="px-6 py-3">
+                      <td colSpan={14} className="px-6 py-3">
                         {isLoadingLg ? (
                           <div className="text-xs text-slate-500 animate-pulse">Loading KG lineage...</div>
                         ) : lg ? (
@@ -320,7 +373,7 @@ export default function SignalsTable() {
   );
 }
 
-// ── Place Order Modal ──────────────────────────────────────────────────────────
+// ── Place Order Modal (Unified: Equity + Options) ──────────────────────────────
 function PlaceOrderModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [ticker, setTicker] = useState("");
   const [direction, setDirection] = useState<"buy" | "sell">("buy");
@@ -328,9 +381,13 @@ function PlaceOrderModal({ onClose, onSuccess }: { onClose: () => void; onSucces
   const [orderType, setOrderType] = useState<"market" | "limit">("market");
   const [limitPrice, setLimitPrice] = useState("");
   const [venue, setVenue] = useState("alpaca");
+  const [intent, setIntent] = useState<"buy_to_open" | "sell_to_open" | "buy_to_close" | "sell_to_close">("buy_to_open");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ order_id: string; fill_price: number; fee_usd: number; mode: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const isOpt = isOptionTicker(ticker.trim());
+  const optDetails = isOpt ? parseOptionDetails(ticker.trim()) : null;
 
   const submit = async () => {
     if (!ticker.trim() || !quantity) return;
@@ -338,15 +395,27 @@ function PlaceOrderModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     setError(null);
     setResult(null);
     try {
-      const res = await signalsApi.placeOrder({
-        ticker: ticker.trim().toUpperCase(),
-        direction,
-        quantity: Number(quantity),
-        order_type: orderType,
-        limit_price: orderType === "limit" ? Number(limitPrice) || null : null,
-        venue,
-      });
-      setResult(res);
+      if (isOpt) {
+        const res = await signalsApi.placeOrder({
+          ticker: ticker.trim().toUpperCase(),
+          direction,
+          quantity: Number(quantity),
+          order_type: orderType,
+          limit_price: orderType === "limit" ? Number(limitPrice) || null : null,
+          venue,
+        });
+        setResult(res);
+      } else {
+        const res = await signalsApi.placeOrder({
+          ticker: ticker.trim().toUpperCase(),
+          direction,
+          quantity: Number(quantity),
+          order_type: orderType,
+          limit_price: orderType === "limit" ? Number(limitPrice) || null : null,
+          venue,
+        });
+        setResult(res);
+      }
       onSuccess();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -360,18 +429,31 @@ function PlaceOrderModal({ onClose, onSuccess }: { onClose: () => void; onSucces
       <div className="bg-slate-900 rounded-xl border border-slate-700 w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
           <div className="flex items-center gap-2">
-            <Wallet size={14} className="text-emerald-400" />
-            <span className="text-sm font-semibold text-slate-200">Place Order</span>
+            {isOpt ? <Activity size={14} className="text-violet-400" /> : <Wallet size={14} className="text-emerald-400" />}
+            <span className="text-sm font-semibold text-slate-200">{isOpt ? "Place Option Order" : "Place Order"}</span>
+            {isOpt && <span className="text-[10px] font-mono text-violet-400 bg-violet-900/40 px-1.5 py-0.5 rounded">OPTION</span>}
           </div>
           <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-200"><X size={14} /></button>
         </div>
         <div className="p-4 space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Ticker</div>
+            <div className="col-span-2">
+              <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Ticker / Contract Symbol</div>
               <input value={ticker} onChange={e => setTicker(e.target.value)}
-                placeholder="e.g. SPY"
-                className="w-full bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5" />
+                placeholder="e.g. SPY or SPY250904C00770000"
+                className="w-full bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5 font-mono" />
+              {isOpt && optDetails && (
+                <div className="flex items-center gap-2 mt-1.5 text-[10px] font-mono">
+                  <span className={clsx("px-1 py-0.5 rounded", optDetails.type === "C" ? "bg-emerald-900/50 text-emerald-300" : "bg-red-900/50 text-red-300")}>
+                    {optDetails.type === "C" ? "CALL" : "PUT"}
+                  </span>
+                  <span className="text-slate-400">Strike {optDetails.strike.toFixed(1)}</span>
+                  <span className="text-slate-500">Exp {optDetails.expiry}</span>
+                  <span className={clsx("font-bold", dteFromExpiry(optDetails.expiry) <= 7 ? "text-red-400" : "text-slate-400")}>
+                    {dteFromExpiry(optDetails.expiry)} DTE
+                  </span>
+                </div>
+              )}
             </div>
             <div>
               <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Side</div>
@@ -381,23 +463,59 @@ function PlaceOrderModal({ onClose, onSuccess }: { onClose: () => void; onSucces
                 <option value="sell">Sell</option>
               </select>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
             <div>
-              <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Quantity</div>
+              <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">{isOpt ? "Contracts" : "Quantity"}</div>
               <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)}
-                step="0.0001" min="0"
+                step={isOpt ? "1" : "0.0001"} min="0"
                 className="w-full bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5" />
             </div>
-            <div>
-              <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Order Type</div>
-              <select value={orderType} onChange={e => setOrderType(e.target.value as "market" | "limit")}
-                className="w-full bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5">
-                <option value="market">Market</option>
-                <option value="limit">Limit</option>
-              </select>
-            </div>
           </div>
+
+          {isOpt && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Intent</div>
+                <select value={intent} onChange={e => setIntent(e.target.value as typeof intent)}
+                  className="w-full bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5">
+                  <option value="buy_to_open">BUY TO OPEN</option>
+                  <option value="sell_to_open">SELL TO OPEN</option>
+                  <option value="buy_to_close">BUY TO CLOSE</option>
+                  <option value="sell_to_close">SELL TO CLOSE</option>
+                </select>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Order Type</div>
+                <select value={orderType} onChange={e => setOrderType(e.target.value as "market" | "limit")}
+                  className="w-full bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5">
+                  <option value="market">Market</option>
+                  <option value="limit">Limit</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {!isOpt && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Order Type</div>
+                <select value={orderType} onChange={e => setOrderType(e.target.value as "market" | "limit")}
+                  className="w-full bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5">
+                  <option value="market">Market</option>
+                  <option value="limit">Limit</option>
+                </select>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Venue</div>
+                <select value={venue} onChange={e => setVenue(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5">
+                  <option value="alpaca">Alpaca Paper</option>
+                  <option value="kraken">Kraken (legacy)</option>
+                  <option value="ibkr">IBKR (legacy)</option>
+                </select>
+              </div>
+            </div>
+          )}
+
           {orderType === "limit" && (
             <div>
               <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Limit Price ($)</div>
@@ -406,15 +524,6 @@ function PlaceOrderModal({ onClose, onSuccess }: { onClose: () => void; onSucces
                 className="w-full bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5" />
             </div>
           )}
-          <div>
-            <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Venue</div>
-            <select value={venue} onChange={e => setVenue(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5">
-              <option value="alpaca">Alpaca Paper</option>
-              <option value="kraken">Kraken (legacy)</option>
-              <option value="ibkr">IBKR (legacy)</option>
-            </select>
-          </div>
 
           {error && (
             <div className="text-xs text-red-400 bg-red-950/30 border border-red-800 rounded p-2">{error}</div>
@@ -429,9 +538,9 @@ function PlaceOrderModal({ onClose, onSuccess }: { onClose: () => void; onSucces
 
           <button onClick={submit} disabled={submitting || !ticker.trim() || !quantity}
             className={clsx("w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
-              submitting ? "bg-slate-700 text-slate-500" : "bg-emerald-700 hover:bg-emerald-600 text-white")}>
+              submitting ? "bg-slate-700 text-slate-500" : isOpt ? "bg-violet-700 hover:bg-violet-600 text-white" : "bg-emerald-700 hover:bg-emerald-600 text-white")}>
             <Radio size={12} className={submitting ? "animate-pulse" : ""} />
-            {submitting ? "Submitting..." : "Submit Order"}
+            {submitting ? "Submitting..." : isOpt ? "Submit Option Order" : "Submit Order"}
           </button>
         </div>
       </div>

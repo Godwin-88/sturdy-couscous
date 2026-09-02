@@ -132,19 +132,31 @@ def get_suggestions(underlying: str, expiration: str | None = None,
 # ── Dynamic delta hedging (Taleb posture, human-in-the-loop) ────────────────
 
 @router.get("/hedge/state")
-def get_hedge_state(underlying: str = "SPY"):
+async def get_hedge_state(underlying: str = "SPY"):
     """Portfolio greeks + recommended dynamic delta hedge (read-only)."""
     _require_alpaca()
     try:
         from agent.hedge_agent import hedge_agent
-        return {"hedge_state": hedge_agent.hedge_state(underlying)}
+        return {"hedge_state": await hedge_agent.hedge_state(underlying)}
     except Exception as e:
         logger.warning(f"hedge state failed: {e}")
         raise HTTPException(status_code=502, detail=f"hedge state failed: {e}")
 
 
+@router.get("/pnl")
+async def get_option_pnl(underlying: str = "SPY"):
+    """Live option P&L: premium income vs hedge cost (mark-to-market)."""
+    _require_alpaca()
+    try:
+        from agent.hedge_agent import hedge_agent
+        return {"option_pnl": await hedge_agent.option_pnl(underlying)}
+    except Exception as e:
+        logger.warning(f"option pnl failed: {e}")
+        raise HTTPException(status_code=502, detail=f"option pnl failed: {e}")
+
+
 @router.post("/hedge/rebalance")
-def post_hedge_rebalance(underlying: str = "SPY", confirm: bool = False):
+async def post_hedge_rebalance(underlying: str = "SPY", confirm: bool = False):
     """
     Dry-run (default) or execute the dynamic delta hedge on the paper account.
 
@@ -155,7 +167,7 @@ def post_hedge_rebalance(underlying: str = "SPY", confirm: bool = False):
     _require_alpaca()
     try:
         from agent.hedge_agent import hedge_agent
-        result = hedge_agent.execute(underlying, confirm=bool(confirm))
+        result = await hedge_agent.execute(underlying, confirm=bool(confirm))
         if result.get("status") == "executed":
             try:
                 order = result.get("order") or {}
