@@ -1,6 +1,8 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { Search, Activity, ArrowRightLeft, Loader2, CheckCircle2, XCircle, Brain, RefreshCw, Shield, Clock, AlertTriangle, Zap, ChevronRight } from "lucide-react";
 import { optionsApi, OptionContractRow, OptionSuggestion, OptionLeg, AlpacaAsset, HedgeState } from "@/lib/api";
+import Greeks3DVisualization from "@/components/Greeks3DVisualization";
+import OptionDiagrams from "@/components/OptionDiagrams";
 import { fmt$, fmtN } from "@/lib/utils";
 import clsx from "clsx";
 
@@ -357,6 +359,63 @@ export default function OptionsPanel() {
           )}
         </div>
       </div>
+
+      {/* Dynamic Delta Hedge — Taleb posture */}
+      <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 bg-slate-950">
+          <Shield size={14} className="text-rose-400" />
+          <span className="text-xs text-slate-300 font-semibold uppercase tracking-widest">Dynamic Delta Hedge</span>
+          <button onClick={loadHedge} disabled={loadingHedge}
+            className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-700/40 border border-slate-600 text-[10px] text-slate-300 hover:bg-slate-700 disabled:opacity-50">
+            {loadingHedge ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />} Refresh
+          </button>
+        </div>
+        <div className="p-3 space-y-2 text-xs font-mono">
+          {hedgeMsg && <div className="text-[10px] text-slate-400">{hedgeMsg}</div>}
+          {!hedgeState ? (
+            <div className="text-slate-500">Load hedge state to see portfolio Δ/Γ/Θ/V and the recommended underlying hedge.</div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-slate-300">
+                <span>Δ <b className="text-slate-100">{hedgeState.greeks.delta.toFixed(2)}</b></span>
+                <span>Γ <b className="text-slate-100">{hedgeState.greeks.gamma.toFixed(4)}</b></span>
+                <span>Θ <b className="text-slate-100">{fmt$(hedgeState.greeks.theta)}</b></span>
+                <span>V <b className="text-slate-100">{hedgeState.greeks.vega.toFixed(2)}</b></span>
+                <span>spot <b className="text-slate-100">{hedgeState.spot != null ? fmt$(hedgeState.spot) : "-"}</b></span>
+                <span>regime <b className="text-slate-100">{hedgeState.regime}</b></span>
+                <span>band <b className="text-slate-100">{hedgeState.band_shares}</b></span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-slate-400">hedge {hedgeState.hedge_shares >= 0 ? "BUY" : "SELL"} <b className="text-slate-100">{Math.abs(hedgeState.hedge_shares).toFixed(0)}</b> {underlying}</span>
+                {hedgeState.needs_rebalance && <span className="text-amber-400">needs rebalance</span>}
+                {hedgeState.tail_sleeve?.recommended && <span className="text-rose-400">tail sleeve recommended</span>}
+                <button onClick={() => runHedge(false)}
+                  className="px-2.5 py-1 rounded bg-slate-700/40 border border-slate-600 text-[10px] text-slate-200 hover:bg-slate-700">
+                  Dry-run hedge
+                </button>
+                <button onClick={() => runHedge(true)}
+                  className="px-2.5 py-1 rounded bg-rose-600/30 border border-rose-500/40 text-[10px] text-rose-300 hover:bg-rose-600/50">
+                  Execute on paper
+                </button>
+              </div>
+
+              {/* 3D Greeks exposure */}
+              <Greeks3DVisualization greeks={hedgeState.greeks} title="Portfolio Greeks 3D" size={170} />
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Option diagrams — payoff + 3D surfaces */}
+      <OptionDiagrams
+        selected={selected}
+        side={side}
+        qty={qty}
+        spot={sugMeta?.spot_estimate ?? null}
+        dte={sugMeta?.dte ?? 0}
+        rows={rows}
+        mood={mood}
+      />
 
       {/* Side-by-side: Agent Suggestions + Order Ticket */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-3">

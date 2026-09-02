@@ -384,6 +384,20 @@ export interface OptionSuggestionsResult {
   rejected:          OptionSuggestionRejected[];
 }
 
+export interface OptionPnl {
+  underlying:         string;
+  option_positions:   number;
+  equity_positions:   number;
+  contracts:          number;
+  underlyings:        string[];
+  premium_income_usd: number;
+  premium_cost_usd:   number;
+  net_premium_usd:    number;
+  unrealized_pnl_usd: number;
+  hedge_sleeve_mv_usd: number;
+  net_option_pnl_usd: number;
+}
+
 export interface HedgeState {
   underlying:       string;
   regime:           string;
@@ -436,6 +450,8 @@ export const optionsApi = {
         `/options/hedge/rebalance?underlying=${encodeURIComponent(underlying)}&confirm=${confirm}`,
         { method: "POST" }),
   },
+  pnl:         (underlying = "SPY") =>
+    apiFetch<{ option_pnl: OptionPnl }>(`/options/pnl?underlying=${encodeURIComponent(underlying)}`),
 };
 
 export const marketApi = {
