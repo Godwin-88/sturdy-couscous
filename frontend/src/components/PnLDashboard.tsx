@@ -14,20 +14,23 @@ const ASSET_CLASS_COLOR: Record<string, string> = {
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { agentApi, Portfolio, Position, Signal, MarketQuote } from "@/lib/api";
+import { agentApi, alpacaApi, AlpacaPortfolio, Position, MarketQuote } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
 import { fmt$, fmtPct } from "@/lib/utils";
 import clsx from "clsx";
 
 export default function PnLDashboard() {
-  const { data: portfolio } = usePolling<Portfolio>(agentApi.portfolio, 10_000);
+  const { data: portfolio } = usePolling<AlpacaPortfolio>(alpacaApi.portfolio, 10_000);
   const { data: positions } = usePolling<Position[]>(agentApi.positions, 10_000);
-  const { data: signals }   = usePolling<Signal[]>(() => agentApi.signals(30), 30_000);
   const { data: quotes }    = usePolling<MarketQuote[]>(agentApi.marketQuotes, 60_000);
   const [tab, setTab] = useState<"positions" | "chart">("positions");
 
   const totalPnl = positions?.reduce((s, p) => s + p.unrealised_pnl, 0) ?? 0;
-  const navHistory = buildNavHistory(signals ?? [], portfolio?.nav ?? 10000);
+  const navHistory = (portfolio?.nav_history ?? []).map(pt => ({
+    t: new Date(pt.t).toLocaleDateString("en-US", { month: "numeric", day: "numeric" }),
+    nav: pt.equity,
+  })).slice(-60);
+  const navSource = portfolio?.source ?? "ledger";
 
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden transition-all duration-200 hover:border-slate-500 hover:shadow-lg hover:shadow-emerald-500/10 hover:-translate-y-0.5 cursor-pointer">
@@ -48,6 +51,25 @@ export default function PnLDashboard() {
           })}
         </div>
       )}
+
+      {/* Data-source badge — real broker vs internal ledger */}
+      <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-950 border-b border-slate-700">
+        {navSource === "alpaca" ? (
+          <>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400">
+              Alpaca Paper · Real Broker NAV
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+            <span className="text-[10px] font-mono uppercase tracking-widest text-slate-400">
+              Internal ledger NAV (Alpaca not configured)
+            </span>
+          </>
+        )}
+      </div>
 
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-700 border-b border-slate-700">
@@ -194,7 +216,7 @@ function PositionsTable({ positions }: { positions: Position[] }) {
 
 function NavChart({ data }: { data: { t: string; nav: number }[] }) {
   if (data.length === 0) {
-    return <div className="text-center py-6 text-slate-500 text-sm">No trade history yet</div>;
+    return <div className="text-center py-6 text-slate-500 text-sm">No broker history yet — run a few paper cycles and this chart populates from Alpaca</div>;
   }
   const isUp = data[data.length - 1].nav >= data[0].nav;
   const color = isUp ? "#10b981" : "#ef4444";
@@ -221,20 +243,4 @@ function NavChart({ data }: { data: { t: string; nav: number }[] }) {
       </AreaChart>
     </ResponsiveContainer>
   );
-}
-
-function buildNavHistory(signals: Signal[], currentNav: number) {
-  if (signals.length === 0) return [];
-  const sorted = [...signals].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-  );
-  let nav = currentNav;
-  const points = sorted.map(s => {
-    const d = new Date(s.created_at);
-    const label = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
-    nav += (s.fill_price ?? 0) * s.quantity * (s.direction === "buy" ? -1 : 1);
-    return { t: label, nav: Math.max(nav, 0) };
-  });
-  points.push({ t: "Now", nav: currentNav });
-  return points;
 }

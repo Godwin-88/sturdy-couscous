@@ -41,6 +41,10 @@ export interface Portfolio {
   drawdown_pct: number;
   halted:       boolean;
   updated_at?:  string;
+  source?:      "alpaca" | "ledger";
+  equity?:      number;
+  buying_power?: number;
+  nav_history?: { t: string; equity: number }[];
 }
 
 export interface Signal {
@@ -293,9 +297,18 @@ export interface AlpacaPosition {
   side:              "buy" | "sell";
 }
 
+export type AlpacaPortfolio = Portfolio & {
+  source:       "alpaca" | "ledger";
+  equity:       number;
+  buying_power: number;
+  nav_history:  { t: string; equity: number }[];
+  base_value?:  number;
+};
+
 export const alpacaApi = {
   account:      () => apiFetch<AlpacaAccount>("/alpaca/account"),
   positions:    () => apiFetch<AlpacaPosition[]>("/alpaca/positions"),
+  portfolio:    () => apiFetch<AlpacaPortfolio>("/alpaca/portfolio"),
   bars:        (symbol: string) => apiFetch<{ t: string; o: number; h: number; l: number; c: number; v: number }[]>(`/alpaca/bars/${encodeURIComponent(symbol)}`),
 };
 

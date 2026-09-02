@@ -4,6 +4,7 @@ Requires ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY in .env.
 """
 
 import os
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 
@@ -52,3 +53,52 @@ async def get_bars(symbol: str, timeframe: str = "1Day", limit: int = 252):
     if _unconfigured():
         return []
     return await alpaca.get_bars(symbol, timeframe, limit)
+
+
+@router.get("/portfolio")
+async def get_portfolio_history(days: int = 30):
+    """Real Alpaca account NAV + equity curve (replaces the fabricated $10k ledger)."""
+    _require_alpaca()
+    if _unconfigured():
+        return {"source": "unconfigured"}
+    account = await alpaca.get_account()
+    hist = await alpaca.portfolio_history(days=days)
+    nav_history = _normalise_nav(hist.get("nav_history", []))
+    equity = float(account.get("equity", 0) or 0)
+    cash = float(account.get("cash", 0) or 0)
+    buying_power = float(account.get("buying_power", 0) or 0)
+    drawdown_pct = 0.0
+    peak = 0.0
+    for pt in nav_history:
+        e = float(pt.get("equity", 0) or 0)
+        if e > peak:
+            peak = e
+        if peak > 0:
+            drawdown_pct = max(drawdown_pct, (peak - e) / peak)
+    return {
+        "source": "alpaca",
+        "nav": equity,
+        "equity": equity,
+        "cash": cash,
+        "buying_power": buying_power,
+        "drawdown_pct": drawdown_pct,
+        "halted": False,
+        "nav_history": nav_history[-days * 2:] or nav_history,
+        "base_value": hist.get("base_value", 0),
+        "updated_at": None,
+    }
+
+
+def _normalise_nav(nav_history: list) -> list:
+    """Clean the broker history: ISO timestamps, positive equity only, sorted."""
+    out = []
+    for pt in nav_history or []:
+        t = pt.get("t")
+        e = float(pt.get("equity", 0) or 0)
+        if e <= 0:
+            continue  # first broker point is often a 0.0 baseline — drop it
+        if isinstance(t, (int, float)) or (isinstance(t, str) and t.isdigit()):
+            t = datetime.utcfromtimestamp(float(t)).isoformat() + "Z"
+        out.append({"t": t, "equity": e})
+    out.sort(key=lambda p: p["t"])
+    return out

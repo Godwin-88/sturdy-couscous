@@ -33,6 +33,7 @@ class AlpacaOrderResult:
     filled_avg_price: float | None
     status: str
     raw: dict
+    http_status: int = 502  # hint to the route layer (502 transient, 403 account-level, 400 validation)
 
 
 class AlpacaClient:
@@ -138,6 +139,37 @@ class AlpacaClient:
             logger.error(f"Alpaca get_account failed: {e}")
             return {"status": "error", "error": str(e)}
 
+    async def portfolio_history(self, days: int = 30) -> dict:
+        """Return the broker's real equity curve (NAV) over the trailing window.
+
+        Uses Alpaca's portfolio-history endpoint so the frontend NAV chart shows
+        the authoritative account equity — never a fabricated running balance.
+        """
+        if not self.is_configured():
+            return {"source": "unconfigured"}
+        try:
+            from alpaca.trading.requests import GetPortfolioHistoryRequest
+            req = GetPortfolioHistoryRequest(period="1M", timeframe="1D", extended_hours=False)
+            hist = self.client.get_portfolio_history(req)
+            # Historically a model; guard against a plain dict shape too.
+            timestamps = getattr(hist, "timestamp", None) or (hist.get("timestamp") if isinstance(hist, dict) else None)
+            equity = getattr(hist, "equity", None) or (hist.get("equity") if isinstance(hist, dict) else None)
+            base_value = getattr(hist, "base_value", None) or (hist.get("base_value") if isinstance(hist, dict) else None)
+            if timestamps is None or equity is None:
+                return {"source": "error", "error": "unexpected portfolio-history shape"}
+            nav_history = [
+                {"t": ts.isoformat() if hasattr(ts, "isoformat") else str(ts), "equity": float(e)}
+                for ts, e in zip(timestamps, equity)
+            ]
+            return {
+                "source": "alpaca",
+                "nav_history": nav_history,
+                "base_value": float(base_value or 0),
+            }
+        except Exception as e:
+            logger.error(f"Alpaca portfolio_history failed: {e}")
+            return {"source": "error", "error": str(e)}
+
     async def get_bars(self, symbol: str, timeframe: str = "1Day",
                        limit: int = 252) -> list[dict]:
         if not self.is_configured():
@@ -234,7 +266,8 @@ class AlpacaClient:
         if not self.is_configured():
             return AlpacaOrderResult(
                 order_id="simulated", symbol=contract_symbol or "OPT", side=side, qty=qty,
-                filled_qty=qty, filled_avg_price=0.0, status="simulated", raw={}
+                filled_qty=qty, filled_avg_price=0.0, status="simulated", raw={},
+                http_status=200,
             )
         try:
             from alpaca.trading.requests import (MarketOrderRequest, LimitOrderRequest,
@@ -256,13 +289,46 @@ class AlpacaClient:
                 else:
                     req = MarketOrderRequest(symbol=contract_symbol, **common)
             else:
+                if not legs or len(legs) < 2:
+                    raise ValueError(
+                        "MLEG orders require at least 2 legs; "
+                        f"got {len(legs) if legs else 0}."
+                    )
+                # Belt-and-suspenders: collapse duplicate (symbol, side,
+                # position_intent) legs by summing qty, in case the caller
+                # didn't consolidate. This is what ratio structures
+                # (butterfly/strip/strap) need — Alpaca rejects duplicate
+                # symbols, so 2x K2 must be one leg with ratio_qty=2.
+                consolidated: dict[tuple, dict] = {}
+                for l in legs:
+                    key = (
+                        str(l.get("symbol")),
+                        str(l.get("side", "buy")).lower(),
+                        str(l.get("position_intent", "buy_to_open")),
+                    )
+                    qty = int(l.get("qty", 1) or 1)
+                    if key in consolidated:
+                        consolidated[key]["qty"] = int(consolidated[key].get("qty", 1) or 1) + qty
+                    else:
+                        consolidated[key] = dict(l)
+                if len(consolidated) < 2:
+                    raise ValueError(
+                        "MLEG orders require at least 2 unique legs after "
+                        f"consolidation; got {len(consolidated)}."
+                    )
+                symbols = [str(l.get("symbol")) for l in consolidated.values()]
+                if len(set(symbols)) != len(symbols):
+                    raise ValueError(
+                        "All legs must have unique symbols; "
+                        f"got duplicates in {symbols}."
+                    )
                 leg_objs = [
                     OptionLegRequest(
                         symbol=str(l["symbol"]),
                         ratio_qty=int(l.get("qty", 1)),
                         side=OrderSide.BUY if str(l.get("side", "buy")).lower() == "buy" else OrderSide.SELL,
                         position_intent=PositionIntent(l.get("position_intent", "buy_to_open")),
-                    ) for l in (legs or [])
+                    ) for l in consolidated.values()
                 ]
                 mleg_common = dict(
                     symbol=None,  # alpsca-py: symbol must NOT be set for MLEG orders
@@ -294,9 +360,21 @@ class AlpacaClient:
             )
         except Exception as e:
             logger.error(f"Alpaca option order failed for {contract_symbol}: {e}")
+            err_text = str(e)
+            # Distinguish account-eligibility / validation errors from
+            # transient transport failures so the route can return 4xx vs 5xx
+            # and the UI can surface a clear message instead of "Bad Gateway".
+            http_status = 502
+            if "40310000" in err_text or "not eligible" in err_text.lower() \
+                    or "forbidden" in err_text.lower() or "permission" in err_text.lower():
+                http_status = 403
+            elif "validation" in err_text.lower() or "missing" in err_text.lower() \
+                    or "invalid" in err_text.lower() or "value error" in err_text.lower():
+                http_status = 400
             return AlpacaOrderResult(
                 order_id="error", symbol=contract_symbol, side=side, qty=qty,
-                filled_qty=0, filled_avg_price=0.0, status="error", raw={"error": str(e)}
+                filled_qty=0, filled_avg_price=0.0, status="error",
+                raw={"error": err_text}, http_status=http_status,
             )
 
 
