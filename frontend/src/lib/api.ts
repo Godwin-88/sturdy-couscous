@@ -309,6 +309,13 @@ export interface OptionPlaceRequest {
   order_type?: "market" | "limit";
   limit_price?: number | null;
   label?: string;
+  order_class?: "simple" | "vertical" | "mleg";
+  legs?: {
+    symbol: string;
+    side: "buy" | "sell";
+    qty: number;
+    position_intent: "buy_to_open" | "sell_to_open" | "buy_to_close" | "sell_to_close";
+  }[];
 }
 
 export interface OptionPlaceResult {

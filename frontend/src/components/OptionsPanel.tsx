@@ -77,6 +77,8 @@ export default function OptionsPanel() {
   const [hedgeMsg, setHedgeMsg] = useState<string | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [orderClass, setOrderClass] = useState<"simple" | "vertical">("simple");
+  const [spreadLegs, setSpreadLegs] = useState<OptionLeg[]>([]);
 
   // Publish live page-session context so the Financial Engineer chat anchors
   // on the same underlying/strike the user is actually viewing (e.g. MCHP).
@@ -225,9 +227,30 @@ export default function OptionsPanel() {
   }
 
   function openLegInTicket(leg: OptionLeg) {
+    setOrderClass("simple");
+    setSpreadLegs([]);
     setSide(leg.side.startsWith("buy") ? "buy" : "sell");
     setIntent(leg.side);
     setSelected(legToRow(leg, expiration, underlying));
+    setPlaced(null);
+    setPlaceErr(null);
+    setModalOpen(true);
+  }
+
+  function openSuggestionInTicket(s: OptionSuggestion) {
+    const legs = s.legs ?? [];
+    if (legs.length > 1) {
+      // Multi-leg spread — prefill the full vertical order
+      setSpreadLegs(legs);
+      setOrderClass("vertical");
+      const first = legs[0];
+      setSide(first.side.startsWith("buy") ? "buy" : "sell");
+      setIntent(first.side);
+      setSelected(legToRow(first, expiration, underlying));
+    } else {
+      openLegInTicket(legs[0] ?? s.legs[0]);
+      return;
+    }
     setPlaced(null);
     setPlaceErr(null);
     setModalOpen(true);
@@ -252,6 +275,15 @@ export default function OptionsPanel() {
         order_type: orderType,
         limit_price: orderType === "limit" && limitPrice ? Number(limitPrice) : null,
         label: "ui-manual",
+        order_class: orderClass,
+        legs: orderClass === "vertical"
+          ? spreadLegs.map(l => ({
+              symbol: l.symbol,
+              side: l.side.startsWith("buy") ? "buy" : "sell",
+              qty: 1, // ratio_qty per leg; top-level qty = number of spreads
+              position_intent: l.side,
+            }))
+          : undefined,
       });
       setPlaced({
         order_id: res.order_id,
@@ -520,7 +552,7 @@ export default function OptionsPanel() {
                   </div>
                 )}
                 {suggestions.map((s) => (
-                  <StrategyCard key={s.strategy} s={s} sugMeta={sugMeta} onOpenTicket={() => openLegInTicket(s.legs[0])} />
+                  <StrategyCard key={s.strategy} s={s} sugMeta={sugMeta} onOpenTicket={() => openSuggestionInTicket(s)} />
                 ))}
                 {rejected.length > 0 && (
                   <div className="rounded border border-amber-900/60 bg-amber-950/10 p-2">
@@ -576,6 +608,9 @@ export default function OptionsPanel() {
           setOrderType={setOrderType}
           limitPrice={limitPrice}
           setLimitPrice={setLimitPrice}
+          orderClass={orderClass}
+          setOrderClass={setOrderClass}
+          spreadLegs={spreadLegs}
           placing={placing}
           placed={placed}
           placeErr={placeErr}
@@ -590,7 +625,9 @@ export default function OptionsPanel() {
 
 function OrderModal({
   selected, underlying, side, setSide, intent, setIntent, qty, setQty,
-  orderType, setOrderType, limitPrice, setLimitPrice, placing, placed, placeErr,
+  orderType, setOrderType, limitPrice, setLimitPrice,
+  orderClass, setOrderClass, spreadLegs,
+  placing, placed, placeErr,
   matching, onClose, onSubmit,
 }: {
   selected: OptionContractRow;
@@ -605,6 +642,9 @@ function OrderModal({
   setOrderType: (t: "market" | "limit") => void;
   limitPrice: string;
   setLimitPrice: (p: string) => void;
+  orderClass: "simple" | "vertical";
+  setOrderClass: (c: "simple" | "vertical") => void;
+  spreadLegs: OptionLeg[];
   placing: boolean;
   placed: { order_id: string; status: string; contract: string; fill: number | null; mode: string } | null;
   placeErr: string | null;
@@ -613,6 +653,7 @@ function OrderModal({
   onSubmit: () => void;
 }) {
   const mid = ((selected.bid ?? 0) + (selected.ask ?? 0)) / 2;
+  const isSpread = orderClass === "vertical" && spreadLegs.length > 1;
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-xl border border-slate-600 bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -625,6 +666,20 @@ function OrderModal({
         </div>
 
         <div className="p-4 space-y-3">
+          {/* Order class: simple vs vertical (multi-leg) */}
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => setOrderClass("simple")}
+              className={clsx("px-2 py-1.5 rounded border text-[11px] font-bold font-mono",
+                orderClass === "simple" ? "bg-indigo-600/30 border-indigo-500/50 text-indigo-200" : "bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800")}>
+              SIMPLE (1 leg)
+            </button>
+            <button onClick={() => setOrderClass("vertical")}
+              className={clsx("px-2 py-1.5 rounded border text-[11px] font-bold font-mono",
+                orderClass === "vertical" ? "bg-violet-600/30 border-violet-500/50 text-violet-200" : "bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800")}>
+              VERTICAL (spread)
+            </button>
+          </div>
+
           {/* Contract summary */}
           <div className="text-xs font-mono text-slate-200 bg-slate-950 border border-slate-700 rounded px-3 py-2">
             <div className="text-slate-100 font-bold">{selected.symbol}</div>
@@ -632,6 +687,26 @@ function OrderModal({
               {selected.contract_type.toUpperCase()} x{selected.multiplier} · {selected.expiration_date} · Strike {fmtN(selected.strike_price)} · {underlying}
             </div>
           </div>
+
+          {/* Spread legs (when vertical) */}
+          {isSpread && (
+            <div className="rounded border border-violet-800/40 bg-violet-950/10 px-3 py-2 space-y-1">
+              <div className="text-[10px] text-violet-300 uppercase tracking-widest font-mono">Spread legs</div>
+              {spreadLegs.map((l, i) => (
+                <div key={i} className="flex items-center justify-between text-[11px] font-mono text-slate-300">
+                  <span className={clsx(l.side.startsWith("buy") ? "text-emerald-400" : "text-red-400")}>
+                    {l.side.toUpperCase().replace(/_/g, " ")}
+                  </span>
+                  <span>{l.symbol}</span>
+                  <span>K {fmtN(l.strike)}</span>
+                  <span>mid {l.mid != null ? fmt$(l.mid) : "-"}</span>
+                </div>
+              ))}
+              <div className="text-[10px] text-slate-500 font-mono pt-1 border-t border-violet-900/40">
+                {matching ? `${matching.strategy} · maxP ${fmt$(matching.max_profit_low)} · maxL ${fmt$(matching.max_loss)}` : "Manual vertical"}
+              </div>
+            </div>
+          )}
 
           {/* Live risk summary */}
           <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">

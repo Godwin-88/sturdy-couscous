@@ -243,11 +243,14 @@ class AlpacaClient:
                                               OrderClass, PositionIntent)
             side_enum = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
             pi = PositionIntent(position_intent)
+            # Alpaca-py OrderClass has no 'vertical' member: normalize to 'mleg'
+            # (multi-leg). 'simple' stays simple.
+            oc_raw = "mleg" if order_class in ("vertical", "mleg") else "simple"
             common = dict(
                 qty=qty, side=side_enum, time_in_force=TimeInForce.DAY,
-                position_intent=pi, order_class=OrderClass(order_class),
+                position_intent=pi, order_class=OrderClass(oc_raw),
             )
-            if order_class == "simple":
+            if oc_raw == "simple":
                 if order_type == "limit" and limit_price is not None:
                     req = LimitOrderRequest(symbol=contract_symbol, limit_price=limit_price, **common)
                 else:
@@ -261,11 +264,23 @@ class AlpacaClient:
                         position_intent=PositionIntent(l.get("position_intent", "buy_to_open")),
                     ) for l in (legs or [])
                 ]
-                req = OrderRequest(
-                    symbol=leg_objs[0].symbol if leg_objs else contract_symbol,
+                mleg_common = dict(
+                    symbol=None,  # alpsca-py: symbol must NOT be set for MLEG orders
                     qty=qty, side=side_enum, time_in_force=TimeInForce.DAY,
                     order_class=OrderClass.MLEG, legs=leg_objs or None,
+                    position_intent=pi,
                 )
+                if order_type == "limit" and limit_price is not None:
+                    req = LimitOrderRequest(
+                        limit_price=limit_price,
+                        type=OrderType.LIMIT,
+                        **mleg_common,
+                    )
+                else:
+                    req = MarketOrderRequest(
+                        type=OrderType.MARKET,
+                        **mleg_common,
+                    )
             order = self.client.submit_order(req)
             return AlpacaOrderResult(
                 order_id=order.id or "",
