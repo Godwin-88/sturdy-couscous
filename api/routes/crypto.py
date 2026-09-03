@@ -130,20 +130,15 @@ async def confirm(req: ConfirmRequest):
                             user=os.getenv("POSTGRES_USER", "graphalpha"),
                             password=os.getenv("POSTGRES_PASSWORD", ""))
 
-    order_id = result.order_id or ""
-    try:
-        if order_id and order_id != "error":
-            uuid.UUID(order_id)
-        else:
-            order_id = str(uuid.uuid4())
-    except ValueError:
-        raw = result.raw or {}
-        alt = raw.get("order_id") or raw.get("id") or str(uuid.uuid4())
+    raw_id = str(result.order_id or "")
+    if raw_id and raw_id != "error":
         try:
-            uuid.UUID(alt)
-            order_id = alt
-        except ValueError:
+            uuid.UUID(raw_id)
+            order_id = raw_id
+        except (ValueError, TypeError):
             order_id = str(uuid.uuid4())
+    else:
+        order_id = str(uuid.uuid4())
     try:
         with conn.cursor() as cur:
             cur.execute("""
