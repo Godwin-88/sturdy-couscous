@@ -101,9 +101,16 @@ class AlpacaDataProvider:
         return self._crypto_client
 
     def resolve_symbol(self, symbol):
-        if symbol in CRYPTO_MAP:
-            return "crypto", CRYPTO_MAP[symbol]
-        return "stock", symbol
+        s = str(symbol or "").strip().upper()
+        if s in CRYPTO_MAP:
+            return "crypto", CRYPTO_MAP[s]
+        if "/" in s:
+            return "crypto", s
+        # Dynamic dash-aliases: SOL-USD → SOL/USD, SOL-USDT → SOL/USDT …
+        for suf in ("-USDT", "-USDC", "-USD"):
+            if s.endswith(suf):
+                return "crypto", s[: -len(suf)] + "/" + suf[1:]
+        return "stock", s
 
     @staticmethod
     @staticmethod

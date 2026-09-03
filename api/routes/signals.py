@@ -10,6 +10,31 @@ from loguru import logger
 
 router = APIRouter(prefix="/signals", tags=["signals"])
 
+
+def _is_crypto_ticker(ticker: str) -> bool:
+    """Crypto on Alpaca = slash-pair ("BTC/USD") or a known alias ("BTC")."""
+    t = (ticker or "").strip().upper()
+    if "/" in t:
+        return True
+    try:
+        from agent.alpaca_data import CRYPTO_MAP
+        return t in CRYPTO_MAP
+    except Exception:
+        return False
+
+
+def _crypto_spot(ticker: str) -> float:
+    """Best-effort live spot for a crypto pair via the Alpaca provider."""
+    try:
+        from agent.alpaca_data import provider as _prov
+        df = _prov.get_ohlcv(ticker, days=2)
+        if df is not None and not getattr(df, "empty", True):
+            return float(df["Close"].iloc[-1])
+    except Exception:
+        pass
+    return 0.0
+
+
 def _conn():
     return psycopg2.connect(
         host=os.getenv("POSTGRES_HOST", "postgres"),
@@ -191,6 +216,8 @@ def place_order(req: PlaceOrderRequest):
         _r.setex(_proposal_key(token), 600, json.dumps(proposal))
         # Reference price for notional / risk preview: limit price or last close fallback.
         ref_price = req.limit_price or 100.0
+        if _is_crypto_ticker(req.ticker):
+            ref_price = _crypto_spot(req.ticker) or 100.0
         try:
             import yfinance as yf
             h = yf.Ticker(req.ticker.upper()).history(period="1d", interval="1m")
@@ -263,8 +290,12 @@ def place_order(req: PlaceOrderRequest):
                 alpaca = None
         if alpaca is not None and alpaca.is_configured():
             try:
-                result = alpaca.place_order(req.ticker.upper(), req.direction, req.quantity,
-                                              req.order_type)
+                if _is_crypto_ticker(req.ticker):
+                    result = alpaca.place_crypto_order(req.ticker, req.direction, req.quantity,
+                                                        req.order_type, req.limit_price)
+                else:
+                    result = alpaca.place_order(req.ticker.upper(), req.direction, req.quantity,
+                                                  req.order_type)
                 order_id = result.order_id or order_id
                 status = result.status or status
                 fill_price = float(result.filled_avg_price or 0) or req.limit_price or 0.0
@@ -277,6 +308,8 @@ def place_order(req: PlaceOrderRequest):
 
     # Simulation fill price
     if fill_price == 0.0:
+        if _is_crypto_ticker(req.ticker):
+            fill_price = _crypto_spot(req.ticker) or 100.0
         if req.order_type == "limit" and req.limit_price:
             fill_price = req.limit_price
         else:

@@ -104,6 +104,106 @@ class AlpacaClient:
                 filled_qty=0, filled_avg_price=0.0, status="error", raw={"error": str(e)}
             )
 
+    async def place_crypto_order(self, symbol: str, side: str, qty: float,
+                                  order_type: str = "market",
+                                  limit_price: float | None = None) -> AlpacaOrderResult:
+        """Place a spot crypto order on Alpaca paper (24/7 market).
+
+        Accepts "BTC/USD" (canonical), "BTC-USD", or "BTC" (mapped via
+        ``agent.alpaca_data.CRYPTO_MAP``. Crypto orders require time_in_force
+        IOC (market) / GTC (limit) — DAY (equities) is rejected for crypto.
+
+        """
+        sym = str(symbol or "").strip().upper()
+        if "/" not in sym:
+            try:
+                from agent.alpaca_data import CRYPTO_MAP
+            except Exception:
+                CRYPTO_MAP = {}
+            sym = CRYPTO_MAP.get(sym, sym)
+        if not self.is_configured():
+            return AlpacaOrderResult(
+                order_id="simulated", symbol=sym, side=side, qty=qty,
+                filled_qty=qty, filled_avg_price=0.0, status="simulated", raw={}, http_status=200
+            )
+        try:
+            side_enum = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
+            tif = TimeInForce.IOC if order_type == "market" else TimeInForce.GTC
+            if order_type == "limit" and limit_price is not None:
+                req = LimitOrderRequest(
+                    symbol=sym, qty=qty, side=side_enum, type=OrderType.LIMIT,
+                    time_in_force=tif, limit_price=limit_price,
+                )
+            else:
+                req = MarketOrderRequest(
+                    symbol=sym, qty=qty, side=side_enum, type=OrderType.MARKET,
+                    time_in_force=tif,
+                )
+            order = self.client.submit_order(req)
+            return AlpacaOrderResult(
+                order_id=order.id or "",
+                symbol=sym,
+                side=side,
+                qty=float(order.qty or qty),
+                filled_qty=float(order.filled_qty or 0),
+                filled_avg_price=float(order.filled_avg_price or 0),
+                status=order.status.value if order.status else "unknown",
+                raw=order.model_dump() if hasattr(order, "model_dump") else {},
+                http_status=200,
+            )
+        except Exception as e:
+            logger.error(f"Alpaca crypto order failed for {sym}: {e}")
+            return AlpacaOrderResult(
+                order_id="error", symbol=sym, side=side, qty=qty,
+                filled_qty=0, filled_avg_price=0.0, status="error",
+                raw={"error": str(e)}, http_status=502,
+            )
+
+    def search_crypto_assets(self, query: str = "") -> list[dict]:
+        """Search the FULL tradable Alpaca crypto universe (no hardcoded set.
+
+        Returns pair symbols ("BTC/USD") so any listed pair is tradable/spawnable
+        from the UI —the universe == Alpaca's crypto asset list.
+
+        """
+        if not self.is_configured():
+            return []
+        try:
+            from alpaca.trading.requests import GetAssetsRequest
+            from alpaca.trading.enums import AssetClass
+            req = GetAssetsRequest(asset_class=AssetClass.CRYPTO, status="active")
+            assets = self.client.get_all_assets(req)
+            q = query.strip().upper()
+            out = []
+            for a in (assets or []):
+                if getattr(a, "tradable", True) is False:
+                    continue
+                sym = str(getattr(a, "symbol", "") or "")
+                pair = sym.replace("-", "/").upper()
+                name = str(getattr(a, "name", "") or "")
+                if not q or q in sym.upper() or q in pair or q in name.upper():
+                    out.append({
+                        "symbol": sym,
+                        "pair": pair,
+                        "name": name,
+                        "tradable": True,
+                        "exchange": getattr(a, "exchange", None),
+                        "asset_class": getattr(a, "class_", None),
+                    })
+            # De-dup by pair, keep first
+            seen = set()
+            dedup = []
+            for e in out:
+                p = e["pair"]
+                if p in seen:
+                    continue
+                seen.add(p)
+                dedup.append(e)
+            return dedup[:250]
+        except Exception as e:
+            logger.error(f"search_crypto_assets failed: {e}")
+            return []
+
     async def get_positions(self) -> list[dict]:
         if not self.is_configured():
             return []
