@@ -2,8 +2,9 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { X, Brain, Send, Loader2, BookOpen, FileText, ChevronDown, Trash2, CheckCircle2, XCircle, ClipboardList, ShieldAlert, ExternalLink, Bot, ShieldCheck } from "lucide-react";
-import { chatApi, optionsApi, type ChatMessage, type ChatContext, type OrderDraft, type FeStep, type FeNews } from "@/lib/api";
+import { chatApi, optionsApi, type ChatMessage, type ChatContext, type OrderDraft, type FeStep, type FeNews, type ChatSource } from "@/lib/api";
 import Markdown from "@/components/Markdown";
+import TraceGraph, { type TraceNode, type TraceEdge } from "@/components/TraceGraph";
 import { getScreenContext, screenContextLabel, setScreenContext } from "@/lib/screenContext";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { WS_BASE, webmcpApi } from "@/lib/api";
@@ -28,6 +29,51 @@ function eventText(ev: ToolInvocation): string {
   const input = ev.input ? `\n  input: ${JSON.stringify(ev.input)}` : "";
   const out = ev.output ? `\n  output: ${JSON.stringify(ev.output).slice(0, 600)}` : "";
   return `tool_invocation · ${tool}${input}${out}`;
+}
+
+
+
+/** Build a source citation graph (book -> chapter -> section -> concept/formula/strategy). */
+function sourceGraph(srcs: ChatSource[] | undefined): { nodes: TraceNode[]; edges: TraceEdge[] } {
+  const nodes: TraceNode[] = [];
+  const edges: TraceEdge[] = [];
+  if (!srcs) return { nodes, edges };
+  srcs.forEach((s, i) => {
+    const rootId = `root_${i}`;
+    if (s.book) {
+      nodes.push({ id: `b_${i}`, label: s.book, kind: "book" });
+      edges.push({ from: rootId, to: `b_${i}` });
+    }
+    if (s.chapter) {
+      const id = `c_${i}`;
+      nodes.push({ id, label: s.chapter, kind: "chapter" });
+      edges.push({ from: s.book ? `b_${i}` : rootId, to: id });
+    }
+    if (s.section) {
+      const id = `sec_${i}`;
+      nodes.push({ id, label: s.section, kind: "section" });
+      edges.push({ from: s.chapter ? `c_${i}` : (s.book ? `b_${i}` : rootId), to: id });
+    }
+    if (s.concept) {
+      const id = `concept_${i}`;
+      nodes.push({ id, label: s.concept, kind: "concept" });
+      edges.push({ from: s.section ? `sec_${i}` : (s.chapter ? `c_${i}` : (s.book ? `b_${i}` : rootId)), to: id });
+    }
+    if (s.formula) {
+      const id = `formula_${i}`;
+      nodes.push({ id, label: s.formula, kind: "formula" });
+      edges.push({ from: s.concept ? `concept_${i}` : (s.section ? `sec_${i}` : rootId), to: id });
+    }
+    if (s.strategy) {
+      const id = `strategy_${i}`;
+      nodes.push({ id, label: s.strategy, kind: "strategy" });
+      edges.push({ from: s.concept ? `concept_${i}` : (s.section ? `sec_${i}` : rootId), to: id });
+    }
+    if (!s.book && !s.chapter && !s.section && !s.concept && !s.formula && !s.strategy) {
+      nodes.push({ id: rootId, label: "source", kind: "section" });
+    }
+  });
+  return { nodes, edges };
 }
 
 /**
@@ -307,7 +353,19 @@ export default function ScreenChat({ screen }: { screen: string }) {
                   return (
                     <div key={i} className={clsx("rounded border border-slate-700 bg-slate-800/60 p-1.5",
                       hasToken ? "border-amber-700/60" : "")}>
-                      <div className="whitespace-pre-wrap text-[9px] font-mono text-slate-300 leading-relaxed break-all">{eventText(ev)}</div>
+                      <TraceGraph
+                        title="WebMCP invocation"
+                        nodes={[
+                          { id: `a_${i}`, label: "agent", kind: "tool" },
+                          { id: `t_${i}`, label: String(ev.tool ?? ev.name ?? "tool"), kind: "ok" },
+                          { id: hasToken ? `d_${i}` : `o_${i}`, label: hasToken ? "order-draft" : "output", kind: hasToken ? "draft" : "output" },
+                        ]}
+                        edges={[{ from: `a_${i}`, to: `t_${i}` }, { from: `t_${i}`, to: hasToken ? `d_${i}` : `o_${i}` }]}
+                      />
+                      <details className="text-[9px] font-mono text-slate-500">
+                        <summary className="cursor-pointer">raw</summary>
+                        <pre className="whitespace-pre-wrap break-all mt-1 max-h-24 overflow-y-auto">{eventText(ev)}</pre>
+                      </details>
                       {approveMsg && <div className="text-[9px] text-emerald-300 mt-1">{approveMsg}</div>}
                       {approveErr && <div className="text-[9px] text-amber-300 mt-1">{approveErr}</div>}
                       {hasToken && (
@@ -338,33 +396,36 @@ export default function ScreenChat({ screen }: { screen: string }) {
                   {m.role === "user" ? m.content : <Markdown text={m.content} />}
                 </div>
 
-                {m.role === "assistant" && m.sources && m.sources.length > 0 && showSources && (
-                  <div className="text-left text-[10px] font-mono text-slate-500 space-y-0.5 mt-1">
-                    {m.sources.map((s, j) => (
-                      <div key={j} className="flex items-start gap-1">
-                        <FileText size={10} className="mt-0.5 shrink-0" />
-                        <span className="truncate">
-                          {s.book ? `[${s.book} · ${s.section ?? ""}]` : s.concept ? `concept: ${s.concept}` : s.formula ? `formula: ${s.formula}` : s.strategy ? `strategy: ${s.strategy}` : JSON.stringify(s)}
-                        </span>
+                {m.role === "assistant" && m.sources && m.sources.length > 0 && (
+                  <div className="text-left mt-1.5">
+                    <button
+                      onClick={() => setShowSources((v) => !v)}
+                      className="flex items-center gap-1 text-[10px] font-mono text-indigo-300 hover:text-indigo-200"
+                    >
+                      <BookOpen size={10} /> Sources ({m.sources.length})
+                      <ChevronDown size={10} className={clsx("transition-transform", showSources ? "rotate-180" : "")} />
+                    </button>
+                    {showSources && (
+                      <div className="mt-1.5">
+                        <TraceGraph nodes={sourceGraph(m.sources).nodes} edges={sourceGraph(m.sources).edges} title="Source trace" />
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
 
                 {m.role === "assistant" && m.steps && m.steps.length > 0 && (
                   <div className="text-left mt-2">
-                    <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-1">
-                      <ClipboardList size={11} /> Agent tool steps
-                    </div>
-                    <div className="space-y-0.5">
-                      {m.steps.map((s, sj) => (
-                        <div key={sj} className={clsx("flex items-center gap-1.5 text-[10px] font-mono",
-                          s.ok ? "text-slate-400" : "text-amber-400/90")}>
-                          {s.ok ? <CheckCircle2 size={10} className="text-emerald-400/80" /> : <XCircle size={10} className="text-amber-400" />}
-                          <span className="truncate">{s.summary}</span>
-                        </div>
-                      ))}
-                    </div>
+                    <TraceGraph
+                      title="Agent tool trace"
+                      nodes={m.steps.map((st, sj) => ({
+                        id: `step_${sj}`,
+                        label: `${sj + 1}. ${st.tool}`,
+                        kind: st.ok ? "ok" : "err",
+                        detail: `${st.summary}
+args: ${JSON.stringify(st.args)}`,
+                      }))}
+                      edges={m.steps.slice(1).map((_, sj) => ({ from: `step_${sj}`, to: `step_${sj + 1}` }))}
+                    />
                   </div>
                 )}
 
@@ -398,6 +459,13 @@ export default function ScreenChat({ screen }: { screen: string }) {
                           <span className="text-slate-400">strategy</span><b className="text-slate-100">{d.strategy ?? "—"}</b>
                           <span className="text-slate-500">·</span><span>{d.regime ?? ""}</span>
                         </div>
+                        {d.graph_path && d.graph_path.length > 0 && (
+                          <TraceGraph
+                            title="KG reasoning trace"
+                            nodes={d.graph_path.map((gp, gi) => ({ id: `gp_${gi}`, label: gp, kind: (gi % 2 === 0 ? "concept" : "strategy") }))}
+                            edges={d.graph_path.slice(1).map((_, gi) => ({ from: `gp_${gi}`, to: `gp_${gi + 1}` }))}
+                          />
+                        )}
                         {d.legs?.map((l, li) => (
                           <div key={li} className="text-slate-400">
                             <span className={l.side === "sell" ? "text-rose-300" : "text-emerald-300"}>{l.side ?? "buy"}</span>{" "}
