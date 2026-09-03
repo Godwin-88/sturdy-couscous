@@ -39,6 +39,15 @@ async def get_account():
     return await alpaca.get_account()
 
 
+@router.get("/crypto/assets")
+def crypto_assets(q: str = ""):
+    """Search the FULL Alpaca crypto trading universe (no hardcoded set)."""
+    _require_alpaca()
+    if _unconfigured():
+        return []
+    return alpaca.search_crypto_assets(q)
+
+
 @router.get("/positions")
 async def get_positions():
     _require_alpaca()

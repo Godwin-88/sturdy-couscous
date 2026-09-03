@@ -101,6 +101,14 @@ def _live_screen_data(screen: str, params: dict | None = None) -> dict:
                 sugg_path += f"&expiration={opt_exp}"
             _get(sugg_path, "options_suggestions")
 
+    if screen == "crypto":
+        _get("/alpaca/account", "alpaca_account")
+        _get("/alpaca/positions", "alpaca_positions")
+        pair = (params.get("pair") or params.get("underlying") or "BTC/USD").upper()
+        lens = params.get("lens") or "defensive"
+        _get(f"/crypto/tape?pair={pair}&days=90", "crypto_tape")
+        _get(f"/crypto/suggestions?pair={pair}&lens={lens}", "crypto_suggestions")
+
     if screen == "intelligence":
         _get("/agent/regime-forecast", "regime_forecast")
 
@@ -126,13 +134,14 @@ class AskRequest(BaseModel):
 @router.get("/context/{screen}")
 def chat_context(screen: str, underlying: str | None = None,
                  expiration: str | None = None, contract_type: str | None = None,
-                 contract_symbol: str | None = None, strike: float | None = None):
+                 contract_symbol: str | None = None, strike: float | None = None,
+                 pair: str | None = None, lens: str | None = None):
     """Return the full context bundle for a screen (live data + GraphRAG)."""
     screen = screen.lower().strip("/")
     params = {k: v for k, v in {
         "underlying": underlying, "expiration": expiration,
         "contract_type": contract_type, "contract_symbol": contract_symbol,
-        "strike": strike,
+        "strike": strike, "pair": pair, "lens": lens,
     }.items() if v is not None}
     hint = SCREEN_HINTS.get(screen, "trading strategy risk analysis")
     cache_key = f"chat:context:{screen}:" + ",".join(f"{k}={v}" for k, v in sorted(params.items()))
