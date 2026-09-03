@@ -7847,6 +7847,55 @@ MATCH (c:Concept {name: 'ReAct'}), (b:Book {id: 'buildingagents'}) MERGE (b)-[:H
 MERGE (:Concept {name: 'Tool Use', definition: 'Agents call external functions (APIs, calculators, DBs) as actions that shape reasoning.', category: 'agents_orchestration', source_book: 'buildingagents'});
 MATCH (c:Concept {name: 'Tool Use'}), (cat:Category {name: 'agents_orchestration'}) MERGE (c)-[:BELONGS_TO]->(cat);
 MATCH (c:Concept {name: 'Tool Use'}), (b:Book {id: 'buildingagents'}) MERGE (b)-[:HAS_CHAPTER]->(c);
+// =============================================================================
+// CRYPTO STRATEGY LIBRARY (Alpaca crypto — 24/7 paper trading universe)
+//   signal_method <-> agent/crypto_signal.py dispatch contract
+//   tradeable_venue 'alpaca_crypto' — matches _kg_crypto_strategies() query
+// =============================================================================
+
+MERGE (s:Strategy {name: 'Crypto Momentum'})
+  SET s.strategy_type = 'momentum',
+      s.signal_method = 'crypto_momentum',
+      s.tradeable_venue = 'alpaca_crypto',
+      s.status = 'active',
+      s.param_lookback_short = 7,
+      s.param_lookback_long = 21,
+      s.param_vol_floor = 0.4,
+      s.risk_weight = 0.5,
+      s.description = '12-1 / 21-7 momentum on crypto pairs; extreme momentum regime with wider thresholds for crypto vol.';
+
+MERGE (s:Strategy {name: 'Crypto Trend Following'})
+  SET s.status = 'active', s.signal_method = 'crypto_trend',
+      s.strategy_type = 'trend', s.tradeable_venue = 'alpaca_crypto',
+      s.param_short_ma = 50, s.param_long_ma = 200, s.risk_weight = 0.4,
+      s.description = 'Follow 50/200-MA directional regime on crypto underlyings.';
+
+MERGE (s:Strategy {name: 'Crypto Mean Reversion'})
+  SET s.status = 'active', s.signal_method = 'crypto_mr',
+      s.strategy_type = 'mean_reversion', s.tradeable_venue = 'alpaca_crypto',
+      s.param_z_enter = 2.0, s.param_z_exit = 0.5, s.risk_weight = 0.3,
+      s.description = 'Mean-revert stretched crypto pairs (z-score bands).';
+
+MERGE (s:Strategy {name: 'BTC Portfolio Hedge'})
+  SET s.status = 'active', s.signal_method = 'crypto_hedge',
+      s.strategy_type = 'hedge', s.tradeable_venue = 'alpaca_crypto',
+      s.param_hedge_target = 0.25, s.risk_weight = 0.25,
+      s.description = 'BTC/ETH hedge sleeve for equity portfolios in stress regimes.';
+
+// Regime activation edges (crypto regimes from the shared KG)
+MATCH (s:Strategy {name: 'Crypto Momentum'}),         (r:Regime {name: 'Trending'})     MERGE (s)-[:ACTIVATED_BY {weight: 0.9}]->(r);
+MATCH (s:Strategy {name: 'Crypto Momentum'}),         (r:Regime {name: 'Neutral'})      MERGE (s)-[:ACTIVATED_BY {weight: 0.5}]->(r);
+MATCH (s:Strategy {name: 'Crypto Trend Following'}),  (r:Regime {name: 'Trending'})     MERGE (s)-[:ACTIVATED_BY {weight: 0.85}]->(r);
+MATCH (s:Strategy {name: 'Crypto Trend Following'}),  (r:Regime {name: 'Recovery'})     MERGE (s)-[:ACTIVATED_BY {weight: 0.6}]->(r);
+MATCH (s:Strategy {name: 'Crypto Mean Reversion'}),   (r:Regime {name: 'MeanReverting'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.8}]->(r);
+MATCH (s:Strategy {name: 'BTC Portfolio Hedge'}),     (r:Regime {name: 'Crisis'})       MERGE (s)-[:ACTIVATED_BY {weight: 0.95}]->(r);
+MATCH (s:Strategy {name: 'BTC Portfolio Hedge'}),     (r:Regime {name: 'SystemicStress'}) MERGE (s)-[:ACTIVATED_BY {weight: 0.95}]->(r);
+
+// Ground in the reference graph (Digital Assets; already a :Concept from REF ingest)
+MATCH (s:Strategy {name: 'Crypto Momentum'}),         (c:Concept {name: 'Digital Assets'})            MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Crypto Trend Following'}),  (c:Concept {name: 'Digital Assets'})            MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'Crypto Mean Reversion'}),   (c:Concept {name: 'Digital Assets'})            MERGE (s)-[:DERIVED_FROM]->(c);
+MATCH (s:Strategy {name: 'BTC Portfolio Hedge'}),     (c:Concept {name: 'Digital Assets'})            MERGE (s)-[:DERIVED_FROM]->(c);
 MATCH (s:Strategy {name: 'Buy & Hold Benchmark'}), (r:Regime {name: 'Neutral'}) MERGE (s)-[:ACTIVATED_BY {weight:0.5}]->(r);
 MATCH (s:Strategy {name: 'S&P500 Momentum'}), (r:Regime {name: 'Trending'}) MERGE (s)-[:ACTIVATED_BY {weight:0.7}]->(r);
 MATCH (s:Strategy {name: 'S&P500 Momentum'}), (r:Regime {name: 'Recovery'}) MERGE (s)-[:ACTIVATED_BY {weight:0.6}]->(r);
