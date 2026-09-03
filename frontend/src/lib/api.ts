@@ -1610,3 +1610,39 @@ export const hypothesisApi = {
   multipleTestingContext: () =>
     apiFetch<MultipleTestingContext>("/hypothesis/multiple-testing-correction"),
 };
+
+// ── Crypto (Alpaca universe, spot-only) ───────────────────────────────────────
+
+export interface CryptoAsset { symbol: string; pair: string; name: string; tradable: boolean; exchange?: string | null; asset_class?: string | null; }
+export interface CryptoPricePt { t: string; close: number; volume?: number; }
+export interface CryptoCard {
+  strategy: string; signal_method: string; side: string; qty_rec: number;
+  est_premium: number; max_profit_low: number; max_loss: number;
+  max_loss_pct_nav: number; risk_reward_pct: number; score: number;
+  liquidity_ok: boolean; notes: string[];
+}
+export interface CryptoSuggestions {
+  pair: string; lens: string; nav: number; regime: string | null;
+  spot: number | null; mom_12_1?: number | null; mom_21_7?: number | null;
+  rv_21?: number | null; rv_pctile?: number | null; above_200ma?: boolean | null;
+  tape_rows: number; suggestions: CryptoCard[];
+}
+export interface CryptoPreview {
+  preview: boolean; proposal_token: string; spot: number;
+  risk_preview: { estimated_notional_usd: number; estimated_fee_usd: number; max_loss_est_usd: number; note: string };
+}
+export interface CryptoConfirm {
+  order_id: string; status: string; mode: string; venue: string;
+  pair: string; side: string; qty: number; filled_avg_price: number | null; created_at: string;
+}
+
+export const cryptoApi = {
+  searchPairs:  (q = "") => apiFetch<CryptoAsset[]>("/alpaca/crypto/assets" + (q ? `?q=${encodeURIComponent(q)}` : "")),
+  tape:         (pair: string, days = 90) => apiFetch<{ pair: string; rows: number; prices: CryptoPricePt[] }>(`/crypto/tape?pair=${encodeURIComponent(pair)}&days=${days}`),
+  suggestions:  (pair: string, lens = "defensive", nav = 100000, regime?: string | null) =>
+    apiFetch<CryptoSuggestions>(`/crypto/suggestions?pair=${encodeURIComponent(pair)}&lens=${lens}&nav=${nav}${regime ? `&regime=${encodeURIComponent(regime)}` : ""}`),
+  preview:      (body: { pair: string; side: string; qty: number; order_type?: string; limit_price?: number | null }) =>
+    apiFetch<CryptoPreview>("/crypto/preview", { method: "POST", body: JSON.stringify(body) }),
+  confirm:      (body: { pair: string; side: string; qty: number; order_type?: string; limit_price?: number | null; proposal_token: string }) =>
+    apiFetch<CryptoConfirm>("/crypto/confirm", { method: "POST", body: JSON.stringify(body) }),
+};

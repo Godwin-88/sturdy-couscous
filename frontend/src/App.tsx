@@ -20,6 +20,7 @@ import ContradictionsPanel from "@/components/ContradictionsPanel";
 import RiskWorkspace       from "@/components/RiskWorkspace";
 import IntelligencePanel   from "@/components/IntelligencePanel";
   import AlpacaPanel        from "@/components/AlpacaPanel";
+import CryptoPanel from "@/components/CryptoPanel";
 import OptionsPanel       from "@/components/OptionsPanel";
 import OptionPnlPanel     from "@/components/OptionPnlPanel";
 import AnalyticsPanel     from "@/components/AnalyticsPanel";
@@ -37,10 +38,11 @@ import { getScreenContext } from "@/lib/screenContext";
 import { registerWebMCPTools, unregisterWebMCPTools, WEBMCP_TOOL_COUNT } from "@/webmcp/tools";
 import { LABEL_COLOR } from "@/lib/utils";
 
-type Tab = "dashboard" | "graph" | "signals" | "backtest" | "risk" | "intelligence" | "options";
+type Tab = "dashboard" | "crypto" | "graph" | "signals" | "backtest" | "risk" | "intelligence" | "options";
 
 const OP_TABS: { id: Tab; label: string; icon: React.ReactNode; stage: string }[] = [
   { id: "dashboard",   label: "Dashboard",     icon: <LayoutDashboard size={14} />, stage: "MONITORING" },
+  { id: "crypto",      label: "Crypto",        icon: <Zap             size={14} />, stage: "DEPLOYED" },
   { id: "options",     label: "Options",       icon: <Activity        size={14} />, stage: "DEPLOYED" },
   { id: "signals",     label: "Signals",       icon: <Table2          size={14} />, stage: "DEPLOYED" },
   { id: "backtest",    label: "Backtest",      icon: <BarChart2       size={14} />, stage: "TESTING" },
@@ -186,6 +188,7 @@ function OperationsShell({ opTab, onNavigate }: { opTab: string; onNavigate?: (t
       {opTab === "dashboard" && <DashboardTab onNavigate={onNavigate} />}
       {opTab === "graph"     && <GraphTab />}
       {opTab === "signals"   && <SignalsTab onNavigate={onNavigate} />}
+      {opTab === "crypto"    && <CryptoTab />}
       {opTab === "options"   && <OptionsTab onNavigate={onNavigate} />}
       {opTab === "risk"      && <RiskWorkspaceTab />}
       {opTab === "backtest"  && <BacktestWorkspaceTab />}
@@ -441,6 +444,14 @@ function StatBox({ label, value, color }: { label: string; value: string; color?
 
 function SignalsTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   return <div className="h-full p-3" data-series-id="signals-tab" data-series-name="Signals" data-series-source="postgres"><SignalsTable onNavigate={onNavigate} /></div>;
+}
+
+function CryptoTab() {
+  return (
+    <div className="h-full overflow-y-auto">
+      <CryptoPanel />
+    </div>
+  );
 }
 
 function OptionsTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {

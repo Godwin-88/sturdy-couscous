@@ -14,6 +14,8 @@ from loguru import logger
 import pandas as pd
 
 from agent.crypto_signal import suggest_crypto
+
+MIN_CRYPTO_NOTIONAL_USD = 10.0  # Alpaca rejects < $10 cost basis
 from agent.alpaca_data import provider
 
 router = APIRouter(prefix="/crypto", tags=["crypto"])
@@ -81,6 +83,9 @@ def preview(req: PreviewRequest):
     except Exception:
         pass
     notional = spot * req.qty if spot else req.limit_price or 0.0
+    if spot and req.qty * spot < MIN_CRYPTO_NOTIONAL_USD:
+        raise HTTPException(status_code=400,
+                            detail=f"cost basis ${round(req.qty * spot,2)} below Alpaca ${MIN_CRYPTO_NOTIONAL_USD:.0f} minimum")
     return {
         "preview": True, "proposal_token": token, "spot": spot,
         "risk_preview": {
@@ -124,20 +129,35 @@ async def confirm(req: ConfirmRequest):
                             dbname=os.getenv("POSTGRES_DB", "graphalpha"),
                             user=os.getenv("POSTGRES_USER", "graphalpha"),
                             password=os.getenv("POSTGRES_PASSWORD", ""))
+
+    order_id = result.order_id or ""
+    try:
+        if order_id and order_id != "error":
+            uuid.UUID(order_id)
+        else:
+            order_id = str(uuid.uuid4())
+    except ValueError:
+        raw = result.raw or {}
+        alt = raw.get("order_id") or raw.get("id") or str(uuid.uuid4())
+        try:
+            uuid.UUID(alt)
+            order_id = alt
+        except ValueError:
+            order_id = str(uuid.uuid4())
     try:
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO order_audit
                   (order_id, strategy, ticker, direction, quantity, fill_price, fee_usd, mode, venue, created_at)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (result.order_id or "", "crypto_signal", req.pair.upper(), req.side,
+            """, (order_id, "crypto_signal", req.pair.upper(), req.side,
                   req.qty, float(result.filled_avg_price or 0) or req.limit_price or 0,
                   0.0, "paper", "alpaca", datetime.utcnow()))
         conn.commit()
     finally:
         conn.close()
     return {
-        "order_id": result.order_id, "status": result.status, "mode": "paper",
+        "order_id": order_id, "status": result.status, "mode": "paper",
         "venue": "alpaca", "pair": req.pair.upper(), "side": req.side, "qty": req.qty,
         "filled_avg_price": result.filled_avg_price,
         "created_at": datetime.utcnow().isoformat(),
