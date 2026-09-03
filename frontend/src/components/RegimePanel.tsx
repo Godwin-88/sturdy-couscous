@@ -281,7 +281,18 @@ export default function RegimePanel({ onNavigate }: { onNavigate?: (tab: string)
         error={benchErr}
         lens={lens}
         setLens={setLens}
-        onOpenOptions={() => onNavigate?.("options")}
+        onOpenOptions={() => {
+          const top = bench?.top_suggestion;
+          if (top) {
+            const und = bench?.underlying || (top.legs?.[0] ? top.legs[0].symbol.replace(/[^A-Z]+$/, "") : "SPY");
+            setScreenContext("options", {
+              screen: "options",
+              underlying: und,
+              extra: { orderDraft: top },
+            });
+          }
+          onNavigate?.("options");
+        }}
       />
 
       {/* Cycle stats (live only) */}

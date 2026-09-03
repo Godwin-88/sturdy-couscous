@@ -1,11 +1,11 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Activity, ArrowRightLeft, Loader2, CheckCircle2, XCircle, Brain, RefreshCw, Shield, Clock, AlertTriangle, Zap, ChevronRight, Filter, LineChart } from "lucide-react";
 import { optionsApi, OptionContractRow, OptionSuggestion, OptionLeg, AlpacaAsset, HedgeState } from "@/lib/api";
 import Greeks3DVisualization from "@/components/Greeks3DVisualization";
 import OptionDiagrams from "@/components/OptionDiagrams";
 import { fmt$, fmtN } from "@/lib/utils";
-import { setScreenContext } from "@/lib/screenContext";
+import { getScreenContext, setScreenContext } from "@/lib/screenContext";
 import clsx from "clsx";
 
 const MOODS = ["call", "put"] as const;
@@ -347,6 +347,24 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
     setPlaceErr(null);
     setModalOpen(true);
   }
+
+  // Regime pick deep-link: consume a pending orderDraft (published by RegimePanel) exactly once on mount.
+  const draftConsumed = useRef(false);
+  useEffect(() => {
+    if (draftConsumed.current) return;
+    const ctx = getScreenContext("options");
+    const draft = ctx?.extra?.orderDraft as OptionSuggestion | undefined;
+    if (!draft || !draft.legs?.length) return;
+    draftConsumed.current = true;
+    const und = ctx?.underlying || draft.legs[0].symbol.replace(/[^A-Z]+$/, "");
+    setUnderlying(und);
+    const exp = expiryFromSymbol(draft.legs[0].symbol) || "";
+    if (exp) setExpiration(exp);
+    setMood((draft.legs[0].contract_type as "call" | "put"));
+    openSuggestionInTicket(draft);
+    // one-shot: clear the draft so tab re-mounts don't re-fire
+    setScreenContext("options", { screen: "options" });
+  }, []);
 
   function openTradeModal(row: OptionContractRow) {
     setSelected(row);
