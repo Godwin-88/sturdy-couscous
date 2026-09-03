@@ -44,6 +44,23 @@ Rules:
 - Structure longer answers with markdown headings and bullet lists; never truncate mid-thought.
 - For an auto-breakdown of a screen, write ~500-700 words across Setup, Portfolio/Hedge Context,
   Risks, and Actionable Takeaways. Only shorten if the screen is genuinely sparse.
+
+PORTFOLIO / NAV AUTHORITATIVE-SOURCE RULE (read carefully):
+- The `risk_metrics.nav` field is the authoritative portfolio NAV for the chat
+  (it is now sourced directly from the live Alpaca brokerage account when
+  configured, see `nav_source`). Always quote THAT number — never invent a
+  "discrepancy" between the Risk Engine and the Brokerage: they are the same
+  number. If the screen also shows `alpaca_account.equity`, both fields will
+  already agree (modulo the few hundred ms between the two HTTP calls).
+- When the portfolio is mostly cash and `kelly_fraction ≈ 0`, that is a NORMAL
+  steady state — the sizing algorithm intentionally waits for high-conviction
+  signals before allocating. Frame it as "dry powder, waiting for regime +
+  signal alignment" rather than as a bug. Do not flag it as a problem unless
+  the user explicitly asks.
+- Never repeat the same NAV / cash / drawdown breakdown across multiple
+  sections of the same answer. State it once in Portfolio/Hedge Context and
+  refer back to it; spend the rest of the response on regime context, risks,
+  and what would change the picture.
 """
 
 
@@ -347,4 +364,179 @@ def synthesize(context: dict, question: str = "") -> dict:
     return {"answer": answer, "sources": retrieval.get("sources") or [], "suggestions": suggestions}
 
 
-__all__ = ["graphrag_retrieve", "synthesize"]
+# ──────────────────────────────────────────────────────────────────────────────
+# Agentic pipeline (ReAct-style) — market data + GraphRAG + news + chain +
+# all-regime strategies + prefill draft. NEVER executes an order; the chat UI
+# runs the two-phase proposal flow (preview -> token -> confirm) for execution.
+# ──────────────────────────────────────────────────────────────────────────────
+_STOP_TICKERS = {"SPY", "QQQ", "XLF", "XLE", "GLD", "TLT", "BTC", "ETH", "IWM",
+                 "US", "ETF", "THE", "AND", "FOR", "WITH", "FROM", "THIS",
+                 "THAT", "THEN", "WHEN", "WHAT", "WHICH", "WOULD", "SHOULD",
+                 "YOUR", "PAGE", "SCREEN", "CHAIN", "NEWS", "REGIME", "RISK"}
+
+_INTENT_WORDS = {"analyze", "trade", "order", "buy", "sell", "call", "put",
+                 "chain", "prefill", "straddle", "spread", "option", "earnings",
+                 "news", "hedge", "contract", "suggest"}
+
+
+def _find_tickers(text: str) -> list[str]:
+    words = re.findall(r"\b[A-Z][A-Z0-9\.\-]{1,6}\b", (text or "").upper())
+    seen, out = set(), []
+    for w in words:
+        if w in _STOP_TICKERS or w in seen or w.isdigit() or "." in w:
+            continue
+        seen.add(w)
+        out.append(w)
+    return out[:3]
+
+
+def run_agentic(question: str, page_context: dict | None = None,
+                screen: str = "options", history: list | None = None) -> dict:
+    """Run the agent tool sequence and return a grounded, HITL-ready bundle.
+
+    Returns {answer, sources, suggestions, steps[], news[], order_drafts[]}.
+    If no ticker/intent is detected, falls back to the existing single-shot path
+    (the caller detects ``agentic == False``).
+    """
+    from agent.fe_tools import call_tool
+
+    page_context = page_context or {}
+    q = (question or "").strip()
+    tickers = _find_tickers(q + " " + page_context.get("underlying", ""))
+    tl = q.lower()
+    has_intent = any(w in tl for w in _INTENT_WORDS)
+    ticker = tickers[0] if tickers else None
+
+    if not has_intent or not ticker:
+        return {"agentic": False}
+
+    nav = 100000.0
+    try:
+        p = call_tool("portfolio")
+        nav = float((p.get("result", {}).get("alpaca_account") or {}).get(
+            "equity")) or 100000.0
+    except Exception:
+        pass
+
+    steps: list[dict] = []
+    news: list[dict] = []
+    order_drafts: list[dict] = []
+    sources: list[dict] = []
+    market: dict = {}
+
+    def _step(name: str, args: dict, res: dict) -> None:
+        ok = bool(res.get("ok"))
+        label = name
+        if not ok:
+            label += f" — {res.get('error')}"
+        args_brief = ", ".join(f"{k}={v}" for k, v in args.items())
+        steps.append({"tool": name, "args": args, "ok": ok,
+                      "summary": f"{label} ({args_brief})"})
+
+    # 1. GraphRAG grounding
+    r = call_tool("graphrag", query=f"{ticker} {q} option strategy earnings implied move risk")
+    _step("graphrag", {"query": f"{ticker} {q[:60]}"}, r)
+    if r.get("ok"):
+        sources += (r["result"].get("sources") or [])[:6]
+
+    # 2. Market data
+    r = call_tool("market_data", ticker=ticker, days=60)
+    _step("market_data", {"ticker": ticker}, r)
+    if r.get("ok"):
+        market = r["result"]
+
+    # 3. Per-ticker news sentiment (fusion: news -> strategy choice)
+    r = call_tool("news_sentiment", ticker=ticker)
+    _step("news_sentiment", {"ticker": ticker}, r)
+    if r.get("ok"):
+        news = (r["result"].get("items") or [])[:8]
+
+    # 4. Strategy matrix across ALL regimes (regime-independent view)
+    r = call_tool("strategy_matrix")
+    _step("strategy_matrix", {}, r)
+    matrix = r.get("result") if r.get("ok") else []
+
+    # 5. Suggestions across all regimes for the target chain
+    expiration = page_context.get("expiration")
+    ctype = page_context.get("contract_type")
+    r = call_tool("suggestions", underlying=ticker, expiration=expiration,
+                  contract_type=ctype, regime="all", lens="defensive", nav=nav)
+    _step("suggestions", {"underlying": ticker, "contract_type": ctype, "regime": "all"}, r)
+    reg_cards: list[dict] = []
+    if r.get("ok"):
+        reg_cards = r["result"].get("suggestions") or []
+        for s in reg_cards[:4]:
+            sources.append({"strategy": s.get("strategy"),
+                            "regime": s.get("regime")})
+
+    # 6. Prefill order draft (top card; human reviews/executes via UI)
+    best = reg_cards[0].get("strategy") if reg_cards else None
+    r = call_tool("prefill_order", underlying=ticker, expiration=expiration,
+                  contract_type=ctype, strategy=best,
+                  lens="defensive", nav=nav)
+    _step("prefill_order", {"strategy": best, "lens": "defensive"}, r)
+    if r.get("ok"):
+        order_drafts.append({**r["result"], "agentic": True})
+# ── Narrative via the LLM, grounded in everything collected ─────────────
+    summary = {
+        "ticker": ticker,
+        "last_close": market.get("last_close"),
+        "return_5d": market.get("return_5d"),
+        "vol_21d": market.get("vol_21d_annualized"),
+        "news_headlines": len(news),
+        "news_aggregate_sentiment": round(sum((n.get("sentiment") or 0) for n in news) / len(news), 3) if news else 0.0,
+        "strategies_across_regimes": len(matrix),
+        "scored_suggestions": len(reg_cards),
+    }
+    drafts = []
+    for d in order_drafts:
+        drafts.append({"strategy": d.get("strategy"), "regime": d.get("regime"),
+                       "legs": len(d.get("legs") or []), "est_premium": d.get("est_premium"),
+                       "max_loss": d.get("max_loss"), "max_losspct_nav": d.get("max_losspct_nav"),
+                       "score": d.get("score")})
+    past = (history or [])[-4:]
+    synth_ctx = {
+        "screen": screen,
+        "screen_data": {
+            **summary,
+            "order_draft": drafts[0] if drafts else None,
+            "regime_cards": [
+                {"strategy": s.get("strategy"), "regime": s.get("regime"),
+                 "score": s.get("score"), "max_loss": s.get("max_loss"),
+                 "max_losspct_nav": s.get("max_loss_pct_nav")}
+                for s in reg_cards[:4]
+            ],
+        },
+        "retrieval": {"sources": sources},
+        "history": past,
+        "page_context": {"underlying": ticker, "expiration": expiration,
+                         "contract_type": ctype},
+    }
+    task = (
+        "As a financial engineer, synthesise the agent's findings for "
+        f"{ticker}: market state, news sentiment, the option strategies scored "
+        "across all regimes, and the top trade draft. Give a loss-averse "
+        "recommendation, cite the graph concepts/sources, and note that the "
+        "draft is a PROPOSAL requiring human confirmation before any paper "
+        "execution. Keep it ~350-500 words with a short table of the top cards."
+    )
+    result = synthesize(synth_ctx, question=task)
+
+    return {
+        "agentic": True,
+        "answer": result["answer"],
+        "sources": result.get("sources") or sources,
+        "suggestions": result.get("suggestions") or [
+            f"Break down each strategy card for {ticker} across regimes",
+            f"What is the news edge for {ticker} and does it change the play?",
+            f"Show the hedge posture if we enter the "
+            f"{order_drafts[0]['strategy'] if order_drafts else 'top'} draft",
+        ],
+        "steps": steps,
+        "news": news,
+        "order_drafts": order_drafts,
+        "market_data": market,
+        "strategy_matrix": matrix[:12] if isinstance(matrix, list) else [],
+    }
+# __AGENTIC_MARKER__
+__all__ = ["graphrag_retrieve", "synthesize", "run_agentic"]

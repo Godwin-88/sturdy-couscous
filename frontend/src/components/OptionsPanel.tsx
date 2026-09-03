@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { Search, Activity, ArrowRightLeft, Loader2, CheckCircle2, XCircle, Brain, RefreshCw, Shield, Clock, AlertTriangle, Zap, ChevronRight, Filter } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Search, Activity, ArrowRightLeft, Loader2, CheckCircle2, XCircle, Brain, RefreshCw, Shield, Clock, AlertTriangle, Zap, ChevronRight, Filter, LineChart } from "lucide-react";
 import { optionsApi, OptionContractRow, OptionSuggestion, OptionLeg, AlpacaAsset, HedgeState } from "@/lib/api";
 import Greeks3DVisualization from "@/components/Greeks3DVisualization";
 import OptionDiagrams from "@/components/OptionDiagrams";
@@ -78,7 +79,8 @@ function legToRow(leg: OptionLeg, fallbackExp: string, fallbackUnderlying: strin
   };
 }
 
-export default function OptionsPanel() {
+export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [assets, setAssets] = useState<AlpacaAsset[]>([]);
   const [searching, setSearching] = useState(false);
@@ -103,6 +105,7 @@ export default function OptionsPanel() {
   const [placeErr, setPlaceErr] = useState<string | null>(null);
 
   const [suggestions, setSuggestions] = useState<OptionSuggestion[]>([]);
+  const [allStrategies, setAllStrategies] = useState<{ name: string; method: string | null; regimes: string[] }[]>([]);
   const [sugMeta, setSugMeta] = useState<{ regime: string; regime_confidence: number; spot_estimate: number | null; dte: number; active_strategies: string[]; lens: string; max_loss_cap_pct: number; nav: number; alt_expirations: string[]; alt_count: number; primary_count: number } | null>(null);
   const [loadingSug, setLoadingSug] = useState(false);
   const [sugErr, setSugErr] = useState<string | null>(null);
@@ -148,7 +151,7 @@ export default function OptionsPanel() {
       loadSuggestions();
     }, 15_000);
     return () => clearInterval(interval);
-  }, [selected, underlying, expiration, mood, lens, regimeOverride]);
+  }, [selected, underlying, expiration, mood, lens, regimeOverride, strategyFilter]);
 
   async function searchUnderlyings() {
     setSearching(true);
@@ -207,6 +210,23 @@ export default function OptionsPanel() {
     return best;
   }, [rows]);
 
+  // Chain-aware deep links — the menu into Analytics (default = underlying
+  // series, with the chain context passed via URL) and Risk (chain context is
+  // already published to screenContext by the effect above).
+  function goToAnalyze() {
+    if (!underlying) return;
+    const params = new URLSearchParams({ series: `px:${underlying}:Close` });
+    params.set("underlying", underlying);
+    if (expiration) params.set("expiration", expiration);
+    params.set("contract_type", mood);
+    if (atmApprox?.strike_price != null) params.set("strike", String(atmApprox.strike_price));
+    navigate(`/analytics?${params.toString()}`);
+  }
+
+  function goToRisk() {
+    onNavigate?.("risk");
+  }
+
   async function loadSuggestions() {
     setLoadingSug(true);
     setSugErr(null);
@@ -216,8 +236,10 @@ export default function OptionsPanel() {
         contract_type: mood,
         lens,
         regime: regimeOverride || undefined,
+        strategy: strategyFilter || undefined,
       });
       setSuggestions(res.suggestions ?? []);
+      setAllStrategies(res.all_strategies ?? []);
       setRejected((res.rejected ?? []).map(r => ({ strategy: r.strategy, max_loss_pct_nav: r.max_loss_pct_nav, reason: r.reason })));
       setSugMeta({
         regime: res.regime,
@@ -256,7 +278,14 @@ export default function OptionsPanel() {
   }
 
   function changeStrategyFilter(next: string) {
-    setStrategyFilter(prev => (prev === next ? "" : next));
+    // Server-side force-select: toggling picks a specific strategy from the
+    // full KG library and re-scores it against the current chain (accurate
+    // metrics computed even when the strategy isn't regime-active).
+    setStrategyFilter(prev => {
+      const nv = prev === next ? "" : next;
+      setTimeout(loadSuggestions, 0);
+      return nv;
+    });
   }
 
   async function loadHedge() {
@@ -375,7 +404,17 @@ export default function OptionsPanel() {
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 bg-slate-950">
           <Activity size={14} className="text-indigo-400" />
           <span className="text-xs text-slate-300 font-semibold uppercase tracking-widest">Options - Alpaca Paper</span>
-          <span className="ml-auto flex items-center gap-1.5 text-[10px] font-mono text-emerald-400">
+          <div className="ml-auto flex items-center gap-1.5">
+            <button onClick={goToAnalyze} disabled={!rows.length} title="Deep-link this chain into Analytics (default = underlying series)"
+              className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-semibold font-mono bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-600/50 disabled:opacity-40 disabled:cursor-not-allowed">
+              <LineChart size={11} /> Analyze
+            </button>
+            <button onClick={goToRisk} title="Open Risk — chain context carries over"
+              className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-semibold font-mono bg-rose-600/20 border border-rose-500/30 text-rose-300 hover:bg-rose-600/40">
+              <Shield size={11} /> Risk
+            </button>
+          </div>
+          <span className="flex items-center gap-1.5 text-[10px] font-mono text-emerald-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />LIVE CHAINS
           </span>
         </div>
@@ -653,42 +692,39 @@ export default function OptionsPanel() {
                     loss-aversion gates: max loss ≤ {sugMeta.max_loss_cap_pct.toFixed(0)}% of NAV ({sugMeta.nav ? fmt$(sugMeta.nav) : "-"}) — anything bigger is rejected
                   </div>
                 )}
-                {/* Client-side strategy filter — narrows cards to one strategy family without re-hitting the API. */}
+                {/* Strategy picker — select ANY strategy from the full KG
+                    library (not just regime-active ones). Choosing one
+                    re-scores it against the current chain server-side, so the
+                    metrics shown are computed from live option quotes. */}
                 {(() => {
-                  const unique = Array.from(new Set(suggestions.map(s => s.strategy)));
-                  if (suggestions.length === 0) return null;
+                  const library = allStrategies.length > 0 ? allStrategies : [];
+                  if (library.length === 0 && suggestions.length === 0) return null;
+                  const sorted = [...library].sort((a, b) => a.name.localeCompare(b.name));
+                  const active = strategyFilter;
                   return (
                     <div className="flex flex-wrap items-center gap-1">
                       <span className="text-[10px] text-slate-500 uppercase">Strategy:</span>
-                      <button
-                        onClick={() => changeStrategyFilter("")}
-                        className={clsx(
-                          "text-[10px] font-mono px-1.5 py-0.5 rounded border",
-                          strategyFilter === ""
-                            ? "bg-indigo-600/30 border-indigo-500/50 text-indigo-200"
-                            : "bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800"
-                        )}
+                      <select
+                        value={active}
+                        onChange={e => changeStrategyFilter(e.target.value)}
+                        className="rounded border px-1.5 py-0.5 text-[10px] font-mono bg-slate-950 border-slate-700 text-slate-200 hover:border-slate-500 outline-none max-w-[220px]"
+                        title="Select any KG strategy — metrics are re-computed live from the current option chain (regime-independent)."
                       >
-                        All ({suggestions.length})
-                      </button>
-                      {unique.map(name => {
-                        const cnt = suggestions.filter(s => s.strategy === name).length;
-                        const active = strategyFilter === name;
-                        return (
-                          <button
-                            key={name}
-                            onClick={() => changeStrategyFilter(name)}
-                            className={clsx(
-                              "text-[10px] font-mono px-1.5 py-0.5 rounded border",
-                              active
-                                ? "bg-violet-600/30 border-violet-500/50 text-violet-200"
-                                : "bg-slate-950 border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-500"
-                            )}
-                          >
-                            {name} ({cnt})
-                          </button>
-                        );
-                      })}
+                        <option value="">All strategies (regime-active)</option>
+                        {sorted.map(s => (
+                          <option key={s.name} value={s.name}>
+                            {s.name}{s.regimes?.length ? `  [${s.regimes.join(", ")}]` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      {active && (
+                        <button
+                          onClick={() => changeStrategyFilter("")}
+                          className="text-[10px] font-mono px-1.5 py-0.5 rounded border bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700"
+                        >
+                          ✕ clear
+                        </button>
+                      )}
                     </div>
                   );
                 })()}
@@ -704,7 +740,7 @@ export default function OptionsPanel() {
                   />
                 ))}
                 {strategyFilter && suggestions.filter(s => s.strategy === strategyFilter).length === 0 && (
-                  <div className="text-[10px] font-mono text-slate-500">No cards for {strategyFilter} in this regime — try a different filter.</div>
+                  <div className="text-[10px] font-mono text-slate-500">No computable card for {strategyFilter} on this chain right now (chain may not support its strikes/DTE) — try another strategy or expiry.</div>
                 )}
                 {rejected.length > 0 && (
                   <div className="rounded border border-amber-900/60 bg-amber-950/10 p-2">
@@ -763,6 +799,7 @@ export default function OptionsPanel() {
           orderClass={orderClass}
           setOrderClass={setOrderClass}
           spreadLegs={spreadLegs}
+          setSpreadLegs={setSpreadLegs}
           placing={placing}
           placed={placed}
           placeErr={placeErr}
@@ -778,7 +815,7 @@ export default function OptionsPanel() {
 function OrderModal({
   selected, underlying, side, setSide, intent, setIntent, qty, setQty,
   orderType, setOrderType, limitPrice, setLimitPrice,
-  orderClass, setOrderClass, spreadLegs,
+  orderClass, setOrderClass, spreadLegs, setSpreadLegs,
   placing, placed, placeErr,
   matching, onClose, onSubmit,
 }: {
@@ -797,6 +834,7 @@ function OrderModal({
   orderClass: "simple" | "vertical";
   setOrderClass: (c: "simple" | "vertical") => void;
   spreadLegs: OptionLeg[];
+  setSpreadLegs: (legs: OptionLeg[]) => void;
   placing: boolean;
   placed: { order_id: string; status: string; contract: string; fill: number | null; mode: string } | null;
   placeErr: string | null;
@@ -806,6 +844,72 @@ function OrderModal({
 }) {
   const mid = ((selected.bid ?? 0) + (selected.ask ?? 0)) / 2;
   const isSpread = orderClass === "vertical" && spreadLegs.length > 1;
+
+  // Live re-compute from the (editable) leg set — premium/net debit/credit,
+  // max profit, max loss, based on each leg's mid quote × multiplier × qty.
+  const legMetrics = (() => {
+    const legs = isSpread ? spreadLegs : [];
+    if (legs.length === 0) {
+      // single leg
+      const notional = (mid || 0) * (selected.multiplier ?? 100) * qty;
+      return {
+        premium: mid || 0,
+        net: side === "buy" ? -notional : notional,
+        max_profit: side === "buy" ? null : notional,
+        max_loss: side === "buy" ? notional : null,
+      };
+    }
+    let net = 0;
+    for (const l of legs) {
+      const legMid = l.mid ?? 0;
+      const legNotional = legMid * (selected.multiplier ?? 100) * Math.max(1, Number(l.contracts ?? 1) || 1);
+      net += l.side.startsWith("buy") ? -legNotional : legNotional;
+    }
+    // Max loss/profit approximation for a defined-risk vertical:
+    // net > 0 = credit (maxP = net, maxL = width - net); net < 0 = debit.
+    let max_profit: number | null = null;
+    let max_loss: number | null = null;
+    if (net >= 0) {
+      max_profit = net;
+    } else {
+      max_loss = -net;
+    }
+    return { premium: null, net, max_profit, max_loss };
+  })();
+
+  function setLegQty(i: number, n: number) {
+    const next = spreadLegs.map((l, idx) => (idx === i ? { ...l, contracts: Math.max(1, n || 1) } : l));
+    setSpreadLegs(next);
+  }
+  function setLegSide(i: number, s: string) {
+    const next = spreadLegs.map((l, idx) => (idx === i ? { ...l, side: s as OptionLeg["side"] } : l));
+    setSpreadLegs(next);
+  }
+  function removeLeg(i: number) {
+    setSpreadLegs(spreadLegs.filter((_, idx) => idx !== i));
+  }
+  function addLeg() {
+    // Add a leg derived from the last one but with the opposite side, so the
+    // user can build a genuine pair (e.g. BTO + STO) and edit it further.
+    const last = spreadLegs[spreadLegs.length - 1];
+    const base = last ?? {
+      symbol: selected.symbol,
+      strike: selected.strike_price,
+      contract_type: selected.contract_type,
+      mid,
+      delta: selected.greeks?.delta,
+    };
+    const inverse = (base.side ?? "buy_to_open").startsWith("buy") ? "sell_to_open" : "buy_to_open";
+    setSpreadLegs([...spreadLegs, {
+      symbol: base.symbol,
+      strike: base.strike,
+      contract_type: base.contract_type,
+      side: inverse as OptionLeg["side"],
+      contracts: 1,
+      mid: base.mid ?? mid,
+      delta: base.delta,
+    }]);
+  }
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-xl border border-slate-600 bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -840,23 +944,64 @@ function OrderModal({
             </div>
           </div>
 
-          {/* Spread legs (when vertical) */}
+          {/* Spread legs (when vertical) — editable: side/contracts per leg,
+              add/remove legs, and metrics re-compute live from leg mids. */}
           {isSpread && (
-            <div className="rounded border border-violet-800/40 bg-violet-950/10 px-3 py-2 space-y-1">
-              <div className="text-[10px] text-violet-300 uppercase tracking-widest font-mono">Spread legs</div>
+            <div className="rounded border border-violet-800/40 bg-violet-950/10 px-3 py-2 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <div className="text-[10px] text-violet-300 uppercase tracking-widest font-mono">Spread legs</div>
+                <button onClick={addLeg}
+                  className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded border border-violet-500/40 bg-violet-950/40 text-violet-300 hover:bg-violet-900/50">
+                  + leg
+                </button>
+              </div>
               {spreadLegs.map((l, i) => (
-                <div key={i} className="flex items-center justify-between text-[11px] font-mono text-slate-300">
-                  <span className={clsx(l.side.startsWith("buy") ? "text-emerald-400" : "text-red-400")}>
-                    {l.side.toUpperCase().replace(/_/g, " ")}
-                  </span>
-                  <span>{l.symbol}</span>
+                <div key={i} className="flex items-center gap-2 text-[11px] font-mono text-slate-300">
+                  <select value={l.side}
+                    onChange={e => setLegSide(i, e.target.value)}
+                    className="bg-slate-950 border border-violet-700/60 rounded px-1 py-0.5 text-[10px] font-mono text-slate-200">
+                    <option value="buy_to_open">BTO</option>
+                    <option value="sell_to_open">STO</option>
+                    <option value="buy_to_close">BTC</option>
+                    <option value="sell_to_close">STC</option>
+                  </select>
+                  <span className="truncate flex-1 text-slate-400" title={l.symbol}>{l.symbol}</span>
                   <span>K {fmtN(l.strike)}</span>
-                  <span>mid {l.mid != null ? fmt$(l.mid) : "-"}</span>
+                  <span className="text-slate-500">mid {l.mid != null ? fmt$(l.mid) : "-"}</span>
+                  <input type="number" min={1} value={l.contracts ?? 1}
+                    onChange={e => setLegQty(i, Number(e.target.value))}
+                    className="w-14 bg-slate-950 border border-violet-700/60 rounded px-1 py-0.5 text-[10px] font-mono text-slate-200" />
+                  <button onClick={() => removeLeg(i)} disabled={spreadLegs.length <= 1}
+                    className="text-slate-500 hover:text-red-400 disabled:opacity-30 ml-0.5">
+                    <XCircle size={11} />
+                  </button>
                 </div>
               ))}
-              <div className="text-[10px] text-slate-500 font-mono pt-1 border-t border-violet-900/40">
-                {matching ? `${matching.strategy} · maxP ${fmt$(matching.max_profit_low)} · maxL ${fmt$(matching.max_loss)}` : "Manual vertical"}
+              {/* Live recomputed metrics from the editable legs */}
+              <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono pt-1.5 border-t border-violet-900/40">
+                <div className="text-slate-300">
+                  {legMetrics.net >= 0 ? "Net CREDIT" : "Net DEBIT"}{" "}
+                  <b className={legMetrics.net >= 0 ? "text-emerald-400" : "text-amber-400"}>{fmt$(Math.abs(legMetrics.net))}</b>
+                </div>
+                <div className="text-slate-300">
+                  maxP <b className="text-emerald-400">{legMetrics.max_profit != null ? fmt$(legMetrics.max_profit) : "-"}</b>
+                </div>
+                <div className="text-slate-300">
+                  maxL <b className="text-red-400">{legMetrics.max_loss != null ? fmt$(legMetrics.max_loss) : "-"}</b>
+                </div>
+                <div className="text-slate-300">
+                  RR <b className="text-slate-100">
+                    {legMetrics.max_profit != null && legMetrics.max_loss != null && legMetrics.max_loss > 0
+                      ? `${(legMetrics.max_profit / legMetrics.max_loss).toFixed(2)}`
+                      : "-"}
+                  </b>
+                </div>
               </div>
+              {matching && (
+                <div className="text-[10px] text-slate-500 font-mono pt-1 border-t border-violet-900/40">
+                  {matching.strategy} (agent) · maxP {fmt$(matching.max_profit_low)} · maxL {fmt$(matching.max_loss)} — edits re-compute above
+                </div>
+              )}
             </div>
           )}
 

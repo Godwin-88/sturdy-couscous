@@ -20,7 +20,7 @@ from fastapi import APIRouter
 from loguru import logger
 from pydantic import BaseModel
 
-from agent.financial_engineer import graphrag_retrieve, synthesize
+from agent.financial_engineer import graphrag_retrieve, synthesize, run_agentic
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -118,6 +118,9 @@ class AskRequest(BaseModel):
     question: str = ""
     history: list[dict] = []
     page_context: dict = {}
+    mode: str = "auto"          # auto | analyze | trade
+    lens: str = "defensive"     # ranking lens for trade drafts
+    nav: float | None = None
 
 
 @router.get("/context/{screen}")
@@ -174,17 +177,39 @@ def chat_ask(req: AskRequest):
     ] if v)
     query = f"{hint} {anchor} {req.question}" if (req.question or anchor) else hint
 
-    try:
-        retrieval = graphrag_retrieve(query, top_n=8, hops=2)
-    except Exception as err:
-        logger.error(f"graphrag_retrieve failed: {err}")
-        retrieval = {"concepts": [], "sections": [], "formulas": [],
-                     "strategies": [], "sources": []}
-
     live = _live_screen_data(screen, page_ctx)
-    context = {"screen": screen, "screen_data": live, "retrieval": retrieval,
-               "history": req.history, "page_context": page_ctx}
-    result = synthesize(context, question=req.question)
+
+    result = None
+    try:
+        want_agentic = req.mode in ("trade", "analyze") or any(
+            w in (req.question or "").lower()
+            for w in ("analyze", "prefill", "order", "trade", "buy", "call",
+                      "put", "chain", "earnings", "straddle", "spread", "news"))
+        if want_agentic:
+            agentic = run_agentic(req.question, page_ctx, screen, req.history)
+            if agentic.get("agentic"):
+                agentic["screen_data"] = live
+                result = agentic
+    except Exception as err:
+        logger.warning(f"agentic path failed, falling back to single-shot: {err}")
+
+    if result is None:
+        try:
+            retrieval = graphrag_retrieve(query, top_n=8, hops=2)
+        except Exception as err:
+            logger.error(f"graphrag_retrieve failed: {err}")
+            retrieval = {"concepts": [], "sections": [], "formulas": [],
+                         "strategies": [], "sources": []}
+        context = {"screen": screen, "screen_data": live, "retrieval": retrieval,
+                   "history": req.history, "page_context": page_ctx}
+        base = synthesize(context, question=req.question)
+        result = {
+            **base,
+            "agentic": False,
+            "steps": [],
+            "news": [],
+            "order_drafts": [],
+        }
 
     # Persist conversation
     try:

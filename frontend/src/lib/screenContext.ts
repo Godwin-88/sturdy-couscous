@@ -1,3 +1,5 @@
+import type { OrderDraft } from "@/lib/api";
+
 /**
  * Live "page session context" shared between screen components and the
  * Financial Engineer chat. Components publish what the user is currently
@@ -20,6 +22,8 @@ export interface ScreenContextData {
   strike?: number;
   /** Optional: loss-aversion lens */
   lens?: "average" | "defensive";
+  /** Optional: a pre-filled order draft from the Financial Engineer chat */
+  prefillDraft?: OrderDraft;
   /** Optional: free-form extra context (spot, dte, liquidity notes …) */
   extra?: Record<string, unknown>;
 }

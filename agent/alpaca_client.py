@@ -289,9 +289,12 @@ class AlpacaClient:
                 else:
                     req = MarketOrderRequest(symbol=contract_symbol, **common)
             else:
-                if not legs or len(legs) < 2:
+                # Accept 1-leg MLEG as a way to bypass single-leg market-hours
+                # restrictions on Alpaca (the broker allows MLEG market orders
+                # outside hours even with a single option leg).
+                if not legs or len(legs) < 1:
                     raise ValueError(
-                        "MLEG orders require at least 2 legs; "
+                        "MLEG orders require at least 1 leg; "
                         f"got {len(legs) if legs else 0}."
                     )
                 # Belt-and-suspenders: collapse duplicate (symbol, side,
@@ -311,9 +314,9 @@ class AlpacaClient:
                         consolidated[key]["qty"] = int(consolidated[key].get("qty", 1) or 1) + qty
                     else:
                         consolidated[key] = dict(l)
-                if len(consolidated) < 2:
+                if len(consolidated) < 1:
                     raise ValueError(
-                        "MLEG orders require at least 2 unique legs after "
+                        "MLEG orders require at least 1 leg after "
                         f"consolidation; got {len(consolidated)}."
                     )
                 symbols = [str(l.get("symbol")) for l in consolidated.values()]
@@ -330,23 +333,48 @@ class AlpacaClient:
                         position_intent=PositionIntent(l.get("position_intent", "buy_to_open")),
                     ) for l in consolidated.values()
                 ]
-                mleg_common = dict(
-                    symbol=None,  # alpsca-py: symbol must NOT be set for MLEG orders
-                    qty=qty, side=side_enum, time_in_force=TimeInForce.DAY,
-                    order_class=OrderClass.MLEG, legs=leg_objs or None,
-                    position_intent=pi,
-                )
-                if order_type == "limit" and limit_price is not None:
-                    req = LimitOrderRequest(
-                        limit_price=limit_price,
-                        type=OrderType.LIMIT,
-                        **mleg_common,
-                    )
+                # Alpaca rejects MLEG orders with < 2 unique legs after
+                # consolidation. When the caller asked for mleg/vertical but the
+                # payload collapsed to a single leg (e.g. the route's market-hour
+                # auto-wrap of a simple order), downgrade to a SIMPLE order on
+                # that one leg instead of submitting an invalid 1-leg MLEG.
+                if len(consolidated) == 1:
+                    sole = consolidated[next(iter(consolidated))]
+                    sole_symbol = str(sole["symbol"])
+                    sole_side = OrderSide.BUY if str(sole.get("side", "buy")).lower() == "buy" else OrderSide.SELL
+                    sole_qty = int(sole.get("qty", 1) or 1)
+                    if order_type == "limit" and limit_price is not None:
+                        req = LimitOrderRequest(
+                            symbol=sole_symbol, limit_price=limit_price,
+                            qty=sole_qty, side=sole_side, time_in_force=TimeInForce.DAY,
+                            position_intent=PositionIntent(sole.get("position_intent", position_intent)),
+                            order_class=OrderClass.SIMPLE,
+                        )
+                    else:
+                        req = MarketOrderRequest(
+                            symbol=sole_symbol,
+                            qty=sole_qty, side=sole_side, time_in_force=TimeInForce.DAY,
+                            position_intent=PositionIntent(sole.get("position_intent", position_intent)),
+                            order_class=OrderClass.SIMPLE,
+                        )
                 else:
-                    req = MarketOrderRequest(
-                        type=OrderType.MARKET,
-                        **mleg_common,
+                    mleg_common = dict(
+                        symbol=None,  # alpaca-py: symbol must NOT be set for MLEG orders
+                        qty=qty, side=side_enum, time_in_force=TimeInForce.DAY,
+                        order_class=OrderClass.MLEG, legs=leg_objs or None,
+                        position_intent=pi,
                     )
+                    if order_type == "limit" and limit_price is not None:
+                        req = LimitOrderRequest(
+                            limit_price=limit_price,
+                            type=OrderType.LIMIT,
+                            **mleg_common,
+                        )
+                    else:
+                        req = MarketOrderRequest(
+                            type=OrderType.MARKET,
+                            **mleg_common,
+                        )
             order = self.client.submit_order(req)
             return AlpacaOrderResult(
                 order_id=order.id or "",

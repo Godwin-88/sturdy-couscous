@@ -25,6 +25,28 @@ export interface AgentStatus {
   cycle_duration_s:  number;
 }
 
+export interface RegimeBenchSpot {
+  spot:   number | null;
+  d1:     number | null;
+  d5:     number | null;
+  d1_pct: number | null;
+  d5_pct: number | null;
+}
+
+export interface RegimeBenchResult {
+  underlying:      string;
+  spot:            RegimeBenchSpot;
+  regime:          string;
+  confidence:      number;
+  is_override:     boolean;
+  live_regime:     string;
+  live_confidence: number;
+  eligible:        { name: string; description: string }[];
+  eligible_count:  number;
+  top_suggestion:  OptionSuggestion | null;
+  rejected:        { strategy: string; max_loss: number; max_loss_pct_nav: number; reason: string }[];
+}
+
 export interface Position {
   ticker:          string;
   direction:       string;
@@ -358,6 +380,8 @@ export interface OptionPlaceRequest {
     qty: number;
     position_intent: "buy_to_open" | "sell_to_open" | "buy_to_close" | "sell_to_close";
   }[];
+  preview?: boolean;
+  proposal_token?: string | null;
 }
 
 export interface OptionPlaceResult {
@@ -429,6 +453,7 @@ export interface OptionSuggestionsResult {
   nav:               number;
   max_loss_cap_pct:  number;
   active_strategies: string[];
+  all_strategies:    { name: string; method: string | null; regimes: string[] }[];
   suggestions:       OptionSuggestion[];
   rejected:          OptionSuggestionRejected[];
 }
@@ -458,17 +483,70 @@ export interface ChatSource {
   strategy?: string;
 }
 
+export interface FeStep {
+  tool: string;
+  args: Record<string, unknown>;
+  ok: boolean;
+  summary: string;
+}
+
+export interface FeNews {
+  headline: string;
+  sentiment?: number;
+  concepts?: string[];
+}
+
+export interface OrderDraftLeg {
+  symbol?: string;
+  strike?: number;
+  contract_type?: string;
+  side?: string;
+  contracts?: number;
+}
+
+export interface OrderDraft {
+  underlying: string;
+  expiration?: string | null;
+  contract_type?: string | null;
+  strategy?: string;
+  signal_method?: string;
+  regime?: string;
+  score?: number;
+  loss_aversion_score?: number;
+  graph_path?: string[];
+  legs: OrderDraftLeg[];
+  est_premium?: number;
+  max_profit?: number;
+  max_loss?: number;
+  risk_reward_pct?: number;
+  max_losspct_nav?: number;
+  budget_pct?: number;
+  liquidity_ok?: boolean;
+  notes?: string[];
+  nav?: number;
+  agentic?: boolean;
+}
+
 export interface ChatMessage {
   role: string;
   content: string;
   sources?: ChatSource[];
   suggestions?: string[];
+  steps?: FeStep[];
+  news?: FeNews[];
+  order_drafts?: OrderDraft[];
 }
 
 export interface ChatAnswer {
   answer: string;
   sources: ChatSource[];
   suggestions: string[];
+  agentic?: boolean;
+  steps?: FeStep[];
+  news?: FeNews[];
+  order_drafts?: OrderDraft[];
+  market_data?: Record<string, unknown>;
+  strategy_matrix?: unknown[];
 }
 
 export interface ChatContext {
@@ -497,10 +575,10 @@ export const chatApi = {
     const qs = p.toString();
     return apiFetch<ChatContext>(`/chat/context/${screen}${qs ? `?${qs}` : ""}`);
   },
-  ask: (screen: string, question: string, history: { role: string; content: string }[], pageContext?: Record<string, unknown>) =>
+  ask: (screen: string, question: string, history: { role: string; content: string }[], pageContext?: Record<string, unknown>, mode?: string) =>
     apiFetch<ChatAnswer>("/chat/ask", {
       method: "POST",
-      body: JSON.stringify({ screen, question, history, page_context: pageContext ?? {} }),
+      body: JSON.stringify({ screen, question, history, page_context: pageContext ?? {}, mode: mode ?? "auto" }),
     }),
   history: (screen: string) => apiFetch<ChatMessage[]>(`/chat/history/${screen}`),
   clearHistory: (screen: string) =>
@@ -540,13 +618,14 @@ export const optionsApi = {
     return apiFetch<{ underlying: string; rows: OptionContractRow[] }>(`/options/chain?${p.toString()}`);
   },
   snapshot:    (contract: string) => apiFetch<OptionContractRow>(`/options/snapshot?contract=${encodeURIComponent(contract)}`),
-  suggestions: (underlying: string, opts?: { expiration?: string; contract_type?: string; regime?: string; lens?: string; nav?: number }) => {
+  suggestions: (underlying: string, opts?: { expiration?: string; contract_type?: string; regime?: string; lens?: string; nav?: number; strategy?: string }) => {
     const p = new URLSearchParams({ underlying: underlying.toUpperCase() });
     if (opts?.expiration) p.set("expiration", opts.expiration);
     if (opts?.contract_type) p.set("contract_type", opts.contract_type);
     if (opts?.regime) p.set("regime", opts.regime);
     if (opts?.lens) p.set("lens", opts.lens);
     if (opts?.nav != null) p.set("nav", String(opts.nav));
+    if (opts?.strategy) p.set("strategy", opts.strategy);
     return apiFetch<OptionSuggestionsResult>(`/options/suggestions?${p.toString()}`);
   },
   place:       (req: OptionPlaceRequest) =>
@@ -576,6 +655,19 @@ export const agentApi = {
   portfolio:      () => apiFetch<Portfolio>("/positions/portfolio"),
   signals:        (limit = 50) => apiFetch<Signal[]>(`/signals?limit=${limit}`),
   liveSignals:    () => apiFetch<Signal[]>("/signals/live"),
+  regimeOverrideGet: () => apiFetch<{ override: string }>("/agent/regime-override"),
+  regimeOverrideSet: (regime: string) =>
+    apiFetch<{ override: string }>(`/agent/regime-override?regime=${encodeURIComponent(regime)}`, { method: "POST" }),
+  regimeBench:    (opts: { regime?: string; strategy?: string; underlying?: string; contract_type?: string; lens?: string } = {}) => {
+    const p = new URLSearchParams();
+    if (opts.regime) p.set("regime", opts.regime);
+    if (opts.strategy) p.set("strategy", opts.strategy);
+    if (opts.underlying) p.set("underlying", opts.underlying);
+    if (opts.contract_type) p.set("contract_type", opts.contract_type);
+    if (opts.lens) p.set("lens", opts.lens);
+    const qs = p.toString();
+    return apiFetch<RegimeBenchResult>(`/agent/regime-bench${qs ? `?${qs}` : ""}`);
+  },
   graphNodes:     (nodeType?: string, limit = 300) =>
     apiFetch<GraphNode[]>(`/graph/nodes?${nodeType ? `node_type=${nodeType}&` : ""}limit=${limit}`),
   graphEdges:     (limit = 800) => apiFetch<GraphEdge[]>(`/graph/edges?limit=${limit}`),
@@ -1008,6 +1100,44 @@ export interface AnalyticsSeries {
   description: string;
 }
 
+export interface OptionChainProfile {
+  underlying: string;
+  expiration: string | null;
+  contract_type: string | null;
+  spot: number | null;
+  n_contracts: number;
+  dte: number | null;
+  iv: {
+    atm_strike: number | null;
+    atm_iv: number | null;
+    min_iv: number | null;
+    max_iv: number | null;
+    q1_iv: number | null;
+    median_iv: number | null;
+    q3_iv: number | null;
+    smile: { strike: number; iv: number; mid: number | null; spread_pct: number | null; contract_type?: string | null }[];
+  };
+  skew: { iv_25d_call: number | null; iv_25d_put: number | null; risk_reversal_25d: number | null; note: string };
+  expected_move: {
+    straddle_mid: number | null;
+    atm_iv: number | null;
+    move_pct: number | null;
+    ann_pct: number | null;
+    days: number | null;
+    method: string;
+  };
+  oi: { total: number | null; top_strikes: { strike: number; oi: number; mid: number | null; contract_type?: string | null }[] };
+  greeks: {
+    delta: { median: number | null; mean: number | null; p25: number | null; p75: number | null };
+    gamma: { median: number | null; mean: number | null; p25: number | null; p75: number | null };
+    theta: { median: number | null; mean: number | null; p25: number | null; p75: number | null };
+    vega: { median: number | null; mean: number | null; p25: number | null; p75: number | null };
+  };
+  spreads: { avg_spread_pct: number | null; p90_spread_pct: number | null; max_spread_pct: number | null };
+  term_structure: { expiration: string; dte: number | null; atm_iv: number | null }[];
+  source: string;
+}
+
 export interface AnalyticsDataPoint {
   timestamp: string;
   value: number | string | null;
@@ -1321,6 +1451,15 @@ export const analyticsApi = {
     if (endDate) p.set("end_date", endDate);
     p.set("method", method);
     return apiFetch<AnomalyResult>(`/analytics/anomalies?${p.toString()}`);
+  },
+  optionsChain:    (underlying: string, params?: { expiration?: string; contract_type?: string; strike_gte?: number; strike_lte?: number }) => {
+    const p = new URLSearchParams();
+    if (params?.expiration) p.set("expiration", params.expiration);
+    if (params?.contract_type) p.set("contract_type", params.contract_type);
+    if (params?.strike_gte != null) p.set("strike_gte", String(params.strike_gte));
+    if (params?.strike_lte != null) p.set("strike_lte", String(params.strike_lte));
+    const q = p.toString();
+    return apiFetch<OptionChainProfile>(`/analytics/options-chain?underlying=${encodeURIComponent(underlying)}${q ? `&${q}` : ""}`);
   },
 };
 

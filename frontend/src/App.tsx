@@ -34,6 +34,7 @@ import RecommendationsPanel from "@/components/RecommendationsPanel";
 import ScreenChat from "@/components/ScreenChat";
 import AgentCoPilot from "@/components/AgentCoPilot";
 import { agentApi, researchApi, hypothesisApi } from "@/lib/api";
+import { getScreenContext } from "@/lib/screenContext";
 import { registerWebMCPTools, unregisterWebMCPTools, WEBMCP_TOOL_COUNT } from "@/webmcp/tools";
 import { LABEL_COLOR } from "@/lib/utils";
 
@@ -91,6 +92,26 @@ export default function App() {
   const handleOpNav = (tab: string) => {
     setOpTab(tab as Tab);
     navigate("/");
+  };
+
+  // Sidebar Analytics carries the current options-chain selection when present,
+  // so deep links from anywhere stay anchored on the same underlying/expiry.
+  const goToAnalysisItem = (a: typeof ANALYSIS_ITEMS[0]) => {
+    if (a.id !== "analytics") {
+      navigate(a.path);
+      return;
+    }
+    const ctx = getScreenContext("options");
+    if (ctx?.underlying) {
+      const p = new URLSearchParams({ series: `px:${ctx.underlying}:Close` });
+      p.set("underlying", ctx.underlying);
+      if (ctx.expiration) p.set("expiration", ctx.expiration);
+      if (ctx.contract_type) p.set("contract_type", ctx.contract_type);
+      if (ctx.strike != null) p.set("strike", String(ctx.strike));
+      navigate(`/analytics?${p.toString()}`);
+    } else {
+      navigate("/analytics");
+    }
   };
 
   // WebMCP tool registration — once on mount, unregister on unmount.
@@ -151,7 +172,7 @@ export default function App() {
                     const a = item as typeof ANALYSIS_ITEMS[0];
                     const isActive = (a.id === "analytics" && isAnalyticsRoute) || (a.id === "hypothesis" && isHypothesisRoute);
                     return (
-                      <button key={a.id} onClick={() => navigate(a.path)}
+                      <button key={a.id} onClick={() => goToAnalysisItem(a)}
                         className={clsx("flex items-center gap-2.5 w-full px-3 py-2 text-xs font-mono rounded-lg transition-colors text-left",
                           isActive
                             ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
@@ -205,7 +226,7 @@ function OperationsShell({ opTab, onNavigate }: { opTab: string; onNavigate?: (t
       {opTab === "dashboard" && <DashboardTab onNavigate={onNavigate} />}
       {opTab === "graph"     && <GraphTab />}
       {opTab === "signals"   && <SignalsTab />}
-      {opTab === "options"   && <OptionsTab />}
+      {opTab === "options"   && <OptionsTab onNavigate={onNavigate} />}
       {opTab === "risk"      && <RiskWorkspaceTab />}
       {opTab === "backtest"  && <BacktestWorkspaceTab />}
       {opTab === "intelligence" && <IntelligenceTab />}
@@ -241,7 +262,7 @@ function DashboardTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   return (
     <div className="h-full grid grid-cols-[340px_1fr] gap-3 p-3 overflow-hidden">
       <div className="flex flex-col gap-3 overflow-y-auto min-h-0">
-        <RegimePanel />
+        <RegimePanel onNavigate={onNavigate} />
         <ContradictionsPanel />
         <div className="flex-1 min-h-[240px]"><AgentLog /></div>
       </div>
@@ -462,8 +483,8 @@ function SignalsTab() {
   return <div className="h-full p-3" data-series-id="signals-tab" data-series-name="Signals" data-series-source="postgres"><SignalsTable /></div>;
 }
 
-function OptionsTab() {
-  return <OptionsPanel />;
+function OptionsTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+  return <OptionsPanel onNavigate={onNavigate} />;
 }
 
 function RiskWorkspaceTab() {

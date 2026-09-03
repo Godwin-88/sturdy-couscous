@@ -1,11 +1,12 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   AreaChart, Area,
 } from "recharts";
-import { agentApi, researchApi, RiskMetrics, AgentPerformance, ParityStatus, HedgeState } from "@/lib/api";
+import { agentApi, researchApi, optionsApi, RiskMetrics, AgentPerformance, ParityStatus, HedgeState } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
-import { ShieldAlert, TrendingDown, Percent, Activity, GitCompare, FlaskConical, RefreshCw, Zap, Scale, Bot, Wallet, AlertTriangle, Shield, Clock } from "lucide-react";
+import { getScreenContext } from "@/lib/screenContext";
+import { ShieldAlert, TrendingDown, Percent, Activity, GitCompare, FlaskConical, RefreshCw, Zap, Scale, Bot, Wallet, AlertTriangle, Shield, Clock, Link2 } from "lucide-react";
 import { fmt$, fmtPct } from "@/lib/utils";
 import clsx from "clsx";
 import StressTestModal from "@/components/StressTestModal";
@@ -16,53 +17,51 @@ import Greeks3DVisualization from "@/components/Greeks3DVisualization";
 
 type SubTab = "overview" | "options" | "stress" | "rebalance" | "agents" | "parity";
 
-// Mock options risk data (would come from backend)
-function useOptionsRiskData() {
+// Options risk view. When a chain context is shared by the Options panel
+// (screenContext "options"), the hedge state is fetched for that exact
+// underlying from the broker; without context it falls back to a well-formed
+// illustrative mock so the tab stays usable standalone.
+function useOptionsRiskData(chainUnderlying?: string) {
   const [hedgeState, setHedgeState] = useState<HedgeState | null>(null);
   const [loadingHedge, setLoadingHedge] = useState(false);
+
+  const buildMock = (): HedgeState => {
+    const sym = chainUnderlying || "SPY";
+    return {
+      underlying: sym,
+      regime: "RiskOn",
+      confidence: 0.78,
+      greeks: { delta: 12.4, gamma: 3.2, theta: -45.8, vega: 28.5 },
+      positions: [
+        { symbol: `${sym}260918C00850000`, cls: "option", qty: 5, delta: 0.65, gamma: 0.02, theta: -0.15, vega: 0.12, iv: 0.18 },
+        { symbol: `${sym}260918P00750000`, cls: "option", qty: -3, delta: -0.35, gamma: 0.015, theta: -0.12, vega: 0.09, iv: 0.22 },
+      ],
+      spot: 85.00,
+      hedge_shares: 0,
+      band_shares: 15,
+      needs_rebalance: false,
+      reason: "delta within band (illustrative — no chain context)",
+      proposal: null,
+      tail_sleeve: { recommended: false, reason: "regime stable", budget_usd: 0, suggest: "", note: "" },
+    };
+  };
 
   const loadHedge = async () => {
     setLoadingHedge(true);
     try {
-      const res = await agentApi.risk();
-      setHedgeState({
-        underlying: "SPY",
-        regime: "RiskOn",
-        confidence: 0.78,
-        greeks: { delta: 12.4, gamma: 3.2, theta: -45.8, vega: 28.5 },
-        positions: [
-          { symbol: "SPY250904C00770000", cls: "option", qty: 5, delta: 0.65, gamma: 0.02, theta: -0.15, vega: 0.12, iv: 0.18 },
-          { symbol: "SPY250904P00760000", cls: "option", qty: -3, delta: -0.35, gamma: 0.015, theta: -0.12, vega: 0.09, iv: 0.22 },
-        ],
-        spot: 545.20,
-        hedge_shares: 0,
-        band_shares: 15,
-        needs_rebalance: false,
-        reason: "delta within band",
-        proposal: null,
-        tail_sleeve: { recommended: false, reason: "regime stable", budget_usd: 0, suggest: "", note: "" },
-      });
+      if (chainUnderlying) {
+        const res = await optionsApi.hedge.state(chainUnderlying);
+        if (res.hedge_state) {
+          setHedgeState(res.hedge_state);
+          return;
+        }
+      }
+      setHedgeState(buildMock());
     } catch {
-      // Use mock data
-      setHedgeState({
-        underlying: "SPY",
-        regime: "RiskOn",
-        confidence: 0.78,
-        greeks: { delta: 12.4, gamma: 3.2, theta: -45.8, vega: 28.5 },
-        positions: [
-          { symbol: "SPY250904C00770000", cls: "option", qty: 5, delta: 0.65, gamma: 0.02, theta: -0.15, vega: 0.12, iv: 0.18 },
-          { symbol: "SPY250904P00760000", cls: "option", qty: -3, delta: -0.35, gamma: 0.015, theta: -0.12, vega: 0.09, iv: 0.22 },
-        ],
-        spot: 545.20,
-        hedge_shares: 0,
-        band_shares: 15,
-        needs_rebalance: false,
-        reason: "delta within band",
-        proposal: null,
-        tail_sleeve: { recommended: false, reason: "regime stable", budget_usd: 0, suggest: "", note: "" },
-      });
+      setHedgeState(buildMock());
+    } finally {
+      setLoadingHedge(false);
     }
-    setLoadingHedge(false);
   };
 
   return { hedgeState, loadingHedge, loadHedge };
@@ -70,8 +69,16 @@ function useOptionsRiskData() {
 
 export default function RiskWorkspace() {
   const { data, loading } = usePolling<RiskMetrics>(agentApi.risk, 15_000);
-  const [subTab, setSubTab] = useState<SubTab>("overview");
-  const { hedgeState, loadingHedge, loadHedge } = useOptionsRiskData();
+  // Chain context shared by the Options panel — deep-link arrives with the
+  // underlying/expiry of the chain the user was just looking at.
+  const chainCtx = useMemo(() => getScreenContext("options"), []);
+  const [subTab, setSubTab] = useState<SubTab>(chainCtx?.underlying ? "options" : "overview");
+  const { hedgeState, loadingHedge, loadHedge } = useOptionsRiskData(chainCtx?.underlying);
+
+  // Auto-open the Options sub-tab when a chain context is present.
+  useEffect(() => {
+    if (chainCtx?.underlying) setSubTab("options");
+  }, [chainCtx?.underlying]);
 
   // Modal state
   const [stressOpen, setStressOpen] = useState(false);
@@ -123,7 +130,14 @@ export default function RiskWorkspace() {
               </button>
             ))}
           </div>
-          <div className="ml-auto flex gap-1">
+          <div className="ml-auto flex items-center gap-1">
+            {chainCtx?.underlying && (
+              <span className="flex items-center gap-1 text-[10px] font-mono text-violet-300 bg-violet-950/40 border border-violet-500/30 rounded px-2 py-1">
+                <Link2 size={10} /> chain: {chainCtx.underlying}
+                {chainCtx.expiration ? ` · ${chainCtx.expiration}` : ""}
+                {chainCtx.contract_type ? ` · ${chainCtx.contract_type}` : ""}
+              </span>
+            )}
             {actions.map(a => (
               <button key={a.label} onClick={a.onClick}
                 className="flex items-center gap-1 px-2 py-1.5 rounded text-[10px] font-mono bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-700">

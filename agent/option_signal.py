@@ -147,6 +147,91 @@ def _kg_option_strategies(regime: str) -> list[dict]:
     return out
 
 
+def _all_option_strategies() -> list[dict]:
+    """Every executable (alpaca_options) strategy in the KG, regardless of regime.
+
+    Powers the UI's "select any strategy" picker: the user can force-score a
+    strategy even when it is not active in the current regime.
+    """
+    out: list[dict] = []
+    try:
+        db = get_db()
+        q = """
+        MATCH (s:Strategy {status:'active', tradeable_venue:'alpaca_options'})
+        OPTIONAL MATCH (s)-[:ACTIVATED_BY]->(r:Regime)
+        RETURN s.name AS name, s.signal_method AS method,
+               collect(DISTINCT r.name) AS regimes,
+               s.param_budget_pct AS budget,
+               s.param_delta_lo AS dlo, s.param_delta_hi AS dhi,
+               s.param_dte_lo AS tlo, s.param_dte_hi AS thi
+        ORDER BY s.name
+        """
+        for row in db.execute_and_fetch(q):
+            if not row.get("name"):
+                continue
+            out.append({
+                "name": row["name"],
+                "method": row.get("method"),
+                "regimes": [r for r in (row.get("regimes") or []) if r],
+                "budget_pct": float(row.get("budget") or 0.05),
+                "delta_lo": float(row.get("dlo") or 0.0),
+                "delta_hi": float(row.get("dhi") or 0.5),
+                "dte_lo": int(row.get("tlo") or 7),
+                "dte_hi": int(row.get("thi") or 60),
+            })
+    except Exception as e:
+        logger.warning(f"_all_option_strategies failed: {e}")
+    return out
+
+
+def _get_strategy_by_name(name: str) -> dict | None:
+    """Fetch a single option strategy's params by name (regime-independent)."""
+    name = str(name or "").strip()
+    if not name:
+        return None
+    try:
+        db = get_db()
+        q = """
+        MATCH (s:Strategy {status:'active', tradeable_venue:'alpaca_options',
+                           name: $name})
+        OPTIONAL MATCH (s)-[:ACTIVATED_BY]->(r:Regime)
+        OPTIONAL MATCH (s)-[:DERIVED_FROM]->(c:Concept)
+        RETURN s.name AS name, s.signal_method AS method,
+               collect(DISTINCT r.name) AS regimes,
+               s.param_budget_pct AS budget,
+               s.param_delta_lo AS dlo, s.param_delta_hi AS dhi,
+               s.param_dte_lo AS tlo, s.param_dte_hi AS thi,
+               collect(DISTINCT c.name) AS concepts
+        """
+        for row in db.execute_and_fetch(q, {"name": name}):
+            if not row.get("name"):
+                return None
+            return {
+                "name": row["name"],
+                "method": row.get("method"),
+                "weight": 0.5,
+                "regimes": [r for r in (row.get("regimes") or []) if r],
+                "budget_pct": float(row.get("budget") or 0.05),
+                "delta_lo": float(row.get("dlo") or 0.0),
+                "delta_hi": float(row.get("dhi") or 0.5),
+                "dte_lo": int(row.get("tlo") or 7),
+                "dte_hi": int(row.get("thi") or 60),
+                "concepts": [c for c in (row.get("concepts") or []) if c],
+            }
+    except Exception as e:
+        logger.warning(f"_get_strategy_by_name failed: {e}")
+    return None
+
+
+def _prune_strategy_meta(s: dict) -> dict:
+    """Trim a strategy dict to just the fields the UI picker needs."""
+    return {
+        "name": s.get("name"),
+        "method": s.get("method"),
+        "regimes": s.get("regimes") or [],
+    }
+
+
 def _pick_near_delta(rows: list[dict], target_delta: float, want_call: bool,
                      exclude_strike: float | None = None) -> dict | None:
     """Pick the row whose |delta| is closest to target (of the given type)."""
@@ -724,7 +809,8 @@ def _dedupe_cards(cards: list[dict]) -> list[dict]:
 def compute_suggestions(underlying: str, expiration: str | None,
                         contract_type: str | None, regime: str | None = None,
                         confidence: float = 0.0,
-                        lens: str = "average", nav: float | None = None) -> dict[str, Any]:
+                        lens: str = "average", nav: float | None = None,
+                        strategy_filter: str | None = None) -> dict[str, Any]:
     """Ranked, KG-grounded option strategy suggestions for the selected chain.
 
     `lens` selects the ranking lens:
@@ -735,6 +821,7 @@ def compute_suggestions(underlying: str, expiration: str | None,
     cache_key = "|".join([
         str(underlying or "").strip().upper(), str(expiration or ""),
         str(contract_type or ""), str(regime or ""), lens, f"{float(nav or 0):.0f}",
+        str(strategy_filter or ""),
     ])
     now = time.time()
     hit = _suggestions_cache.get(cache_key)
@@ -779,6 +866,18 @@ def compute_suggestions(underlying: str, expiration: str | None,
         by_key[r.get("symbol") or (str(r.get("contract_type")) + str(r.get("strike_price")))] = r
     rows = list(by_key.values())
     rows.sort(key=lambda r: float(r.get("strike_price") or 0))
+    # When the user force-selects a SPECIFIC strategy, fetch BOTH call and put
+    # chains so multi-sided structures (Iron Condor, Strap, Straddle, Collar…)
+    # can be built accurately even if the user is browsing a call-only chain.
+    if strategy_filter:
+        both = _chain_rows(underlying, expiration, None)
+        if both:
+            bkey: dict[str, dict] = {}
+            for r in both:
+                bkey[r.get("symbol") or (str(r.get("contract_type")) + str(r.get("strike_price")))] = r
+            both = list(bkey.values())
+            both.sort(key=lambda r: float(r.get("strike_price") or 0))
+            rows = both
     rows_c = [r for r in rows if (r.get("contract_type") or "").lower() == "call"]
     rows_p = [r for r in rows if (r.get("contract_type") or "").lower() == "put"]
     spot = _spot_estimate(rows)
@@ -786,6 +885,36 @@ def compute_suggestions(underlying: str, expiration: str | None,
 
     kg = _kg_option_strategies(regime)
     primary_ct = (contract_type or "call").lower()
+
+    # ── "Select any strategy" support ──────────────────────────────────────────
+    # When the UI asks for a SPECIFIC strategy (strategy_filter), inject it into
+    # the scoring set even if it is not ACTIVATED_BY the current regime, so its
+    # accurate chain-based metrics are computed and returned. This is what lets
+    # the user pick any strategy from the full KG library and see real numbers.
+    # Also expose the full selectable library for the picker.
+    all_strategies = _all_option_strategies()
+    if strategy_filter:
+        sf = str(strategy_filter).strip().lower()
+        # 1) exact name match
+        matched = next((s for s in kg if (s.get("name") or "").lower() == sf), None)
+        if matched is None:
+            # 2) try the by-name fetch (regime-independent) and inject
+            named = _get_strategy_by_name(strategy_filter)
+            if named is not None:
+                named["weight"] = 0.5
+                kg = [named] + kg
+            else:
+                # 3) allow method-name filter (e.g. "put_credit_spread")
+                method_match = next(
+                    (s for s in all_strategies if (s.get("method") or "").lower() == sf),
+                    None,
+                )
+                if method_match is not None:
+                    named = _get_strategy_by_name(method_match["name"])
+                    if named is not None:
+                        named["weight"] = 0.5
+                        kg = [named] + kg
+
     cards, rejected = _build_cards(
         rows_c, rows_p, kg, underlying, expiration or "", primary_ct,
         regime, confidence, dte, nav, max_loss_cap_pct, lambda_, lens,
@@ -860,6 +989,15 @@ def compute_suggestions(underlying: str, expiration: str | None,
     truncated = cards[:MAX_SUGGESTIONS]
     alt_count = len(truncated) - primary_count
 
+    # Optional client-side strategy filter (UI-driven; non-empty value
+    # narrows the response to only the named strategy).
+    if strategy_filter:
+        sf = strategy_filter.strip().lower()
+        cards = [c for c in cards if (c.get("strategy") or "").lower() == sf]
+        primary_count = sum(1 for c in cards if c.get("chain_source") == "primary")
+        truncated = cards[:MAX_SUGGESTIONS]
+        alt_count = len(truncated) - primary_count
+
     out: dict[str, Any] = {
         "underlying": underlying,
         "expiration": expiration,
@@ -872,6 +1010,7 @@ def compute_suggestions(underlying: str, expiration: str | None,
         "nav": nav,
         "max_loss_cap_pct": max_loss_cap_pct,
         "active_strategies": [s["name"] for s in kg],
+        "all_strategies": [_prune_strategy_meta(s) for s in all_strategies],
         "suggestions": truncated,
         "rejected": rejected,
         "alt_expirations": alt_exps,

@@ -1,7 +1,8 @@
 // GraphAlpha Analytics Intelligence Platform — Frontend Component
 // Phase 1: Universal Time Series Selector + Descriptive Statistics
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   analyticsApi,
   type AnalyticsSeries,
@@ -18,13 +19,15 @@ import {
   type GarchResult,
   type PCAResult,
   type CovHealthResult,
+  type OptionChainProfile,
 } from "@/lib/api";
-import { fmtN, fmtPct } from "@/lib/utils";
+import { fmtN, fmtPct, fmt$ } from "@/lib/utils";
 import {
   BarChart2, TrendingUp, Activity, ShieldAlert, Brain,
-  RefreshCw, ChevronDown, ChevronRight, Search,
+  RefreshCw, ChevronDown, ChevronRight, Search, Gauge, Link2,
 } from "lucide-react";
 import clsx from "clsx";
+import { setScreenContext } from "@/lib/screenContext";
 
 type Tier = "descriptive" | "diagnostic" | "predictive" | "prescriptive" | "cognitive";
 
@@ -69,10 +72,88 @@ export default function AnalyticsPanel() {
   const [interpretation, setInterpretation] = useState<AIInterpretation | null>(null);
   const [anomalies, setAnomalies] = useState<AnomalyResult | null>(null);
 
+  // ── Chain-context deep-link state (from Options panel "Analyze" / sidebar) ──
+  const [searchParams] = useSearchParams();
+  const chainUnderlying = searchParams.get("underlying") ?? "";
+  const chainExpiration = searchParams.get("expiration") ?? "";
+  const chainContractType = searchParams.get("contract_type") ?? "";
+  const chainStrikeParam = searchParams.get("strike");
+  const deepLinkApplied = useRef(false);
+
+  const [chainProfile, setChainProfile] = useState<OptionChainProfile | null>(null);
+  const [chainLoading, setChainLoading] = useState(false);
+  const [chainError, setChainError] = useState<string | null>(null);
+
   // ── Load available series on mount ───────────────────────────────────────
   useEffect(() => {
     analyticsApi.series().then(setSeries).catch(() => null);
   }, []);
+
+  // Honor URL deep-links once the catalogue is in: select the target series
+  // (px:{underlying}:Close by default when a chain context exists), synthesise
+  // an entry when the ticker isn't on the watchlist, and apply start/end.
+  useEffect(() => {
+    if (deepLinkApplied.current || series.length === 0) return;
+    deepLinkApplied.current = true;
+
+    const urlSeries = searchParams.get("series");
+    let target = urlSeries ? urlSeries : "";
+    if (target.startsWith("yf:")) target = `px:${target.slice(3)}`;
+    if (!target && chainUnderlying) target = `px:${chainUnderlying}:Close`;
+
+    if (target) {
+      const known = series.some(s => s.id === target);
+      if (!known) {
+        const parts = target.split(":");
+        if (parts.length === 3 && parts[0] === "px") {
+          setSeries(prev => [...prev, {
+            id: target,
+            name: `${parts[1]} ${parts[2]}`,
+            ticker: parts[1],
+            metric: parts[2],
+            source: "alpaca",
+            granularities: ["1d", "1wk"],
+            default_granularity: "1d",
+            type: parts[2] === "Volume" ? "volume" : "price",
+            description: `${parts[1]} ${parts[2]} (deep-linked series)`,
+          }]);
+        }
+      }
+      setSelectedSeries(target);
+    }
+
+    const start = searchParams.get("start");
+    const end = searchParams.get("end");
+    if (start) setStartDate(start);
+    if (end) setEndDate(end);
+  }, [series.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Publish analytics screen context (anchors the Financial Engineer chat on
+  // the chain being analyzed) and fetch the chain profile card.
+  useEffect(() => {
+    if (!chainUnderlying) {
+      setChainProfile(null);
+      setChainError(null);
+      return;
+    }
+    setScreenContext("analytics", {
+      screen: "analytics",
+      underlying: chainUnderlying,
+      expiration: chainExpiration || undefined,
+      contract_type: (chainContractType as "call" | "put" | undefined) || undefined,
+      strike: chainStrikeParam ? Number(chainStrikeParam) : undefined,
+      extra: { chain_link: true },
+    });
+    setChainLoading(true);
+    setChainError(null);
+    analyticsApi.optionsChain(chainUnderlying, {
+      expiration: chainExpiration || undefined,
+      contract_type: chainContractType || undefined,
+    })
+      .then(setChainProfile)
+      .catch(e => { setChainError(String(e)); setChainProfile(null); })
+      .finally(() => setChainLoading(false));
+  }, [chainUnderlying, chainExpiration, chainContractType, chainStrikeParam]);
 
   // ── Fetch data when series or date changes ───────────────────────────────
   const fetchData = useCallback(async () => {
@@ -149,6 +230,15 @@ export default function AnalyticsPanel() {
         <div className="flex items-center gap-2">
           <Search size={14} className="text-indigo-400" />
           <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Time Series Selector</span>
+          {chainUnderlying && (
+            <span className="ml-auto flex items-center gap-1 text-[10px] font-mono text-violet-300 bg-violet-950/40 border border-violet-500/30 rounded px-2 py-0.5">
+              <Link2 size={10} />
+              chain: {chainUnderlying}
+              {chainExpiration ? ` · ${chainExpiration}` : ""}
+              {chainContractType ? ` · ${chainContractType}` : ""}
+              {chainStrikeParam ? ` · ${chainStrikeParam}` : ""}
+            </span>
+          )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
@@ -202,6 +292,30 @@ export default function AnalyticsPanel() {
           </div>
         )}
       </div>
+
+      {/* ── Chain Profile card (descriptive/diagnostic context for the chain) ── */}
+      {chainUnderlying && (
+        <div className="rounded-xl border border-indigo-500/30 bg-slate-900 overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 bg-slate-950">
+            <Gauge size={14} className="text-indigo-400" />
+            <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Chain Profile</span>
+            <span className="text-[10px] font-mono text-slate-500 truncate">
+              {chainUnderlying}{chainExpiration ? ` · ${chainExpiration}` : ""}{chainContractType ? ` · ${chainContractType}s` : ""}
+              {chainStrikeParam ? ` · ${chainStrikeParam}` : ""} — context for the underlying series below
+            </span>
+            <span className="ml-auto shrink-0 text-[10px] font-mono text-slate-500">
+              {chainProfile ? `${chainProfile.source} · ${chainProfile.n_contracts} contracts` : "…"}
+            </span>
+          </div>
+          {chainLoading && (
+            <div className="p-4 text-xs text-slate-500 animate-pulse font-mono">Building chain profile…</div>
+          )}
+          {chainError && !chainLoading && (
+            <div className="p-3 text-xs font-mono text-red-400 bg-red-950/30 border-t border-red-800">{chainError}</div>
+          )}
+          {chainProfile && !chainLoading && <ChainProfileCard profile={chainProfile} />}
+        </div>
+      )}
 
       {/* ── Tier Navigation ────────────────────────────────────────────────── */}
       <div className="flex gap-0 border-b border-slate-700 overflow-x-auto">
@@ -275,7 +389,7 @@ export default function AnalyticsPanel() {
           <BarChart2 size={24} className="mx-auto text-slate-600 mb-2" />
           <div className="text-sm text-slate-400">Select a time series above to begin analysis</div>
           <div className="text-xs text-slate-600 mt-1">
-            Choose from {series.length} available series across yfinance, signal metrics, portfolio state, and regime history
+            Choose from {series.length} available series across alpaca-primary market data, signal metrics, portfolio state, and regime history
           </div>
         </div>
       )}
@@ -284,6 +398,118 @@ export default function AnalyticsPanel() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// CHAIN PROFILE CARD — descriptive/diagnostic context for a selected chain
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function ChainProfileCard({ profile }: { profile: OptionChainProfile }) {
+  const iv = profile.iv;
+  const em = profile.expected_move;
+  const skewVal = profile.skew.risk_reversal_25d;
+  const strikeLabel = (s: number) => (s % 1 === 0 ? s.toFixed(0) : s.toFixed(2));
+  return (
+    <div className="p-3 grid grid-cols-1 lg:grid-cols-3 gap-3">
+      {/* IV + smile */}
+      <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-2">
+        <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Implied Volatility</div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-mono">
+          <span className="text-slate-500">ATM strike</span><span className="text-slate-200 text-right">{iv.atm_strike != null ? fmt$(iv.atm_strike) : "—"}</span>
+          <span className="text-slate-500">ATM IV</span><span className="text-indigo-300 text-right">{iv.atm_iv != null ? fmtPct(iv.atm_iv) : "—"}</span>
+          <span className="text-slate-500">Median IV</span><span className="text-slate-200 text-right">{iv.median_iv != null ? fmtPct(iv.median_iv) : "—"}</span>
+          <span className="text-slate-500">IV range</span>
+          <span className="text-slate-200 text-right">{iv.min_iv != null && iv.max_iv != null ? `${fmtPct(iv.min_iv)} – ${fmtPct(iv.max_iv)}` : "—"}</span>
+        </div>
+        {iv.smile.length > 0 && (
+          <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+            {iv.smile.slice(0, 12).map(p => (
+              <div key={p.strike} className="flex items-center gap-2 text-[10px] font-mono">
+                <span className="text-slate-500 w-14 shrink-0">{(p.contract_type === "put" ? "P " : "C ") + strikeLabel(p.strike)}</span>
+                <div className="flex-1 h-1 bg-slate-800 rounded overflow-hidden">
+                  <div
+                    className="h-full bg-indigo-500"
+                    style={{ width: `${iv.max_iv ? Math.min((p.iv / iv.max_iv) * 100, 100) : 0}%` }}
+                  />
+                </div>
+                <span className="text-slate-400 w-12 text-right">{fmtPct(p.iv)}</span>
+                {p.spread_pct != null && <span className="text-amber-400 w-12 text-right">Δ{p.spread_pct.toFixed(2)}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+{/* Skew + expected move */}
+      <div className="space-y-2">
+        <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-1.5">
+          <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">25Δ Risk Reversal</div>
+          <div className="grid grid-cols-3 gap-1 text-[11px] font-mono text-center">
+            <div><div className="text-[9px] text-slate-500">call IV</div><div className="text-emerald-300">{profile.skew.iv_25d_call != null ? fmtPct(profile.skew.iv_25d_call) : "—"}</div></div>
+            <div><div className="text-[9px] text-slate-500">put IV</div><div className="text-rose-300">{profile.skew.iv_25d_put != null ? fmtPct(profile.skew.iv_25d_put) : "—"}</div></div>
+            <div><div className="text-[9px] text-slate-500">RR 25Δ</div>
+              <div className={skewVal != null && skewVal > 0 ? "text-emerald-300" : "text-rose-300"}>
+                {skewVal != null ? `${skewVal > 0 ? "+" : ""}${(skewVal * 100).toFixed(1)}pt` : "—"}
+              </div>
+            </div>
+          </div>
+          <div className="text-[10px] text-slate-500 leading-snug">{profile.skew.note}</div>
+        </div>
+        <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-1.5">
+          <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Expected Move</div>
+          <div className="text-[11px] font-mono text-slate-200 space-y-1">
+            <div className="flex justify-between"><span className="text-slate-500">1σ (ATM {em.method === "atm_straddle" ? "straddle" : "IV"})</span><span>{em.move_pct != null ? fmtPct(em.move_pct) : "—"}</span></div>
+            {em.ann_pct != null && <div className="flex justify-between"><span className="text-slate-500">Ann. equiv</span><span>{fmtPct(em.ann_pct)}</span></div>}
+            {em.straddle_mid != null && <div className="flex justify-between"><span className="text-slate-500">Straddle mid</span><span>{fmt$(em.straddle_mid)}</span></div>}
+            {em.days != null && <div className="flex justify-between"><span className="text-slate-500">To expiry</span><span>{em.days} dte</span></div>}
+          </div>
+          <div className="text-[10px] text-slate-500 border-t border-slate-700 pt-1 leading-snug">
+            Why it matters: the chain prices where the market expects {profile.underlying} at expiry — {em.move_pct != null ? `±${fmtPct(em.move_pct)} (1σ)` : "the ATM option"} is the market's own forecast, while the smile/skew show how much buyers pay for upside vs. downside insurance.
+          </div>
+        </div>
+      </div>
+// ═══════════════════════════════════════════════════════════════════════════════
+{/* OI + spreads + greeks */}
+      <div className="space-y-2">
+        <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-1.5">
+          <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Open Interest</div>
+          {profile.oi.top_strikes.length > 0 ? (
+            <div className="space-y-1">
+              {profile.oi.top_strikes.map(s => (
+                <div key={s.strike} className="flex items-center gap-2 text-[10px] font-mono">
+                  <span className="text-slate-500 w-16 shrink-0">{(s.contract_type === "put" ? "P " : "C ") + strikeLabel(s.strike)}</span>
+                  <div className="flex-1 h-1 bg-slate-800 rounded overflow-hidden">
+                    <div className="h-full bg-violet-500" style={{ width: `${profile.oi.total ? Math.min((s.oi / profile.oi.total) * 100, 100) : 0}%` }} />
+                  </div>
+                  <span className="text-slate-300 w-16 text-right">{Math.round(s.oi).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-[10px] text-slate-600">no OI data in snapshot</div>
+          )}
+          {profile.oi.total ? <div className="text-[10px] text-slate-500 font-mono">total {Math.round(profile.oi.total).toLocaleString()} contracts</div> : null}
+        </div>
+        <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-1">
+          <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Spreads · Greeks (median)</div>
+          <div className="grid grid-cols-3 gap-1 text-[10px] font-mono text-center">
+            <div><div className="text-slate-500">avg spread</div><div className="text-amber-300">{profile.spreads.avg_spread_pct != null ? fmtPct(profile.spreads.avg_spread_pct) : "—"}</div></div>
+            <div><div className="text-slate-500">Δ</div><div className="text-slate-200">{profile.greeks.delta.median != null ? profile.greeks.delta.median.toFixed(3) : "—"}</div></div>
+            <div><div className="text-slate-500">Γ</div><div className="text-indigo-300">{profile.greeks.gamma.median != null ? profile.greeks.gamma.median.toFixed(4) : "—"}</div></div>
+          </div>
+        </div>
+        {profile.term_structure.length > 1 && (
+          <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-1">
+            <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Term Structure</div>
+            {profile.term_structure.map(t => (
+              <div key={t.expiration} className="flex justify-between text-[10px] font-mono">
+                <span className="text-slate-500">{t.expiration} ({t.dte != null ? `${t.dte}d` : "–"})</span>
+                <span className="text-slate-200">{t.atm_iv != null ? fmtPct(t.atm_iv) : "—"}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 // TIER 1: Descriptive Panel
 // ═══════════════════════════════════════════════════════════════════════════════
 

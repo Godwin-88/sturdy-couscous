@@ -105,11 +105,69 @@ def _fetch_yfinance(
         df = t.history(start=start_date, end=end_date, interval=interval)
         if df.empty:
             return None
+        if isinstance(df.columns, pd.MultiIndex):
+            if df.columns.nlevels >= 2:
+                df.columns = df.columns.get_level_values(0)
+            else:
+                df.columns = [str(c) for c in df.columns]
+        df.columns = [str(c)[0].upper() + str(c)[1:] for c in df.columns]
+        df = df.loc[:, [c for c in ("Open", "High", "Low", "Close", "Volume") if c in df.columns]].dropna()
+        if df.empty:
+            return None
         # Cache
         r.setex(cache_key, CACHE_TTL, df.to_json(date_format="iso"))
         return df
     except Exception:
         return None
+
+
+def _market_data_source() -> str:
+    """'alpaca' when the market-data provider is enabled, else 'yfinance'."""
+    try:
+        from agent.alpaca_data import provider as _alpaca_feed
+        if _alpaca_feed.is_enabled():
+            return "alpaca"
+    except Exception:
+        pass
+    return "yfinance"
+
+
+def _fetch_price_series(
+    ticker: str,
+    start_date: str,
+    end_date: str,
+    interval: str = "1d",
+) -> Optional[pd.DataFrame]:
+    """Fetch OHLCV price data — Alpaca market data first, yfinance fallback.
+
+    The analytics stack is Alpaca-primary (the platform trades Alpaca paper
+    and its market data is authoritative). The legacy yfinance helper remains
+    only as a fallback for unconfigured/empty Alpaca feeds and symbols Alpaca
+    does not carry (^VIX/^VXN). Results are Redis-cached like the old helper.
+    """
+    cache_key = f"graphalpha:analytics:px:{ticker}:{start_date}:{end_date}:{interval}"
+    r = _redis()
+    cached = r.get(cache_key)
+    if cached:
+        return pd.read_json(pd.io.common.StringIO(cached))
+
+    df = None
+    try:
+        from agent.alpaca_data import provider as _alpaca_feed
+        if _alpaca_feed.is_enabled():
+            df = _alpaca_feed.get_ohlcv_range(ticker, start_date, end_date, interval)
+    except Exception:
+        df = None
+
+    if df is None or df.empty:
+        df = _fetch_yfinance(ticker, start_date, end_date, interval)
+    if df is None or df.empty:
+        return None
+    try:
+        r.setex(cache_key, CACHE_TTL, df.to_json(date_format="iso"))
+    except Exception:
+        pass
+    return df
 
 
 def _fetch_system_series(
@@ -259,29 +317,32 @@ def get_available_series():
     """Returns available time series metadata (name, granularity, date range, source)."""
     result: list[dict[str, Any]] = []
 
-    # 1. Market data via yfinance
+    # 1. Market data — Alpaca-primary price series (px: prefix). ^VIX/^VXN are
+    #    not on the Alpaca IEX feed, so they stay labelled yfinance.
     for ticker in AVAILABLE_TICKERS:
+        is_proxy = ticker.startswith("^")
+        src = "yfinance" if is_proxy else _market_data_source()
         result.append({
-            "id": f"yf:{ticker}:Close",
+            "id": f"px:{ticker}:Close",
             "name": f"{ticker} Close",
             "ticker": ticker,
             "metric": "Close",
-            "source": "yfinance",
+            "source": src,
             "granularities": ["1d", "1wk"],
             "default_granularity": "1d",
             "type": "price",
-            "description": f"{ticker} daily closing price",
+            "description": f"{ticker} daily closing price ({src})",
         })
         result.append({
-            "id": f"yf:{ticker}:Volume",
+            "id": f"px:{ticker}:Volume",
             "name": f"{ticker} Volume",
             "ticker": ticker,
             "metric": "Volume",
-            "source": "yfinance",
+            "source": src,
             "granularities": ["1d", "1wk"],
             "default_granularity": "1d",
             "type": "volume",
-            "description": f"{ticker} daily volume",
+            "description": f"{ticker} daily volume ({src})",
         })
 
     # 2. System signal metrics
@@ -357,9 +418,9 @@ def fetch_series_data(
     series_type = parts[1]
     metric = parts[2]
 
-    if source == "yf":
+    if source in ("yf", "px"):
         data_points: list[dict[str, Any]] = []
-        df = _fetch_yfinance(series_type, start_date, end_date, granularity)
+        df = _fetch_price_series(series_type, start_date, end_date, granularity)
         if df is None or df.empty:
             return {"series_id": series_id, "data": [], "count": 0, "missing_gaps": []}
 
@@ -391,7 +452,7 @@ def fetch_series_data(
             "metadata": {
                 "ticker": series_type,
                 "metric": metric,
-                "source": "yfinance",
+                "source": _market_data_source(),
                 "granularity": granularity,
                 "start": data_points[0]["timestamp"] if data_points else None,
                 "end": data_points[-1]["timestamp"] if data_points else None,
@@ -915,7 +976,7 @@ def get_signal_ic(
         timestamps = group.index
 
         # Get price data for forward returns
-        price_df = _fetch_yfinance(tk, start_date, end_date)
+        price_df = _fetch_price_series(tk, start_date, end_date)
         if price_df is None or price_df.empty:
             continue
 
@@ -1033,7 +1094,7 @@ def get_factor_exposure(
         raise HTTPException(status_code=400, detail=f"Need at least 60 returns")
 
     # Use SPY as market proxy, fetch factor proxies
-    spy_df = _fetch_yfinance("SPY", start_date, end_date)
+    spy_df = _fetch_price_series("SPY", start_date, end_date)
     if spy_df is None:
         raise HTTPException(status_code=404, detail="Could not fetch market data (SPY)")
 
@@ -1061,7 +1122,7 @@ def get_factor_exposure(
     # UMD: Momentum factor — use past 12-month return spread
 
     try:
-        iwm_df = _fetch_yfinance("IWM", start_date, end_date)
+        iwm_df = _fetch_price_series("IWM", start_date, end_date)
         iwm_rets = iwm_df["Close"].pct_change().dropna().values[-min_len:] if iwm_df is not None else None
     except Exception:
         iwm_rets = None
@@ -1125,7 +1186,7 @@ def post_portfolio_optimize(req: OptimizeRequest):
     # Fetch historical returns
     returns_dict: dict[str, np.ndarray] = {}
     for ticker in req.tickers:
-        df = _fetch_yfinance(ticker, "2023-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
+        df = _fetch_price_series(ticker, "2023-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
         if df is None or df.empty:
             continue
         rets = df["Close"].pct_change().dropna().values
@@ -1551,7 +1612,7 @@ def post_forecast(req: ForecastRequest):
     crashes (e.g. munmap_chunk) from killing the uvicorn process.
     """
     # Quick pre-check: can we fetch data?
-    df = _fetch_yfinance(req.ticker, "2020-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
+    df = _fetch_price_series(req.ticker, "2020-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
     if df is None or df.empty:
         raise HTTPException(status_code=404, detail=f"No data for {req.ticker}")
 
@@ -1582,7 +1643,7 @@ def post_granger_causality(req: ForecastRequest):
     all_tickers = [req.ticker] + [t for t in req.compare_tickers if t != req.ticker]
     price_data: dict[str, np.ndarray] = {}
     for t in all_tickers:
-        t_df = _fetch_yfinance(t, "2020-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
+        t_df = _fetch_price_series(t, "2020-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
         if t_df is not None and not t_df.empty:
             price_data[t] = t_df["Close"].dropna().values
 
@@ -1892,7 +1953,7 @@ class GarchRequest(BaseModel):
 @router.post("/garch")
 def post_garch(req: GarchRequest):
     """Multi-variant GARCH estimation with model comparison."""
-    df = _fetch_yfinance(req.ticker, "2020-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
+    df = _fetch_price_series(req.ticker, "2020-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
     if df is None or df.empty:
         raise HTTPException(status_code=404, detail=f"No data for {req.ticker}")
 
@@ -2055,7 +2116,7 @@ def post_pca(req: PCARequest):
     # Fetch data for all tickers
     price_data: dict[str, np.ndarray] = {}
     for t in req.tickers:
-        df = _fetch_yfinance(t, "2020-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
+        df = _fetch_price_series(t, "2020-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
         if df is not None and not df.empty:
             price_data[t] = df["Close"].dropna().values
 
@@ -2187,7 +2248,7 @@ def post_covariance_health(req: CovHealthRequest):
     # Fetch data
     price_data: dict[str, np.ndarray] = {}
     for t in req.tickers:
-        df = _fetch_yfinance(t, "2020-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
+        df = _fetch_price_series(t, "2020-01-01", datetime.utcnow().strftime("%Y-%m-%d"))
         if df is not None and not df.empty:
             price_data[t] = df["Close"].dropna().values
 
@@ -2332,4 +2393,265 @@ def post_covariance_health(req: CovHealthRequest):
             "n_edges": len(mst_data),
         },
         "all_pairs": all_pairs,
+    })
+# ═══════════════════════════════════════════════════════════════════════════════
+# CHAIN PROFILE — Options-chain analytics (descriptive tier for a selected chain)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+try:
+    from agent.options_market import options_provider
+    _OPTIONS_AVAILABLE = True
+except ImportError:
+    try:
+        from options_market import options_provider
+        _OPTIONS_AVAILABLE = True
+    except ImportError:
+        _OPTIONS_AVAILABLE = False
+        options_provider = None  # type: ignore[assignment]
+
+
+def _percentile(values: list[float], q: float) -> float | None:
+    if not values:
+        return None
+    return float(np.percentile(values, q))
+
+
+@router.get("/options-chain")
+def get_options_chain_profile(
+    underlying: str,
+    expiration: str | None = None,
+    contract_type: str | None = None,
+    strike_gte: float | None = None,
+    strike_lte: float | None = None,
+):
+    """Chain profile for the analytics Chain Profile card (descriptive tier).
+
+    Computed on the live Alpaca chain (same source as /options/chain):
+      - IV smile around the ATM + IV quantiles
+      - 25Δ risk-reversal skew (greeks-delta based when available)
+      - ATM straddle expected move (1σ), annualized
+      - Open-interest concentration (top strikes)
+      - Greeks mid-point centrals (Δ/Γ/Θ/V)
+      - Spread statistics
+      - Term structure across up to 3 nearby expirations
+    """
+    if not _OPTIONS_AVAILABLE or options_provider is None or not options_provider.is_configured():
+        raise HTTPException(status_code=503, detail="Alpaca options not configured")
+
+    underlying = underlying.upper()
+    rows = options_provider.get_chain(underlying, expiration, contract_type,
+                                      strike_gte, strike_lte)
+    if not rows:
+        raise HTTPException(status_code=404,
+                            detail=f"No chain data for {underlying} {expiration or ''} {contract_type or ''}")
+
+    def _mid(r: dict) -> float | None:
+        b, a = r.get("bid"), r.get("ask")
+        if b is None or a is None or a <= 0:
+            return None
+        return (float(b) + float(a)) / 2
+
+    # Spot anchor — latest underlying close via the Alpaca-first price series.
+    spot = None
+    try:
+        end = datetime.utcnow().strftime("%Y-%m-%d")
+        start = (datetime.utcnow() - timedelta(days=45)).strftime("%Y-%m-%d")
+        pdf = _fetch_price_series(underlying, start, end)
+        if pdf is not None and not pdf.empty:
+            spot = float(pdf["Close"].dropna().iloc[-1])
+    except Exception:
+        spot = None
+
+    # DTE
+    dte = None
+    if expiration:
+        try:
+            dte = max(0, (datetime.strptime(expiration, "%Y-%m-%d") - datetime.utcnow()).days)
+        except ValueError:
+            dte = None
+
+    # ATM = closest strike to spot (fallback → richest mid contract).
+    atm_row = None
+    with_spot = [r for r in rows if r.get("strike_price") is not None]
+    if spot is not None and with_spot:
+        atm_row = min(with_spot, key=lambda r: abs(float(r["strike_price"]) - spot))
+    if atm_row is None:
+        priced = [r for r in rows if _mid(r) is not None]
+        if priced:
+            atm_row = max(priced, key=lambda r: _mid(r) or 0)
+    atm_strike = float(atm_row["strike_price"]) if atm_row and atm_row.get("strike_price") is not None else None
+    atm_iv = float(atm_row["implied_volatility"]) if atm_row and atm_row.get("implied_volatility") is not None else None
+# IV smile — nearest strikes around spot with an IV.
+    iv_rows = [r for r in rows
+               if r.get("implied_volatility") is not None and r.get("strike_price") is not None]
+    if spot is not None:
+        iv_rows.sort(key=lambda r: (abs(float(r["strike_price"]) - spot), -float(r["implied_volatility"])))
+    else:
+        iv_rows.sort(key=lambda r: float(r["implied_volatility"]), reverse=True)
+    smile = [{
+        "strike": float(r["strike_price"]),
+        "iv": float(r["implied_volatility"]),
+        "mid": _mid(r),
+        "spread_pct": r.get("spread_pct"),
+        "contract_type": r.get("contract_type"),
+    } for r in iv_rows[:24]]
+
+    iv_values = [float(r["implied_volatility"]) for r in iv_rows]
+    iv_stats = {
+        "atm_strike": atm_strike,
+        "atm_iv": atm_iv,
+        "min_iv": round(float(np.min(iv_values)), 4) if iv_values else None,
+        "max_iv": round(float(np.max(iv_values)), 4) if iv_values else None,
+        "q1_iv": _percentile(iv_values, 25),
+        "median_iv": _percentile(iv_values, 50),
+        "q3_iv": _percentile(iv_values, 75),
+        "smile": smile,
+    }
+
+    # 25Δ risk-reversal skew from greeks delta when snapshots carry it.
+    call_25: dict | None = None
+    put_25: dict | None = None
+    for r in rows:
+        g = r.get("greeks") or {}
+        delta = g.get("delta")
+        if delta is None:
+            continue
+        dv = float(delta)
+        iv = r.get("implied_volatility")
+        ct = r.get("contract_type")
+        if ct == "call":
+            if call_25 is None or abs(dv - 0.25) < abs(call_25["d"] - 0.25):
+                call_25 = {"d": dv, "iv": iv}
+        elif ct == "put":
+            if put_25 is None or abs(dv + 0.25) < abs(put_25["d"] + 0.25):
+                put_25 = {"d": dv, "iv": iv}
+    iv_25d_call = float(call_25["iv"]) if call_25 and call_25["iv"] is not None else None
+    iv_25d_put = float(put_25["iv"]) if put_25 and put_25["iv"] is not None else None
+    skew = {
+        "iv_25d_call": iv_25d_call,
+        "iv_25d_put": iv_25d_put,
+        "risk_reversal_25d": round(iv_25d_call - iv_25d_put, 4)
+            if iv_25d_call is not None and iv_25d_put is not None else None,
+        "note": ("Positive → calls rich vs puts (upside carry/overbid); "
+                 "negative → downside hedging demand."),
+    }
+
+    # Expected move — ATM straddle mid (both types!) else ATM-IV 1σ.
+    call_mid = put_mid = None
+    if atm_strike is not None:
+        for r in rows:
+            if r.get("strike_price") is None or float(r["strike_price"]) != atm_strike:
+                continue
+            if r.get("contract_type") == "call" and call_mid is None:
+                call_mid = _mid(r)
+            elif r.get("contract_type") == "put" and put_mid is None:
+                put_mid = _mid(r)
+    strad = None
+    method = "none"
+    if call_mid is not None and put_mid is not None and call_mid > 0 and put_mid > 0:
+        strad = call_mid + put_mid
+        method = "atm_straddle"
+    elif atm_iv is not None and spot is not None and dte:
+        strad = spot * atm_iv * math.sqrt(dte / 365.0)
+        method = "atm_iv_1sigma"
+    move_pct = (strad / spot) if strad is not None and spot else None
+    ann_pct = None
+    if move_pct is not None and dte:
+        ann_pct = move_pct * math.sqrt(365.0 / dte)
+    expected_move = {
+        "straddle_mid": strad,
+        "atm_iv": atm_iv,
+        "move_pct": move_pct,
+        "ann_pct": ann_pct,
+        "days": dte,
+        "method": method,
+    }
+# Open-interest concentration
+    oi_rows = [r for r in rows if r.get("open_interest") is not None]
+    try:
+        oi_rows.sort(key=lambda r: float(r["open_interest"]), reverse=True)
+        top_oi = [{
+            "strike": float(r["strike_price"]),
+            "oi": float(r["open_interest"]),
+            "mid": _mid(r),
+            "contract_type": r.get("contract_type"),
+        } for r in oi_rows[:6]]
+        oi_total = float(sum(float(r["open_interest"]) for r in oi_rows))
+    except Exception:
+        top_oi, oi_total = [], None
+
+    # Greeks centrals (mid-point distribution across the chain)
+    greeks_out: dict[str, dict] = {}
+    for k in ("delta", "gamma", "theta", "vega"):
+        vals = []
+        for r in rows:
+            g = r.get("greeks") or {}
+            v = g.get(k)
+            if v is not None:
+                try:
+                    vals.append(float(v))
+                except (TypeError, ValueError):
+                    continue
+        greeks_out[k] = {
+            "median": _percentile(vals, 50),
+            "mean": round(float(np.mean(vals)), 6) if vals else None,
+            "p25": _percentile(vals, 25),
+            "p75": _percentile(vals, 75),
+        }
+
+    # Spread statistics
+    spreads = []
+    for r in rows:
+        sp = r.get("spread_pct")
+        if sp is not None:
+            try:
+                spreads.append(float(sp))
+            except (TypeError, ValueError):
+                continue
+    spread_stats = {
+        "avg_spread_pct": round(float(np.mean(spreads)), 4) if spreads else None,
+        "p90_spread_pct": _percentile(spreads, 90),
+        "max_spread_pct": round(float(np.max(spreads)), 4) if spreads else None,
+    }
+
+    # Term structure — ATM IV across up to 3 nearby expirations (ATM ±20%).
+    term: list[dict] = []
+    try:
+        exps = options_provider.get_expirations(underlying)
+        candidates = [e for e in exps if not expiration or e >= expiration]
+        if expiration and expiration not in candidates:
+            candidates.insert(0, expiration)
+        for e in candidates[:3]:
+            if not atm_strike:
+                break
+            sub = options_provider.get_chain(underlying, e, contract_type,
+                                             strike_gte=atm_strike * 0.8,
+                                             strike_lte=atm_strike * 1.2)
+            sub_atm = None
+            if spot is not None and sub:
+                sub_atm = min(sub, key=lambda r: abs(float(r["strike_price"]) - spot))
+            s_iv = float(sub_atm["implied_volatility"]) if sub_atm and sub_atm.get("implied_volatility") is not None else None
+            try:
+                s_dte = max(0, (datetime.strptime(e, "%Y-%m-%d") - datetime.utcnow()).days)
+            except ValueError:
+                s_dte = None
+            term.append({"expiration": e, "dte": s_dte, "atm_iv": s_iv})
+    except Exception:
+        term = []
+
+    return _sanitize({
+        "underlying": underlying,
+        "expiration": expiration or (term[0]["expiration"] if term else None),
+        "contract_type": contract_type,
+        "spot": spot,
+        "n_contracts": len(rows),
+        "dte": dte,
+        "iv": iv_stats,
+        "skew": skew,
+        "expected_move": expected_move,
+        "oi": {"total": oi_total, "top_strikes": top_oi},
+        "greeks": greeks_out,
+        "spreads": spread_stats,
+        "term_structure": term,
+        "source": _market_data_source(),
     })

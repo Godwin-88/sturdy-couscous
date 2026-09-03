@@ -160,6 +160,75 @@ class AlpacaDataProvider:
             return pd.DataFrame()
         return pd.concat(frames, axis=1).sort_index()
 
+    def get_ohlcv_range(self, symbol, start_date, end_date, interval="1d"):
+        """OHLCV over an explicit date range — Alpaca-primary, yfinance fallback.
+
+        Drop-in for the analytics price-series helper. `interval` accepts
+        "1d" | "1wk" | "1h" on the Alpaca side; anything else falls back to
+        yfinance. In-memory cached like the days-based sibling.
+        """
+        key = ("range", symbol.upper(), start_date, end_date, interval)
+        now = time.time()
+        if key in self._cache and now - self._cache[key][0] < DATA_CACHE_TTL_SECONDS:
+            return self._cache[key][1]
+        df = None
+        try:
+            if self.is_enabled():
+                df = self._fetch_alpaca_range(symbol, start_date, end_date, interval)
+                if df is not None and not df.empty:
+                    self._cache[key] = (now, df)
+                    return df
+                logger.debug(f"Alpaca empty for {symbol} {start_date}..{end_date} — yfinance fallback")
+            return self._fetch_yfinance_range(symbol, start_date, end_date, interval)
+        except Exception as e:
+            logger.warning(f"Alpaca range fetch failed for {symbol}: {e}")
+            return self._fetch_yfinance_range(symbol, start_date, end_date, interval)
+
+    def _fetch_alpaca_range(self, symbol, start_date, end_date, interval="1d"):
+        kind, sym = self.resolve_symbol(symbol)
+        tf = {"1d": TimeFrame.Day, "1wk": TimeFrame.Week,
+              "1h": TimeFrame.Hour}.get(interval, TimeFrame.Day)
+        try:
+            start = pd.Timestamp(start_date).to_pydatetime()
+            end = pd.Timestamp(end_date).to_pydatetime() + timedelta(days=1)
+        except Exception:
+            start = datetime.utcnow() - timedelta(days=400)
+            end = datetime.utcnow() + timedelta(days=1)
+        try:
+            if kind == "crypto":
+                req = CryptoBarsRequest(symbol_or_symbols=sym, timeframe=tf, start=start, end=end)
+                resp = self.crypto_client.get_crypto_bars(req)
+            else:
+                req = StockBarsRequest(symbol_or_symbols=sym, timeframe=tf, start=start, end=end)
+                resp = self.stock_client.get_stock_bars(req)
+            return self._barset_to_frame(resp, sym)
+        except Exception as e:
+            logger.warning(f"Alpaca range data fetch failed for {symbol}: {e}")
+            return None
+
+    def _fetch_yfinance_range(self, symbol, start_date, end_date, interval="1d"):
+        try:
+            import yfinance as yf
+            df = yf.download(symbol, start=start_date, end=end_date, interval=interval,
+                             progress=False, auto_adjust=True)
+            if df is None or df.empty or len(df) < 2:
+                return pd.DataFrame()
+            # yf.download with auto_adjust=True returns MultiIndex columns
+            # (("Close","SPY"),...); flatten to the simple OHLCV names the
+            # analytics pipeline expects (pandas 2.x drops the last level via
+            # get_level_values selectively, older versions need the fallback).
+            if isinstance(df.columns, pd.MultiIndex):
+                if df.columns.nlevels >= 2 and df.columns.get_level_values(1).nunique() == 1:
+                    df.columns = df.columns.get_level_values(0)
+                else:
+                    df.columns = [str(c[0]) for c in df.columns]
+            df.columns = [str(c)[0].upper() + str(c)[1:] for c in df.columns]
+            df = df.loc[:, [c for c in ("Open", "High", "Low", "Close", "Volume") if c in df.columns]].dropna()
+            return _normalize_index(df)
+        except Exception as e:
+            logger.debug(f"yfinance range fallback failed for {symbol}: {e}")
+            return pd.DataFrame()
+
     def get_vix_proxy(self, days=90, mult=None):
         spy = self.get_close_series("SPY", days=days)
         if spy.empty:
