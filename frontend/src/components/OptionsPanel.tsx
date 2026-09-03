@@ -5,7 +5,7 @@ import { optionsApi, OptionContractRow, OptionSuggestion, OptionLeg, AlpacaAsset
 import Greeks3DVisualization from "@/components/Greeks3DVisualization";
 import OptionDiagrams from "@/components/OptionDiagrams";
 import { fmt$, fmtN } from "@/lib/utils";
-import { getScreenContext, setScreenContext, type ScreenContextData } from "@/lib/screenContext";
+import { getScreenContext, setScreenContext, takeOrderDraft, type ScreenContextData } from "@/lib/screenContext";
 import clsx from "clsx";
 
 const MOODS = ["call", "put"] as const;
@@ -370,7 +370,9 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
       if (draft?.legs?.length) consumeDraft(draft, detail.data?.underlying);
     };
     window.addEventListener("ga-screen-context", onCtx);
-    // Also check on mount (first-mount path)
+    // Also check on mount: queue first (survives store overwrite), then store fallback
+    const pd = takeOrderDraft("options");
+    if (pd?.draft?.legs?.length) { consumeDraft(pd.draft, pd.underlying); return () => window.removeEventListener("ga-screen-context", onCtx); }
     const ctx = getScreenContext("options");
     const initial = ctx?.extra?.orderDraft as OptionSuggestion | undefined;
     if (initial?.legs?.length) consumeDraft(initial, ctx?.underlying);

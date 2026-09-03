@@ -1,4 +1,4 @@
-import type { OrderDraft } from "@/lib/api";
+import type { OrderDraft, OptionSuggestion } from "@/lib/api";
 
 /**
  * Live "page session context" shared between screen components and the
@@ -39,6 +39,18 @@ export function setScreenContext(screen: string, data: Partial<ScreenContextData
 
 export function getScreenContext(screen: string): ScreenContextData | undefined {
   return store.get(screen);
+}
+
+// ── One-shot order-draft handoff (survives store overwrites / navigation remounts) ──
+let pendingOrderDraft: { screen: string; draft: OptionSuggestion; underlying?: string } | null = null;
+export function queueOrderDraft(screen: string, draft: OptionSuggestion, underlying?: string): void {
+  pendingOrderDraft = { screen, draft, underlying };
+}
+export function takeOrderDraft(screen: string): { draft: OptionSuggestion; underlying?: string } | null {
+  if (!pendingOrderDraft || pendingOrderDraft.screen !== screen) return null;
+  const out = pendingOrderDraft;
+  pendingOrderDraft = null;
+  return out;
 }
 
 /** Short human label for the chip, e.g. "Analyzing: MCHP · 2026-09-04 calls · strike 85.00" */

@@ -3,7 +3,7 @@ import { Activity, TrendingUp, CheckCircle, XCircle, Lightbulb, ChevronDown, Che
 import { agentApi, optionsApi, AgentStatus, RegimeBenchResult, OptionSuggestion, AlpacaAsset } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
 import { REGIME_META, fmtPct } from "@/lib/utils";
-import { setScreenContext } from "@/lib/screenContext";
+import { setScreenContext, queueOrderDraft } from "@/lib/screenContext";
 import clsx from "clsx";
 
 // Catalogue mirrors agent/regime_agent.py:194-237. "auto" = use live regime.
@@ -285,11 +285,8 @@ export default function RegimePanel({ onNavigate }: { onNavigate?: (tab: string)
           const top = bench?.top_suggestion;
           if (top) {
             const und = bench?.underlying || (top.legs?.[0] ? top.legs[0].symbol.replace(/[^A-Z]+$/, "") : "SPY");
-            setScreenContext("options", {
-              screen: "options",
-              underlying: und,
-              extra: { orderDraft: top },
-            });
+            queueOrderDraft("options", top, und);          // survives store overwrite on mount
+            setScreenContext("options", { screen: "options", underlying: und });
           }
           onNavigate?.("options");
         }}
