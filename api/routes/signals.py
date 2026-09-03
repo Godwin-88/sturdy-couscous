@@ -19,6 +19,53 @@ def _conn():
     )
 
 
+import re as _re
+from datetime import datetime as _dt
+
+_OPT_RE = _re.compile(r"^[A-Z]{1,5}\d{6}[CP]\d{8}$")
+
+
+def _option_meta(symbol: str) -> dict | None:
+    """Best-effort display metadata for an OCC option row.
+
+    envelope of strike / expiry / DTE / mid premium / delta / IV populated from
+    the OCC symbol + a cached live snapshot. Never raises — missing data stays null.
+    """
+    try:
+        from agent.option_utils import parse_contract_symbol
+        root, expiry, right, strike = parse_contract_symbol(symbol)
+        dte = max(0, (expiry - _dt.utcnow().date()).days)
+        meta = {
+            "contract_type": "call" if right == "C" else "put",
+            "strike": round(float(strike), 2),
+            "expiry": str(expiry),
+            "dte": int(dte),
+            "delta": None,
+            "premium": None,
+            "iv": None,
+        }
+        try:
+            from agent.options_market import provider as _oprov
+            snap = _oprov.get_snapshot(symbol)
+            if not isinstance(snap, dict):
+                return meta
+            g = snap.get("greeks") or {}
+            if isinstance(g, dict) and g.get("delta") is not None:
+                meta["delta"] = round(float(g["delta"]), 3)
+            v = snap.get("implied_volatility")
+            if v is not None:
+                meta["iv"] = round(float(v), 4)
+            b = snap.get("bid")
+            a = snap.get("ask")
+            if b is not None and a is not None and float(b) > 0 and float(a) > 0:
+                meta["premium"] = round((float(b) + float(a)) / 2.0, 2)
+        except Exception:
+            pass
+        return meta
+    except Exception:
+        return None
+
+
 class PlaceOrderRequest(BaseModel):
     ticker: str
     direction: str  # "buy" or "sell"
@@ -46,7 +93,12 @@ def get_signals(limit: int = 50):
             cols = ["order_id","strategy","ticker","direction","quantity",
                     "fill_price","mode","signal_score","created_at"]
             rows = cur.fetchall()
-    return [dict(zip(cols, r)) for r in rows]
+    out = []
+    for r in (dict(zip(cols, row)) for row in rows):
+        sym = str(r.get("ticker") or "")
+        r["option"] = _option_meta(sym) if _OPT_RE.match(sym) else None
+        out.append(r)
+    return out
 
 
 @router.get("/suggested")
@@ -74,7 +126,12 @@ def get_suggested_signals(limit: int = 100, ticker: str | None = None):
             cur.execute(sql, {"limit": limit, "ticker": ticker})
             cols = [d[0] for d in cur.description]
             rows = [dict(zip(cols, r)) for r in cur.fetchall()]
-    return rows
+    out = []
+    for r in rows:
+        sym = str(r.get("venue_symbol") or r.get("ticker") or "")
+        r["option"] = _option_meta(sym) if _OPT_RE.match(sym) else None
+        out.append(r)
+    return out
 
 
 @router.get("/live")

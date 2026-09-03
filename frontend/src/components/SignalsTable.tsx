@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { agentApi, researchApi, signalsApi, Signal, SignalLineage, RejectedSignals, ExecutionFill, SuggestedSignal } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
 import { fmt$, relTime } from "@/lib/utils";
-import { RefreshCw, ChevronDown, ChevronRight, BookOpen, BarChart, Brain, Search, X, AlertCircle, Plus, Download, Radio, Wallet, ExternalLink, Activity, Clock, Zap, TrendingUp, Ban } from "lucide-react";
+import { setScreenContext } from "@/lib/screenContext";
+import { RefreshCw, ChevronDown, ChevronRight, BookOpen, BarChart, Brain, Search, X, AlertCircle, Plus, Download, Radio, Wallet, ExternalLink, Activity, Clock, Zap, TrendingUp, Ban, Shield } from "lucide-react";
 import clsx from "clsx";
 import OrderDetailDrawer from "@/components/OrderDetailDrawer";
 
@@ -31,7 +32,35 @@ function dteFromExpiry(expiry: string): number {
   return Math.max(0, Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
-export default function SignalsTable() {
+/** Chain-aware analytics deep link for a signal (underlying for options, else px series). */
+function smartAnalyzeLink(s: Signal): string {
+  const opt = parseOptionDetails(s.ticker);
+  if (opt) {
+    const p = new URLSearchParams({
+      series: `px:${opt.underlying}:Close`,
+      underlying: opt.underlying,
+      expiration: opt.expiry,
+      contract_type: opt.type === "C" ? "call" : "put",
+    });
+    return `/analytics?${p.toString()}`;
+  }
+  return `/analytics?series=${encodeURIComponent(`px:${s.ticker}:Close`)}`;
+}
+
+/** Scope the Risk workspace to this signal's underlying/chain (when option), then open it. */
+function goRiskForSignal(s: Signal, onNavigate?: (tab: string) => void) {
+  const opt = parseOptionDetails(s.ticker);
+  if (opt) {
+    setScreenContext("options", {
+      underlying: opt.underlying,
+      expiration: opt.expiry,
+      contract_type: opt.type === "C" ? "call" : "put",
+    });
+  }
+  onNavigate?.("risk");
+}
+
+export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const navigate = useNavigate();
   const [limit, setLimit] = useState(50);
   const [subTab, setSubTab] = useState<SubTab>("all");
@@ -234,15 +263,15 @@ export default function SignalsTable() {
                     <td className="py-1.5 px-3 text-right text-slate-300">{s.quantity.toFixed(4)}</td>
                     <td className="py-1.5 px-3 text-right text-slate-300">{s.fill_price ? fmt$(s.fill_price) : "—"}</td>
                     <td className="py-1.5 px-3 text-right text-violet-300">
-                      {isOpt && optDetails ? <span className="text-[10px]">{optDetails.strike.toFixed(1)}</span> : "—"}
+                      {isOpt ? (s.option?.delta != null ? s.option.delta.toFixed(2) : "—") : "—"}
                     </td>
                     <td className="py-1.5 px-3 text-right text-amber-300">
-                      {isOpt ? <span className="text-[10px]">{s.fill_price ? fmt$(s.fill_price) : "—"}</span> : "—"}
+                      {isOpt ? (s.option?.premium != null ? fmt$(s.option.premium) : "—") : "—"}
                     </td>
                     <td className="py-1.5 px-3 text-right">
-                      {dte != null ? (
-                        <span className={clsx("text-[10px] font-bold", dte <= 7 ? "text-red-400" : dte <= 30 ? "text-amber-400" : "text-slate-300")}>
-                          {dte}d
+                      {(s.option?.dte ?? dte) != null ? (
+                        <span className={clsx("text-[10px] font-bold", (s.option?.dte ?? dte)! <= 7 ? "text-red-400" : (s.option?.dte ?? dte)! <= 30 ? "text-amber-400" : "text-slate-300")}>
+                          {(s.option?.dte ?? dte)}d
                         </span>
                       ) : "—"}
                     </td>
@@ -262,9 +291,13 @@ export default function SignalsTable() {
                           className="p-1 rounded text-slate-500 hover:text-indigo-400 hover:bg-slate-700" title="View details">
                           <Search size={11} />
                         </button>
-                        <button onClick={() => navigate(`/analytics?series=${encodeURIComponent(s.strategy)}&ticker=${s.ticker}`)}
-                          className="p-1 rounded text-slate-500 hover:text-emerald-400 hover:bg-slate-700" title="Analyze">
+                        <button onClick={() => navigate(smartAnalyzeLink(s))}
+                          className="p-1 rounded text-slate-500 hover:text-emerald-400 hover:bg-slate-700" title="Analyze (chain-aware)">
                           <BarChart size={11} />
+                        </button>
+                        <button onClick={() => goRiskForSignal(s, onNavigate)}
+                          className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-slate-700" title="Risk (chain-aware)">
+                          <Shield size={11} />
                         </button>
                         <button onClick={() => navigate(`/hypothesis/new?series=${encodeURIComponent(s.strategy)}&ticker=${s.ticker}`)}
                           className="p-1 rounded text-slate-500 hover:text-purple-400 hover:bg-slate-700" title="Create hypothesis">
@@ -471,7 +504,7 @@ export default function SignalsTable() {
           onClose={() => setDetailOrder(null)}
           onAnalyze={() => {
             setDetailOrder(null);
-            navigate(`/analytics?series=${encodeURIComponent(detailOrder.strategy)}&ticker=${detailOrder.ticker}`);
+            navigate(smartAnalyzeLink(detailOrder));
           }}
           onHypothesis={() => {
             setDetailOrder(null);

@@ -32,7 +32,6 @@ import SimulateModal       from "@/components/SimulateModal";
 import SignalLineageModal  from "@/components/SignalLineageModal";
 import RecommendationsPanel from "@/components/RecommendationsPanel";
 import ScreenChat from "@/components/ScreenChat";
-import AgentCoPilot from "@/components/AgentCoPilot";
 import { agentApi, researchApi, hypothesisApi } from "@/lib/api";
 import { getScreenContext } from "@/lib/screenContext";
 import { registerWebMCPTools, unregisterWebMCPTools, WEBMCP_TOOL_COUNT } from "@/webmcp/tools";
@@ -41,11 +40,10 @@ import { LABEL_COLOR } from "@/lib/utils";
 type Tab = "dashboard" | "graph" | "signals" | "backtest" | "risk" | "intelligence" | "options";
 
 const OP_TABS: { id: Tab; label: string; icon: React.ReactNode; stage: string }[] = [
-  { id: "backtest",    label: "Backtest",      icon: <BarChart2       size={14} />, stage: "TESTING" },
-  { id: "signals",     label: "Signals",       icon: <Table2          size={14} />, stage: "DEPLOYED" },
-  { id: "options",     label: "Options",       icon: <Activity        size={14} />, stage: "DEPLOYED" },
-  { id: "risk",        label: "Risk",          icon: <ShieldAlert     size={14} />, stage: "DEPLOYED" },
   { id: "dashboard",   label: "Dashboard",     icon: <LayoutDashboard size={14} />, stage: "MONITORING" },
+  { id: "options",     label: "Options",       icon: <Activity        size={14} />, stage: "DEPLOYED" },
+  { id: "signals",     label: "Signals",       icon: <Table2          size={14} />, stage: "DEPLOYED" },
+  { id: "backtest",    label: "Backtest",      icon: <BarChart2       size={14} />, stage: "TESTING" },
   { id: "intelligence",label: "Intelligence",  icon: <Brain           size={14} />, stage: "MONITORING" },
   { id: "graph",       label: "KG Explorer",   icon: <GitBranch       size={14} />, stage: "MONITORING" },
 ];
@@ -141,61 +139,24 @@ export default function App() {
           </span>
         </div>
 
-        {/* Grouped by lifecycle stage */}
-        {(["TESTING", "DEPLOYED", "MONITORING"] as const).map(stage => {
-          const opItems = OP_TABS.filter(t => t.stage === stage);
-          const analysisItems = stage === "TESTING" ? ANALYSIS_ITEMS : [];
-          const allItems = [...opItems, ...analysisItems];
-          if (allItems.length === 0) return null;
-          return (
-            <div key={stage} className="px-3 pt-3 pb-1">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5 px-2">
-                {stage}
-              </div>
-              <nav className="space-y-0.5">
-                {allItems.map(item => {
-                  const isTabNav = "id" in item && OP_TABS.some(t => t.id === item.id);
-                  if (isTabNav) {
-                    const t = item as typeof OP_TABS[0];
-                    const isActive = !isAnalysisRoute && opTab === t.id;
-                    return (
-                      <button key={t.id} onClick={() => handleOpNav(t.id)}
-                        className={clsx("flex items-center gap-2.5 w-full px-3 py-2 text-xs font-mono rounded-lg transition-colors text-left",
-                          isActive
-                            ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-transparent"
-                        )}>
-                        {t.icon}{t.label}
-                      </button>
-                    );
-                  } else {
-                    const a = item as typeof ANALYSIS_ITEMS[0];
-                    const isActive = (a.id === "analytics" && isAnalyticsRoute) || (a.id === "hypothesis" && isHypothesisRoute);
-                    return (
-                      <button key={a.id} onClick={() => goToAnalysisItem(a)}
-                        className={clsx("flex items-center gap-2.5 w-full px-3 py-2 text-xs font-mono rounded-lg transition-colors text-left",
-                          isActive
-                            ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
-                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-transparent"
-                        )}>
-                        {a.icon}{a.label}
-                      </button>
-                    );
-                  }
-                })}
-              </nav>
-            </div>
-          );
-        })}
+        {/* Primary navigation — trading user story (flat, ordered) */}
+        <nav className="px-3 pt-4 space-y-0.5">
+          {OP_TABS.map(t => {
+            const isActive = !isAnalysisRoute && opTab === t.id;
+            return (
+              <button key={t.id} onClick={() => handleOpNav(t.id)}
+                className={clsx("flex items-center gap-2.5 w-full px-3 py-2 text-xs font-mono rounded-lg transition-colors text-left",
+                  isActive
+                    ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-transparent"
+                )}>
+                {t.icon}{t.label}
+              </button>
+            );
+          })}
+        </nav>
 
         <div className="mt-auto px-4 py-3 border-t border-slate-800 space-y-2">
-          <button
-            onClick={() => setCopilotOpen(true)}
-            className="flex items-center gap-2 w-full px-3 py-2 text-xs font-mono rounded-lg border border-emerald-600/40 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-900/40"
-          >
-            <Bot size={13} /> Agent CoPilot
-            <span className="ml-auto text-[10px] text-emerald-400/70">{WEBMCP_TOOL_COUNT} tools</span>
-          </button>
           <div className="flex items-center gap-1.5 text-xs font-mono text-slate-500">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />paper mode
           </div>
@@ -212,10 +173,9 @@ export default function App() {
         </Routes>
       </main>
 
-      {/* Global Financial Engineer chat — screen-aware, right slide-over */}
+      {/* Global Financial Engineer chat — screen-aware, right slide-over. WebMCP agent-activity trace
+          lives inside it too, so there is ONE assistant (no second bot). */}
       <ScreenChat screen={currentScreen} />
-      {/* Agent CoPilot — WebMCP event echo + two-phase order approval */}
-      <AgentCoPilot open={copilotOpen} onClose={() => setCopilotOpen(false)} />
     </div>
   );
 }
@@ -225,7 +185,7 @@ function OperationsShell({ opTab, onNavigate }: { opTab: string; onNavigate?: (t
     <>
       {opTab === "dashboard" && <DashboardTab onNavigate={onNavigate} />}
       {opTab === "graph"     && <GraphTab />}
-      {opTab === "signals"   && <SignalsTab />}
+      {opTab === "signals"   && <SignalsTab onNavigate={onNavigate} />}
       {opTab === "options"   && <OptionsTab onNavigate={onNavigate} />}
       {opTab === "risk"      && <RiskWorkspaceTab />}
       {opTab === "backtest"  && <BacktestWorkspaceTab />}
@@ -479,8 +439,8 @@ function StatBox({ label, value, color }: { label: string; value: string; color?
   );
 }
 
-function SignalsTab() {
-  return <div className="h-full p-3" data-series-id="signals-tab" data-series-name="Signals" data-series-source="postgres"><SignalsTable /></div>;
+function SignalsTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+  return <div className="h-full p-3" data-series-id="signals-tab" data-series-name="Signals" data-series-source="postgres"><SignalsTable onNavigate={onNavigate} /></div>;
 }
 
 function OptionsTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {

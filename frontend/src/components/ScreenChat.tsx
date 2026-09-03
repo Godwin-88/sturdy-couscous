@@ -1,10 +1,34 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { X, Brain, Send, Loader2, BookOpen, FileText, ChevronDown, Trash2, CheckCircle2, XCircle, ClipboardList, ShieldAlert, ExternalLink } from "lucide-react";
+import { X, Brain, Send, Loader2, BookOpen, FileText, ChevronDown, Trash2, CheckCircle2, XCircle, ClipboardList, ShieldAlert, ExternalLink, Bot, ShieldCheck } from "lucide-react";
 import { chatApi, optionsApi, type ChatMessage, type ChatContext, type OrderDraft, type FeStep, type FeNews } from "@/lib/api";
 import Markdown from "@/components/Markdown";
 import { getScreenContext, screenContextLabel, setScreenContext } from "@/lib/screenContext";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { WS_BASE, webmcpApi } from "@/lib/api";
+
+interface ToolInvocation {
+  type?: string;
+  tool?: string;
+  name?: string;
+  input?: Record<string, unknown>;
+  output?: unknown;
+  at?: string;
+  proposal_token?: string;
+}
+
+interface AgentEvent {
+  type: string;
+  [k: string]: unknown;
+}
+
+function eventText(ev: ToolInvocation): string {
+  const tool = String(ev.tool ?? ev.name ?? "unknown_tool");
+  const input = ev.input ? `\n  input: ${JSON.stringify(ev.input)}` : "";
+  const out = ev.output ? `\n  output: ${JSON.stringify(ev.output).slice(0, 600)}` : "";
+  return `tool_invocation · ${tool}${input}${out}`;
+}
 
 /**
  * Financial Engineer chat — a right slide-over available on every screen.
@@ -23,6 +47,45 @@ export default function ScreenChat({ screen }: { screen: string }) {
   const listRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const [proposals, setProposals] = useState<Record<number, { token?: string; risk?: string; done?: string; err?: string; busy?: boolean }>>({});
+  const [showAgentActivity, setShowAgentActivity] = useState(false);
+  const { messages: wsMessages } = useWebSocket<AgentEvent>(`${WS_BASE}/ws/events`);
+  const invocations = useMemo(
+    () => (wsMessages ?? []).filter((m) => (m.type ?? "").toString().toLowerCase().includes("tool")).slice(0, 40) as ToolInvocation[],
+    [wsMessages]
+  );
+  const [approving, setApproving] = useState(false);
+  const [approveMsg, setApproveMsg] = useState<string | null>(null);
+  const [approveErr, setApproveErr] = useState<string | null>(null);
+
+  const approveAgentOrder = async (ev: ToolInvocation) => {
+    const input = ev.input as Record<string, unknown> | undefined;
+    if (!ev.proposal_token && !(ev.output as Record<string, unknown>)?.proposal_token) {
+
+      setApproveErr("No proposal_token on this event — can't approve directly.");
+      return;
+    }
+    const token = ev.proposal_token ?? (ev.output as Record<string, unknown>)?.proposal_token;
+    const ticker = String(input?.ticker ?? "");
+    const direction = (input?.direction ?? "buy") as "buy" | "sell";
+    const quantity = Number(input?.quantity ?? 1);
+    setApproving(true);
+    setApproveMsg(null);
+    setApproveErr(null);
+    try {
+      const res = await webmcpApi.submitOrder({
+        ticker,
+        direction,
+        quantity,
+        proposal_token: String(token),
+        venue: (input?.venue as string) ?? "alpaca",
+      });
+      setApproveMsg(`Order ${res.order_id} ${res.status} @ ${res.venue}.`);
+    } catch (e) {
+      setApproveErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setApproving(false);
+    }
+  };
 
   const makePlaceRequest = (d: OrderDraft) => {
     const legs = (d.legs ?? []).slice(0, 4).filter((l) => l.symbol);
@@ -218,6 +281,47 @@ export default function ScreenChat({ screen }: { screen: string }) {
               {err && <span className="text-[10px] text-amber-400 font-mono">{err}</span>}
             </div>
           )}
+
+          {/* WebMCP agent activity — merged into the one chat (single-bot UX) */}
+          <div className="border-b border-slate-700/70 bg-slate-900">
+            <button onClick={() => setShowAgentActivity((s) => !s)}
+              className="flex items-center gap-1.5 w-full px-3 py-1.5 text-[10px] font-mono text-slate-400 hover:text-slate-200">
+              <Bot size={11} className="text-emerald-400" /> WebMCP agent activity
+              <span className="ml-auto flex items-center gap-1">
+                {approving && <Loader2 size={10} className="animate-spin" />}
+                {invocations.length} event(s)
+                <ChevronDown size={10} />
+              </span>
+            </button>
+            {showAgentActivity && (
+              <div className="px-3 pb-2 space-y-1.5 max-h-[30vh] overflow-y-auto">
+                {invocations.length === 0 && (
+                  <div className="text-[10px] text-slate-500 font-mono py-1">
+                    No WebMCP tool invocations yet — when an LLM agent drives GraphAlpha, its calls + proposed orders appear here for human approval.
+
+                  </div>
+                )}
+                {invocations.map((ev, i) => {
+                  const out = ev.output as Record<string, unknown> | undefined;
+                  const hasToken = Boolean(ev.proposal_token ?? out?.proposal_token);
+                  return (
+                    <div key={i} className={clsx("rounded border border-slate-700 bg-slate-800/60 p-1.5",
+                      hasToken ? "border-amber-700/60" : "")}>
+                      <div className="whitespace-pre-wrap text-[9px] font-mono text-slate-300 leading-relaxed break-all">{eventText(ev)}</div>
+                      {approveMsg && <div className="text-[9px] text-emerald-300 mt-1">{approveMsg}</div>}
+                      {approveErr && <div className="text-[9px] text-amber-300 mt-1">{approveErr}</div>}
+                      {hasToken && (
+                        <button onClick={() => approveAgentOrder(ev)} disabled={approving}
+                          className="mt-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-600/30 border border-amber-500/40 text-[9px] font-bold text-amber-300 hover:bg-amber-600/50 disabled:opacity-50">
+                          {approving ? <Loader2 size={9} className="animate-spin" /> : <ShieldCheck size={9} />} Approve & execute (paper)
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-3 min-h-0">
             {messages.length === 0 && busy && (

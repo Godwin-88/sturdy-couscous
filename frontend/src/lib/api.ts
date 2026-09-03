@@ -79,6 +79,16 @@ export interface Signal {
   mode:         string;
   signal_score: number;
   created_at:   string;
+  /** Best-effort option metadata enriched by the API (null for equity rows). */
+  option?: {
+    contract_type: "call" | "put" | null;
+    strike:        number | null;
+    expiry:        string | null;
+    dte:           number | null;
+    delta:         number | null;
+    premium:       number | null;
+    iv:            number | null;
+  } | null;
 }
 
 export interface GraphNode {
@@ -284,6 +294,15 @@ export interface SuggestedSignal {
   order_id?:               string | null;
   fill_price?:             number | null;
   fill_timestamp?:         string | null;
+  option?: {
+    contract_type: "call" | "put" | null;
+    strike:        number | null;
+    expiry:        string | null;
+    dte:           number | null;
+    delta:         number | null;
+    premium:       number | null;
+    iv:            number | null;
+  } | null;
 }
 
 export const signalsApi = {
