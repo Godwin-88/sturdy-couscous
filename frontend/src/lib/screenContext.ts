@@ -31,7 +31,10 @@ export interface ScreenContextData {
 const store = new Map<string, ScreenContextData>();
 
 export function setScreenContext(screen: string, data: Partial<ScreenContextData>): void {
-  store.set(screen, { screen, ...data });
+  const merged = { screen, ...data };
+  store.set(screen, merged);
+  // Notify listeners (OptionsPanel consumes order drafts even when already mounted)
+  window.dispatchEvent(new CustomEvent("ga-screen-context", { detail: { screen, data: merged } }));
 }
 
 export function getScreenContext(screen: string): ScreenContextData | undefined {

@@ -5,7 +5,7 @@ import { optionsApi, OptionContractRow, OptionSuggestion, OptionLeg, AlpacaAsset
 import Greeks3DVisualization from "@/components/Greeks3DVisualization";
 import OptionDiagrams from "@/components/OptionDiagrams";
 import { fmt$, fmtN } from "@/lib/utils";
-import { getScreenContext, setScreenContext } from "@/lib/screenContext";
+import { getScreenContext, setScreenContext, type ScreenContextData } from "@/lib/screenContext";
 import clsx from "clsx";
 
 const MOODS = ["call", "put"] as const;
@@ -348,23 +348,34 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
     setModalOpen(true);
   }
 
-  // Regime pick deep-link: consume a pending orderDraft (published by RegimePanel) exactly once on mount.
+  // Regime pick deep-link: consume a pending orderDraft. Event-driven so it works even when Options was already mounted (no mount race), and deferred so the chain reload triggered by setMood/setExpiration settles first (its setSelected(null) won't clobber the prefill).
   const draftConsumed = useRef(false);
-  useEffect(() => {
-    if (draftConsumed.current) return;
-    const ctx = getScreenContext("options");
-    const draft = ctx?.extra?.orderDraft as OptionSuggestion | undefined;
-    if (!draft || !draft.legs?.length) return;
+  const consumeDraft = useCallback((draft: OptionSuggestion, und?: string) => {
+    if (draftConsumed.current || !draft?.legs?.length) return;
     draftConsumed.current = true;
-    const und = ctx?.underlying || draft.legs[0].symbol.replace(/[^A-Z]+$/, "");
-    setUnderlying(und);
+    const u = und || draft.legs[0].symbol.replace(/[^A-Z]+$/, "");
+    setUnderlying(u);
     const exp = expiryFromSymbol(draft.legs[0].symbol) || "";
     if (exp) setExpiration(exp);
-    setMood((draft.legs[0].contract_type as "call" | "put"));
-    openSuggestionInTicket(draft);
-    // one-shot: clear the draft so tab re-mounts don't re-fire
+    if (draft.legs[0].contract_type) setMood(draft.legs[0].contract_type as "call" | "put");
+    // Let the chain-load effect run first, then open the modal prefilled
+    window.setTimeout(() => openSuggestionInTicket(draft), 80);
     setScreenContext("options", { screen: "options" });
   }, []);
+  useEffect(() => {
+    const onCtx = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail as { screen?: string; data?: Partial<ScreenContextData> } | undefined;
+      if (!detail || detail.screen !== "options") return;
+      const draft = detail.data?.extra?.orderDraft as OptionSuggestion | undefined;
+      if (draft?.legs?.length) consumeDraft(draft, detail.data?.underlying);
+    };
+    window.addEventListener("ga-screen-context", onCtx);
+    // Also check on mount (first-mount path)
+    const ctx = getScreenContext("options");
+    const initial = ctx?.extra?.orderDraft as OptionSuggestion | undefined;
+    if (initial?.legs?.length) consumeDraft(initial, ctx?.underlying);
+    return () => window.removeEventListener("ga-screen-context", onCtx);
+  }, [consumeDraft]);
 
   function openTradeModal(row: OptionContractRow) {
     setSelected(row);
