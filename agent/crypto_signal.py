@@ -159,6 +159,13 @@ def _tape(pair: str, days: int = 90) -> tuple[pd.DataFrame, dict]:
             ma20 = close.rolling(20).mean()
             idx["ma_50"] = float(ma50.iloc[-1]) if ma50.iloc[-1] == ma50.iloc[-1] else None
             idx["ma_20"] = float(ma20.iloc[-1]) if ma20.iloc[-1] == ma20.iloc[-1] else None
+    # MA cross (fallback trend proxy when 200d not available)
+    ma_s = idx.get("ma_50")
+    ma_l = idx.get("ma_20")
+    if ma_s is not None and ma_l is not None:
+        idx["ma_cross"] = bool(ma_s > ma_l)
+    elif idx.get("above_200ma") is not None:
+        idx["ma_cross"] = idx.get("above_200ma")
     if len(df) >= 60:
         m12 = close.pct_change(12).dropna()
         m12z = (m12.iloc[-1] - m12.mean()) / (m12.std() or 1)
@@ -167,6 +174,49 @@ def _tape(pair: str, days: int = 90) -> tuple[pd.DataFrame, dict]:
         z = (m21_7.iloc[-1] - m21_7.mean()) / (m21_7.std() or 1)
         idx["mom_21_7_z"] = round(float(z), 2)
     return df, idx
+
+
+def _classify_crypto_regime(idx: dict) -> tuple[str, float]:
+    """Per-pair regime from the pair's OWN tape (past data only).
+
+    Crypto is rarely a mean-reverting asset, so MeanReverting is issued ONLY
+    when vol is compressed AND price is range-bound near the trend proxy. The
+    regime is computed from the pair's tape — it must NOT inherit the global
+    SPY/equity label (that was the bug: chat anchored XRP on the SPY MeanReverting).
+    """
+    rvp = idx.get("rv_pctile")
+    mz = idx.get("mom_12_1_z", 0.0) or 0.0
+    above = idx.get("above_200ma")
+    cross = idx.get("ma_cross")
+    if above is None:
+        above = cross
+    dist = abs(float(idx.get("dist_200ma_pct") or 0.0))
+
+    if rvp is None or idx.get("spot") is None:
+        return "Neutral", 0.3
+
+    # 1. Crisis: extreme vol + sharp negative momentum
+    if rvp >= 0.9 and mz <= -1.0:
+        return "Crisis", 0.75
+    # 2. HighVolatility: elevated vol (directional or not)
+    if rvp >= 0.8:
+        return "HighVolatility", 0.7
+    # 3. Trending: strong aligned momentum on reasonable vol
+    if abs(mz) >= 0.8 and rvp <= 0.75:
+        if above is not None:
+            aligned = (mz > 0 and above) or (mz < 0 and not above)
+        else:
+            aligned = True
+        if aligned:
+            return "Trending", 0.65
+    # 4. LowVolatility: compressed vol + quiet tape
+    if rvp <= 0.25 and abs(mz) < 0.5:
+        return "LowVolatility", 0.6
+    # 5. MeanReverting ONLY when compressed vol AND range-bound (rare for crypto)
+    if rvp <= 0.4 and abs(mz) < 0.7 and dist < 0.06:
+        return "MeanReverting", 0.5
+    # 6. Neutral: mixed / no clear signal
+    return "Neutral", 0.4
 
 
 def _score_strategy(strat: dict, idx: dict, pair: str, lens: str, nav: float,
@@ -260,7 +310,11 @@ def _score_strategy(strat: dict, idx: dict, pair: str, lens: str, nav: float,
     # Regime-fit bonus applied AFTER the strategy raw score (so it isn't clobbered).
     score += 20.0 * base_w  # ≤ +20 regime-fit bonus
 
-    qty_rec = max(10.0, budget / max(spot, 1.0))
+    # Size to the USD loss budget: qty = budget / spot. This clears Alpaca's
+    # $10 minimum *notional* for any pair (high-price → small qty, low-price →
+    # larger qty) without the broken max(10.0, ...) unit-floor that forced
+    # e.g. 10 BTC (~$810k) regardless of budget.
+    qty_rec = budget / max(spot, 1.0)
     max_loss = budget
     max_loss_pct_nav = max_loss / nav
     if max_loss_pct_nav > lm["max_loss_pct_nav"]:
@@ -295,13 +349,22 @@ def suggest_crypto(pair: str, lens: str = "defensive", nav: float = 100_000.0,
     also returns ``all_strategies`` for the UI picker.
     """
     df, idx = _tape(pair)
-    regime = regime_override or idx.get("regime") or "Neutral"
+    # Per-pair regime from the pair's OWN tape — NOT the global SPY label.
+    # The user can still override via the UI toggle (regime_override).
+    if regime_override:
+        regime = regime_override
+        regime_source = "user_override"
+        regime_conf = 0.9
+    else:
+        regime, regime_conf = _classify_crypto_regime(idx)
+        regime_source = "pair_tape"
     idx["lens"] = lens
     idx["regime"] = regime
     kg = _kg_crypto_strategies()
     cards = []
     base_envelope = {
         "pair": pair, "lens": lens, "nav": nav, "regime": idx.get("regime"),
+        "regime_confidence": regime_conf, "regime_source": regime_source,
         "spot": idx.get("spot"), "mom_12_1": idx.get("mom_12_1"),
         "mom_21_7": idx.get("mom_21_7"), "rv_21": idx.get("rv_21"),
         "rv_pctile": idx.get("rv_pctile"), "above_200ma": idx.get("above_200ma"),
