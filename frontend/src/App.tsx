@@ -19,7 +19,7 @@ import BacktestWorkspace   from "@/components/BacktestWorkspace";
 import ContradictionsPanel from "@/components/ContradictionsPanel";
 import RiskWorkspace       from "@/components/RiskWorkspace";
 import IntelligencePanel   from "@/components/IntelligencePanel";
-  import AlpacaPanel        from "@/components/AlpacaPanel";
+import BrokerTablePanel   from "@/components/BrokerTablePanel";
 import CryptoPanel from "@/components/CryptoPanel";
 import OptionsPanel       from "@/components/OptionsPanel";
 import OptionPnlPanel     from "@/components/OptionPnlPanel";
@@ -230,9 +230,9 @@ function DashboardTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
         <div className="flex-1 min-h-[240px]"><AgentLog /></div>
       </div>
       <div className="flex flex-col gap-3 overflow-y-auto min-h-0">
-        <div className="shrink-0"><AlpacaPanel onNavigate={onNavigate} /></div>
+        <div className="shrink-0"><PnLDashboard onNavigate={onNavigate} /></div>
+        <div className="shrink-0"><BrokerTablePanel onNavigate={onNavigate} /></div>
         <div className="shrink-0"><OptionPnlPanel /></div>
-        <div className="shrink-0"><PnLDashboard /></div>
         <div className="flex-1 min-h-[200px]"><DashboardGraph /></div>
       </div>
     </div>

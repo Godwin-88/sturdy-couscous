@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { TrendingDown, TrendingUp, DollarSign, AlertTriangle, ArrowUp, ArrowDown } from "lucide-react";
 
 const ASSET_CLASS_ORDER = ["equity", "vol", "rates", "commodity", "crypto", "fx", "other"];
@@ -14,22 +13,36 @@ const ASSET_CLASS_COLOR: Record<string, string> = {
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { agentApi, alpacaApi, AlpacaPortfolio, Position, MarketQuote } from "@/lib/api";
+import { agentApi, alpacaApi, AlpacaPortfolio, AlpacaPosition, MarketQuote } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
 import { fmt$, fmtPct } from "@/lib/utils";
 import clsx from "clsx";
 
-export default function PnLDashboard() {
+export default function PnLDashboard({ onNavigate }: { onNavigate?: (tab: string) => void } = {}) {
   const { data: portfolio } = usePolling<AlpacaPortfolio>(alpacaApi.portfolio, 10_000);
-  const { data: positions } = usePolling<Position[]>(agentApi.positions, 10_000);
+  const { data: brokerPositions } = usePolling<AlpacaPosition[]>(() => alpacaApi.positions(), 10_000);
   const { data: quotes }    = usePolling<MarketQuote[]>(agentApi.marketQuotes, 60_000);
-  const [tab, setTab] = useState<"positions" | "chart">("positions");
 
-  const totalPnl = positions?.reduce((s, p) => s + p.unrealised_pnl, 0) ?? 0;
+  // Real broker unrealized P&L: sum every broker position (sign-aware for shorts).
+  const totalPnl = (brokerPositions ?? []).reduce((s, p) => {
+    const side = (p.side === "sell" || (typeof p.qty === "number" && p.qty < 0)) ? -1 : 1;
+    return s + side * (p.current_price - p.avg_entry_price) * Math.abs(p.qty);
+  }, 0);
+
+  // Real NAV curve, ending at today's live equity (Alpaca's weekly history can lag a day).
   const navHistory = (portfolio?.nav_history ?? []).map(pt => ({
     t: new Date(pt.t).toLocaleDateString("en-US", { month: "numeric", day: "numeric" }),
     nav: pt.equity,
   })).slice(-60);
+  if (portfolio?.nav && navHistory.length > 0) {
+    const lastEquity = navHistory[navHistory.length - 1].nav;
+    if (Math.abs(lastEquity - (portfolio.nav ?? 0)) > 1) {
+      navHistory.push({
+        t: "now",
+        nav: portfolio.nav ?? 0,
+      });
+    }
+  }
   const navSource = portfolio?.source ?? "ledger";
 
   return (
@@ -100,30 +113,16 @@ export default function PnLDashboard() {
         />
       </div>
 
-      {/* Tab bar */}
+      {/* Tab bar — chart is the primary, positions now live in their own table below */}
       <div className="flex border-b border-slate-700">
-        {(["positions", "chart"] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={clsx(
-              "px-4 py-2 text-xs font-mono uppercase tracking-wider transition-colors",
-              tab === t ? "text-indigo-400 border-b-2 border-indigo-500 bg-slate-800"
-                        : "text-slate-400 hover:text-slate-200"
-            )}
-          >
-            {t}
-          </button>
-        ))}
+        <span className="px-4 py-2 text-xs font-mono uppercase tracking-wider text-indigo-400 border-b-2 border-indigo-500 bg-slate-800">
+          NAV
+        </span>
       </div>
 
-      {/* Content */}
+      {/* Content — real NAV chart */}
       <div className="p-3">
-        {tab === "positions" ? (
-          <PositionsTable positions={positions ?? []} />
-        ) : (
-          <NavChart data={navHistory} />
-        )}
+        <NavChart data={navHistory} />
       </div>
     </div>
   );
@@ -177,7 +176,7 @@ function StatCell({
   );
 }
 
-function PositionsTable({ positions }: { positions: Position[] }) {
+function PositionsTable({ positions }: { positions: AlpacaPosition[] }) {
   if (positions.length === 0) {
     return <div className="text-center py-6 text-slate-500 text-sm">No open positions</div>;
   }
@@ -185,30 +184,36 @@ function PositionsTable({ positions }: { positions: Position[] }) {
     <table className="w-full text-xs font-mono">
       <thead>
         <tr className="text-slate-400 border-b border-slate-700">
-          <th className="text-left pb-2">Ticker</th>
+          <th className="text-left pb-2">Symbol</th>
           <th className="text-left pb-2">Side</th>
           <th className="text-right pb-2">Qty</th>
           <th className="text-right pb-2">Entry</th>
-          <th className="text-right pb-2">Current</th>
-          <th className="text-right pb-2">P&amp;L</th>
+          <th className="text-right pb-2">Last</th>
+          <th className="text-right pb-2">Mkt Val</th>
+          <th className="text-right pb-2">UPL</th>
         </tr>
       </thead>
       <tbody>
-        {positions.map(p => (
-          <tr key={p.ticker} className="border-b border-slate-800 hover:bg-slate-800/50">
-            <td className="py-1.5 text-slate-100 font-bold">{p.ticker}</td>
-            <td className={clsx("py-1.5", p.direction === "buy" ? "text-emerald-400" : "text-red-400")}>
-              {p.direction.toUpperCase()}
-            </td>
-            <td className="py-1.5 text-right text-slate-300">{p.quantity.toFixed(4)}</td>
-            <td className="py-1.5 text-right text-slate-400">{fmt$(p.avg_entry_price)}</td>
-            <td className="py-1.5 text-right text-slate-300">{fmt$(p.current_price)}</td>
-            <td className={clsx("py-1.5 text-right font-bold",
-              p.unrealised_pnl >= 0 ? "text-emerald-400" : "text-red-400")}>
-              {p.unrealised_pnl >= 0 ? "+" : ""}{fmt$(p.unrealised_pnl)}
-            </td>
-          </tr>
-        ))}
+        {positions.map(p => {
+          const sideSign = p.qty < 0 || p.side === "sell" ? -1 : 1;
+          const upl = sideSign * (p.current_price - p.avg_entry_price) * Math.abs(p.qty);
+          const up = upl >= 0;
+          return (
+            <tr key={p.symbol} className="border-b border-slate-800 hover:bg-slate-800/50">
+              <td className="py-1.5 text-slate-100 font-bold">{p.symbol}</td>
+              <td className={clsx("py-1.5", sideSign > 0 ? "text-emerald-400" : "text-red-400")}>
+                {sideSign > 0 ? "LONG" : "SHORT"}
+              </td>
+              <td className="py-1.5 text-right text-slate-300">{p.qty.toFixed(4)}</td>
+              <td className="py-1.5 text-right text-slate-400">{fmt$(p.avg_entry_price)}</td>
+              <td className="py-1.5 text-right text-slate-300">{fmt$(p.current_price)}</td>
+              <td className="py-1.5 text-right text-slate-300">{fmt$(p.market_value)}</td>
+              <td className={clsx("py-1.5 text-right font-bold", up ? "text-emerald-400" : "text-red-400")}>
+                {up ? "+" : ""}{fmt$(upl)}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
