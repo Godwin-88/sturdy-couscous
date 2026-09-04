@@ -87,6 +87,7 @@ export default function CryptoPanel() {
     setPlacedCard(card);
     setOrderSide(card.side);
     setOrderType("market");
+    setOrderQty(card.qty_rec && card.qty_rec > 0 ? String(card.qty_rec) : "1");
     setToken(null); setPreviewInfo(null); setExecInfo(null); setExecErr(null);
     setModalOpen(true);
   };
