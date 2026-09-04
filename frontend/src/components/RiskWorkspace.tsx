@@ -173,14 +173,16 @@ export default function RiskWorkspace({ onNavigate }: { onNavigate?: (tab: strin
 
                 {/* Exposure row */}
                 <div className="grid grid-cols-2 gap-3">
-                  <MetricBox label="Gross Exposure" value={fmt$(data.gross_exposure)} sub={fmtPct(data.gross_pct_nav) + " of NAV"} warn={data.gross_pct_nav > 1.5} />
-                  <MetricBox label="Net Exposure" value={fmt$(data.net_exposure)} sub={fmtPct(data.net_pct_nav) + " of NAV"} neutral />
+                  <MetricBox label="Gross Exposure" value={fmt$(data.gross_exposure)} sub={fmtPct(data.gross_pct_nav) + " of NAV"} warn={data.gross_pct_nav > 1.5}
+                    hint="Sum of absolute market values of every position (long + short legs incl. options & crypto). >100% NAV flags leverage; amber when >150%." />
+                  <MetricBox label="Net Exposure" value={fmt$(data.net_exposure)} sub={fmtPct(data.net_pct_nav) + " of NAV"} neutral
+                    hint="Long market value − short market value. Positive = net-long (market β), negative = net-short. Near 0 = hedged book." />
                 </div>
 
                 {/* Drawdown gauge */}
                 <div>
                   <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-slate-400 flex items-center gap-1"><TrendingDown size={11} /> Drawdown</span>
+                    <span className="text-slate-400 flex items-center gap-1" title="Peak-to-trough NAV decline from the running peak. 0% = fresh peak; approaching the 10% limit triggers risk halt."><TrendingDown size={11} /> Drawdown</span>
                     <span className="font-mono" style={{ color: ddColor }}>{fmtPct(data.drawdown_current)} / {fmtPct(data.drawdown_limit)} limit</span>
                   </div>
                   <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
@@ -193,7 +195,7 @@ export default function RiskWorkspace({ onNavigate }: { onNavigate?: (tab: strin
                 {data.kelly_fraction !== null && (
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-slate-400 flex items-center gap-1"><Percent size={11} /> Kelly Fraction (7d)</span>
+                      <span className="text-slate-400 flex items-center gap-1" title="Kelly fraction = fraction of NAV the sizing engine would allocate. 0 = dry powder (no conviction signal); >0.25 = aggressive sizing; capped below 0.5 for safety."><Percent size={11} /> Kelly Fraction (7d)</span>
                       <span className="font-mono text-purple-300">{fmtPct(data.kelly_fraction)}</span>
                     </div>
                     <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
@@ -205,7 +207,7 @@ export default function RiskWorkspace({ onNavigate }: { onNavigate?: (tab: strin
                 {/* Concentration bar chart */}
                 {data.concentration.length > 0 && (
                   <div>
-                    <div className="text-xs text-slate-400 mb-2">Position Concentration (% NAV)</div>
+                    <div className="text-xs text-slate-400 mb-2" title="Weight of each position as % of NAV. >10% single-name = concentration risk; >20% flags needing de-risking.">Position Concentration (% NAV)</div>
                     <ResponsiveContainer width="100%" height={Math.max(60, data.concentration.length * 28)}>
                       <BarChart layout="vertical" data={data.concentration} margin={{ top: 0, right: 40, bottom: 0, left: 60 }}>
                         <XAxis type="number" tick={{ fontSize: 9, fill: "#64748b" }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} />
@@ -226,8 +228,10 @@ export default function RiskWorkspace({ onNavigate }: { onNavigate?: (tab: strin
                 )}
 
                 <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-700">
-                  <MetricBox label="Positions" value={String(data.n_positions)} />
-                  <MetricBox label="NAV" value={fmt$(data.nav)} />
+                  <MetricBox label="Positions" value={String(data.n_positions)}
+                    hint="Number of open positions across equity, options and crypto (from the Alpaca book)." />
+                  <MetricBox label="NAV" value={fmt$(data.nav)}
+                    hint="Net Asset Value = cash + market value of open positions (Alpaca paper account equity)." />
                 </div>
               </div>
 
@@ -346,9 +350,9 @@ export default function RiskWorkspace({ onNavigate }: { onNavigate?: (tab: strin
   );
 }
 
-function MetricBox({ label, value, sub, warn, neutral }: { label: string; value: string; sub?: string; warn?: boolean; neutral?: boolean }) {
+function MetricBox({ label, value, sub, warn, neutral, hint }: { label: string; value: string; sub?: string; warn?: boolean; neutral?: boolean; hint?: string }) {
   return (
-    <div className="bg-slate-800/60 rounded-lg p-2.5">
+    <div className="bg-slate-800/60 rounded-lg p-2.5" title={hint}>
       <div className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</div>
       <div className={clsx("text-base font-mono font-bold mt-0.5", warn ? "text-red-400" : neutral ? "text-slate-200" : "text-slate-100")}>{value}</div>
       {sub && <div className="text-[10px] text-slate-500">{sub}</div>}

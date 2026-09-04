@@ -32,6 +32,34 @@ function dteFromExpiry(expiry: string): number {
   return Math.max(0, Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
+/* Hover explanation (range + inference) for every column in the Order History table. */
+const COL_HELP: Record<string, string> = {
+  Time:    "Order timestamp (UTC). Newest first.",
+  Strategy:"Strategy / agent that produced the order.",
+  Ticker:  "Traded symbol — OCC code for options (e.g. AAPL260904C00330000), PAIR/USD for crypto.",
+  Type:    "CALL / PUT for options; EQUITY or CRYPTO for spot rows.",
+  Side:    "Buy = open/long leg · Sell = close/short leg.",
+  Qty:     "Quantity — option contracts (each ×100 multiplier), base units for crypto, shares for equity.",
+  "Fill $":"Executed average fill price. When not yet filled, ≈ shows the live ref price so the column is never blank.",
+  "Δ":     "Delta: option first-order sensitivity to a $1 underlying move (range −1..+1; ≈0.5 ATM). Spot rows show the position's unit delta: +1.00 long / −1.00 short.",
+  Prem:    "Premium: option = mid-market premium per contract. Spot rows = current market price (unit premium).",
+  DTE:     "Days to expiry (options; 0 = expires today, red <7). SPOT rows have no expiry — badge shown instead.",
+  Score:   "Agent conviction score (−1..+1). >0 positive-expected signal; ±threshold drives sizing.",
+  Mode:    "Execution mode: paper (Alpaca paper) or live.",
+  Actions: "View details · chain-aware Analytics · scoped Risk · create Hypothesis.",
+};
+function fillDisplay(s: Signal): string {
+  if (s.fill_price) return fmt$(s.fill_price);
+  return s.mark != null && s.mark > 0 ? `≈${fmt$(s.mark)}` : "—";
+}
+function premDisplay(s: Signal): string {
+  if (s.option?.premium != null) return fmt$(s.option.premium);
+  return s.mark != null && s.mark > 0 ? fmt$(s.mark) : "—";
+}
+function spotDelta(s: Signal): string {
+  return s.direction === "buy" ? "+1.00" : "−1.00";
+}
+
 /** Chain-aware analytics deep link for a signal (underlying for options, else px series). */
 function smartAnalyzeLink(s: Signal): string {
   const opt = parseOptionDetails(s.ticker);
@@ -214,7 +242,7 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
               <tr className="text-slate-400">
                 <th className="py-2 px-2 w-6" />
                 {["Time","Strategy","Ticker","Type","Side","Qty","Fill $","Δ","Prem","DTE","Score","Mode","Actions"].map(h => (
-                  <th key={h} className={clsx("py-2 px-3 font-medium text-[10px] uppercase tracking-wider",
+                  <th key={h} title={COL_HELP[h] || h} className={clsx("py-2 px-3 font-medium text-[10px] uppercase tracking-wider",
                     ["Qty","Fill $","Δ","Prem","DTE","Score"].includes(h) ? "text-right" : "text-left"
                   )}>{h}</th>
                 ))}
@@ -261,19 +289,19 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
                       {s.direction.toUpperCase()}
                     </td>
                     <td className="py-1.5 px-3 text-right text-slate-300">{s.quantity.toFixed(4)}</td>
-                    <td className="py-1.5 px-3 text-right text-slate-300">{s.fill_price ? fmt$(s.fill_price) : "—"}</td>
+                    <td className="py-1.5 px-3 text-right text-slate-300">{fillDisplay(s)}</td>
                     <td className="py-1.5 px-3 text-right text-violet-300">
-                      {isOpt ? (s.option?.delta != null ? s.option.delta.toFixed(2) : "—") : "—"}
+                      {isOpt ? (s.option?.delta != null ? s.option.delta.toFixed(2) : "—") : spotDelta(s)}
                     </td>
-                    <td className="py-1.5 px-3 text-right text-amber-300">
-                      {isOpt ? (s.option?.premium != null ? fmt$(s.option.premium) : "—") : "—"}
-                    </td>
+                    <td className="py-1.5 px-3 text-right text-amber-300">{premDisplay(s)}</td>
                     <td className="py-1.5 px-3 text-right">
-                      {(s.option?.dte ?? dte) != null ? (
+                      {isOpt ? (
                         <span className={clsx("text-[10px] font-bold", (s.option?.dte ?? dte)! <= 7 ? "text-red-400" : (s.option?.dte ?? dte)! <= 30 ? "text-amber-400" : "text-slate-300")}>
                           {(s.option?.dte ?? dte)}d
                         </span>
-                      ) : "—"}
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-500">SPOT</span>
+                      )}
                     </td>
                     <td className={clsx("py-1.5 px-3 text-right font-bold",
                       (s.signal_score ?? 0) > 0 ? "text-emerald-400" : "text-red-400")}>

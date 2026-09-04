@@ -44,7 +44,7 @@ const OP_TABS: { id: Tab; label: string; icon: React.ReactNode; stage: string }[
   { id: "dashboard",   label: "Dashboard",     icon: <LayoutDashboard size={14} />, stage: "MONITORING" },
   { id: "crypto",      label: "Crypto",        icon: <Zap             size={14} />, stage: "DEPLOYED" },
   { id: "options",     label: "Options",       icon: <Activity        size={14} />, stage: "DEPLOYED" },
-  { id: "signals",     label: "Signals",       icon: <Table2          size={14} />, stage: "DEPLOYED" },
+  { id: "signals",     label: "Orders",       icon: <Table2          size={14} />, stage: "DEPLOYED" },
   { id: "backtest",    label: "Backtest",      icon: <BarChart2       size={14} />, stage: "TESTING" },
   { id: "intelligence",label: "Intelligence",  icon: <Brain           size={14} />, stage: "MONITORING" },
   { id: "graph",       label: "KG Explorer",   icon: <GitBranch       size={14} />, stage: "MONITORING" },
@@ -443,7 +443,7 @@ function StatBox({ label, value, color }: { label: string; value: string; color?
 }
 
 function SignalsTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
-  return <div className="h-full p-3" data-series-id="signals-tab" data-series-name="Signals" data-series-source="postgres"><SignalsTable onNavigate={onNavigate} /></div>;
+  return <div className="h-full p-3" data-series-id="signals-tab" data-series-name="Orders" data-series-source="postgres"><SignalsTable onNavigate={onNavigate} /></div>;
 }
 
 function CryptoTab() {

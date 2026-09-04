@@ -89,6 +89,10 @@ export interface Signal {
     premium:       number | null;
     iv:            number | null;
   } | null;
+  /** Live ref price when the order is unfilled (mark ≈ current market). */
+  mark?: number | null;
+  /** asset class of the row: "option" | "crypto" | "equity". */
+  asset_class?: string | null;
 }
 
 export interface GraphNode {

@@ -39,6 +39,15 @@ const TIERS: { id: Tier; label: string; icon: React.ReactNode; desc: string }[] 
   { id: "cognitive",    label: "Cognitive",    icon: <Brain       size={13} />, desc: "What does it mean?" },
 ];
 
+/* Hover explanation of each analytics tier (ranges/inference). */
+const TIER_HINT: Record<Tier, string> = {
+  descriptive:  "What happened — central tendency, dispersion, distribution shape, stationarity of the series.",
+  diagnostic:   "Why it happened — volatility clustering (GARCH), signal accuracy (IC/IR), factor exposures (α, β, R²).",
+  predictive:   "What will happen — ARMA/GARCH forecasts with persistence, half-life, and model-comparison criteria (AIC/BIC).",
+  prescriptive: "What should we do — portfolio optimization (MVO) weights and efficient-frontier output.",
+  cognitive:    "What does it mean — anomaly detection + LLM interpretation of the descriptive/diagnostic results in narrative form.",
+};
+
 const DATE_PRESETS = [
   { label: "1M", days: 30 },
   { label: "3M", days: 90 },
@@ -320,7 +329,7 @@ export default function AnalyticsPanel() {
       {/* ── Tier Navigation ────────────────────────────────────────────────── */}
       <div className="flex gap-0 border-b border-slate-700 overflow-x-auto">
         {TIERS.map(t => (
-          <button key={t.id} onClick={() => setActiveTier(t.id)}
+          <button key={t.id} onClick={() => setActiveTier(t.id)} title={TIER_HINT[t.id]}
             className={clsx(
               "flex items-center gap-1.5 px-4 py-2 text-xs font-mono whitespace-nowrap transition-colors border-b-2 -mb-px",
               activeTier === t.id
@@ -932,12 +941,12 @@ function GarchPanel({ ticker }: { ticker: string }) {
               <table className="w-full text-[10px] font-mono">
                 <thead><tr className="text-slate-500">
                   <th className="text-left py-1 px-1">Variant</th>
-                  <th className="text-right py-1 px-1">AIC</th>
-                  <th className="text-right py-1 px-1">BIC</th>
-                  <th className="text-right py-1 px-1">LogLik</th>
-                  <th className="text-right py-1 px-1">Persistence</th>
-                  <th className="text-right py-1 px-1">Half-Life</th>
-                  <th className="text-right py-1 px-1">Converged</th>
+                  <th className="text-right py-1 px-1" title="Akaike Information Criterion — lower is better; balances fit vs parsimony.">AIC</th>
+                  <th className="text-right py-1 px-1" title="Bayesian Information Criterion — lower is better; penalizes complexity more than AIC.">BIC</th>
+                  <th className="text-right py-1 px-1" title="Log-likelihood — higher is better; larger = data more likely under the model.">LogLik</th>
+                  <th className="text-right py-1 px-1" title="Vol/cluster persistence (α+β). ~0.9+ = slow decay (persistent); <0.85 = fast mean-reversion.">Persistence</th>
+                  <th className="text-right py-1 px-1" title="Half-life = time for a volatility shock to halve. Shorter = faster reversion to baseline.">Half-Life</th>
+                  <th className="text-right py-1 px-1" title="Whether the optimizer converged — a reliable parameter estimate.">Converged</th>
                 </tr></thead>
                 <tbody>
                   {result.model_comparison.map(m => (
@@ -1737,11 +1746,47 @@ function InterpretationPanel({ data }: { data: AIInterpretation }) {
 // Shared Components
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/* Hover explanation (range + inference) for analytics metrics by label. */
+const STAT_HINTS: Record<string, string> = {
+  "Mean": "Average value of the series in the window. Compare to median to gauge symmetry.",
+  "Median": "50th percentile — robust central value less sensitive to outliers than the mean.",
+  "Std Dev": "Dispersion of daily returns. Higher = riskier. ~annualize ×√252 for annualized vol.",
+  "Variance": "Std dev squared (σ²); used in risk models, not directly on the return scale.",
+  "Skewness": "Asymmetry of returns. |skew|>1 highlighted: negative skew = fat left tail (crash risk), positive = right tail.",
+  "Excess Kurtosis": "Tail thickness vs normal (0 = normal). >2 highlighted: leptokurtic = fatter tails, more tail-risk than Gaussian models assume.",
+  "Min": "Worst single-period return in the window.",
+  "Max": "Best single-period return in the window.",
+  "Q1 (25%)": "First quartile; 25% of returns lie below it.",
+  "Q3 (75%)": "Third quartile; 75% of returns lie below it.",
+  "IQR": "Interquartile range (Q3−Q1) — central 50% dispersion, outlier-robust.",
+  "Range": "Max − Min — full spread of returns observed.",
+  "Ann. Mean Return": "Annualized average return; used to assess long-run edge. >0 attractive, < risk-free suggests no alpha.",
+  "Ann. Volatility": "Annualized std dev (×√252). Equities ~15–25%, crypto 40–80%+; higher = more uncertainty.",
+  "Jarque-Bera": "Normality test stat; high p → non-normal returns (fat tails, skew) to account for in VaR.",
+  "ADF (Stationarity)": "Augmented Dickey-Fuller: p<0.05 → reject unit root = stationary series (mean-reverting candidate). p>0.05 → non-stationary (trending).",
+  "KPSS (Stationarity)": "Opposite null to ADF: p<0.05 → non-stationary. Use ADF+KPSS together; agreement increases confidence.",
+  "Mean IC": "Mean information-coefficient (rank corr of signal→forward returns). 0 = no predictive power; >0.03 decent for high-frequency.",
+  "IC Std": "Volatility of IC — lower = more stable signal.",
+  "IR": "Information ratio = mean IC / IC std. >0.5 strong signal consistency; >1 excellent.",
+  "t-stat": "Signal t-statistic; |t|>2 roughly significant → signal not explainable by noise.",
+  "Alpha (α)": "Intercept of regression vs market — risk-adjusted excess return after β. >0 = adds value.",
+  "Beta (β)": "Exposure to market factor. 1 = same as market; >1 more volatile (concentrated in β); 0 = market-neutral.",
+  "R²": "Fraction of return variance explained by the model — 0 no fit, 1 perfect.",
+  "Adj. R²": "R² penalized for #regressors — comparable across models.",
+  "ARCH LM (Volatility Clustering)": "Tests for conditional heteroskedasticity (vol clustering). Significant → vol is time-varying; use GARCH-family models.",
+  "α (ARCH)": "ARCH constant — baseline variance level.",
+  "β (GARCH)": "GARCH persistence of variance shocks; closer to 1 = shocks decay slowly (long memory).",
+  "Persistence": "α+β — <0.85 fast mean-reverting vol, ~0.9+ slowly decaying (persistent). >1 invalid (non-stationary).",
+  "Assets": "Number of assets / observations used in the model.",
+  "Sig. Components (Kaiser)": "Principal components with eigenvalue>1 — dominant risk drivers in the covariance matrix.",
+  "90% Variance": "Number of PCs explaining 90% of variance — fewer = stronger common factor structure.",
+};
 function StatCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  const hint = STAT_HINTS[label];
   return (
     <div className={clsx("bg-slate-800 rounded-lg p-2 border",
       highlight ? "border-amber-700/50" : "border-slate-700")}>
-      <div className="text-[9px] text-slate-500 uppercase tracking-wider">{label}</div>
+      <div className="text-[9px] text-slate-500 uppercase tracking-wider" title={hint}>{label}</div>
       <div className={clsx("text-xs font-bold font-mono mt-0.5",
         highlight ? "text-amber-400" : "text-slate-200")}>
         {value}

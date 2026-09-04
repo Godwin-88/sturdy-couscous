@@ -91,6 +91,34 @@ def _option_meta(symbol: str) -> dict | None:
         return None
 
 
+def _live_mark(symbol: str):
+    """Best-effort current mark/ref price for an order row.
+
+    Options → last traded / mid premium from the live snapshot;
+    everything else (crypto, equity) → last close from the data provider.
+    Never raises; returns None when unavailable.
+    """
+    try:
+        if _OPT_RE.match(symbol):
+            from agent.options_market import provider as _oprov
+            snap = _oprov.get_snapshot(symbol)
+            if isinstance(snap, dict):
+                b = snap.get("bid")
+                a = snap.get("ask")
+                last = snap.get("last")
+                if b is not None and a is not None and float(b) > 0 and float(a) > 0:
+                    return round((float(b) + float(a)) / 2.0, 2)
+                if last:
+                    return round(float(last), 2)
+        from agent.alpaca_data import provider as _dprov
+        df = _dprov.get_ohlcv(symbol, days=2)
+        if df is not None and not getattr(df, "empty", True) and "Close" in df.columns:
+            return round(float(df["Close"].iloc[-1]), 2)
+    except Exception:
+        pass
+    return None
+
+
 class PlaceOrderRequest(BaseModel):
     ticker: str
     direction: str  # "buy" or "sell"
@@ -121,7 +149,13 @@ def get_signals(limit: int = 50):
     out = []
     for r in (dict(zip(cols, row)) for row in rows):
         sym = str(r.get("ticker") or "")
-        r["option"] = _option_meta(sym) if _OPT_RE.match(sym) else None
+        if _OPT_RE.match(sym):
+            r["option"] = _option_meta(sym)
+            r["asset_class"] = "option"
+        else:
+            r["option"] = None
+            r["asset_class"] = "crypto" if "/" in sym.upper() else "equity"
+        r["mark"] = _live_mark(sym)
         out.append(r)
     return out
 
