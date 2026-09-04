@@ -7,8 +7,8 @@ import { setScreenContext } from "@/lib/screenContext";
 import { RefreshCw, ChevronDown, ChevronRight, BookOpen, BarChart, Brain, Search, X, AlertCircle, Plus, Download, Radio, Wallet, ExternalLink, Activity, Clock, Zap, TrendingUp, Ban, Shield } from "lucide-react";
 import clsx from "clsx";
 import OrderDetailDrawer from "@/components/OrderDetailDrawer";
-import OrderTicketModal from "@/components/OrderTicketModal";
-import type { OrderTicketInitial } from "@/components/OrderTicketModal";
+import OptionOrderModal from "@/components/OptionOrderModal";
+import type { OptionOrderInitial } from "@/components/OptionOrderModal";
 
 type SubTab = "all" | "suggested" | "rejected" | "fills";
 
@@ -103,7 +103,7 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
   const [subLoading, setSubLoading] = useState(false);
 
   // Place Order modal state — can be prefilled from a suggested signal
-  const [placeInitial, setPlaceInitial] = useState<{ ticker: string; direction: "buy" | "sell"; quantity?: string; signal_id?: string | null } | null>(null);
+  const [placeInitial, setPlaceInitial] = useState<{ ticker: string; direction: "buy" | "sell"; quantity?: string; signal_id?: string | null; matchingNote?: string | null } | null>(null);
 
   // Expanded lineage state
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -515,14 +515,15 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
         )}
       </div>
 
-      {/* Place Order Modal (shared rich two-phase design) */}
+      {/* Place Order Modal (shared rich two-phase design — same as Options Agent Suggestions) */}
       {placeOpen && (
-        <OrderTicketModal
+        <OptionOrderModal
           initial={{
             ticker: placeInitial?.ticker ?? "",
             direction: placeInitial?.direction ?? "buy",
             quantity: placeInitial?.quantity ? Number(placeInitial.quantity) : undefined,
             signal_id: placeInitial?.signal_id ?? null,
+            matchingNote: placeInitial?.matchingNote ?? null,
           }}
           onClose={() => setPlaceOpen(false)}
           onSuccess={() => { refresh(); setPlaceOpen(false); setPlaceInitial(null); }}
