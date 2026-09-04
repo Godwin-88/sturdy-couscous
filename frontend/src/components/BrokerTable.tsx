@@ -86,7 +86,6 @@ export default function BrokerTable({ onNavigate, maxHeight = "max-h-[320px]" }:
 
   const handleAnalyze = (p: AlpacaPosition) => {
     navigate(`/analytics?series=${encodeURIComponent(seriesIdForPosition(p.symbol))}`);
-    onNavigate?.("analytics");
   };
 
   if (!positions || positions.length === 0) {
