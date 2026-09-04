@@ -7,6 +7,8 @@ import { setScreenContext } from "@/lib/screenContext";
 import { RefreshCw, ChevronDown, ChevronRight, BookOpen, BarChart, Brain, Search, X, AlertCircle, Plus, Download, Radio, Wallet, ExternalLink, Activity, Clock, Zap, TrendingUp, Ban, Shield } from "lucide-react";
 import clsx from "clsx";
 import OrderDetailDrawer from "@/components/OrderDetailDrawer";
+import OrderTicketModal from "@/components/OrderTicketModal";
+import type { OrderTicketInitial } from "@/components/OrderTicketModal";
 
 type SubTab = "all" | "suggested" | "rejected" | "fills";
 
@@ -513,10 +515,15 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
         )}
       </div>
 
-      {/* Place Order Modal */}
+      {/* Place Order Modal (shared rich two-phase design) */}
       {placeOpen && (
-        <PlaceOrderModal
-          initial={placeInitial}
+        <OrderTicketModal
+          initial={{
+            ticker: placeInitial?.ticker ?? "",
+            direction: placeInitial?.direction ?? "buy",
+            quantity: placeInitial?.quantity ? Number(placeInitial.quantity) : undefined,
+            signal_id: placeInitial?.signal_id ?? null,
+          }}
           onClose={() => setPlaceOpen(false)}
           onSuccess={() => { refresh(); setPlaceOpen(false); setPlaceInitial(null); }}
         />

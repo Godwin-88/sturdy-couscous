@@ -326,8 +326,8 @@ export interface SuggestedSignal {
 }
 
 export const signalsApi = {
-  placeOrder: (req: { ticker: string; direction: string; quantity: number; order_type?: string; limit_price?: number | null; venue?: string; signal_id?: string | null }) =>
-    apiFetch<{ order_id: string; status: string; mode: string; venue: string; ticker: string; direction: string; quantity: number; fill_price: number; fee_usd: number; signal_id?: string | null; created_at: string }>("/signals/place", { method: "POST", body: JSON.stringify(req) }),
+  placeOrder: (req: { ticker: string; direction: string; quantity: number; order_type?: string; limit_price?: number | null; venue?: string; signal_id?: string | null; preview?: boolean; proposal_token?: string | null }) =>
+    apiFetch<{ order_id: string; status: string; mode: string; venue: string; ticker: string; direction: string; quantity: number; fill_price: number; fee_usd: number; signal_id?: string | null; created_at: string; proposal_token?: string | null; risk_preview?: { ref_price: number; estimated_notional_usd?: number; estimated_fee_usd?: number; max_loss_est_usd?: number; note?: string; notional?: number; fee_usd?: number } | null }>("/signals/place", { method: "POST", body: JSON.stringify(req) }),
   suggested: (limit = 100, ticker?: string) =>
     apiFetch<SuggestedSignal[]>(`/signals/suggested?${new URLSearchParams({ ...(ticker ? { ticker } : {}), limit: String(limit) }).toString()}`),
   exportSignals: (format = "json", startDate?: string, endDate?: string) => {
