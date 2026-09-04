@@ -57,6 +57,24 @@ def suggestions(pair: str, lens: str = "defensive", nav: float = 100_000.0,
         raise HTTPException(status_code=502, detail=str(e))
 
 
+def _quote_usd_rate(pair: str) -> float:
+    """USD price of the quote currency for a pair (1.0 for */USD).
+
+    Spot data for non-USD-quoted pairs (e.g. UNI/BTC) is denominated in the
+    quote currency, so the USD notional must convert via {quote}/USD.
+    """
+    quote = (pair.upper().split("/", 1) + ["USD"])[1]
+    if quote == "USD":
+        return 1.0
+    try:
+        df = provider.get_ohlcv(f"{quote}/USD", days=2)
+        if df is not None and not getattr(df, "empty", True):
+            return float(df["Close"].iloc[-1])
+    except Exception:
+        pass
+    return 0.0
+
+
 class PreviewRequest(BaseModel):
     pair: str
     side: str = "buy"
@@ -83,16 +101,30 @@ def preview(req: PreviewRequest):
             spot = float(df["Close"].iloc[-1])
     except Exception:
         pass
-    notional = spot * req.qty if spot else req.limit_price or 0.0
-    if spot and req.qty * spot < MIN_CRYPTO_NOTIONAL_USD:
-        raise HTTPException(status_code=400,
-                            detail=f"cost basis ${round(req.qty * spot,2)} below Alpaca ${MIN_CRYPTO_NOTIONAL_USD:.0f} minimum")
+    usd_rate = _quote_usd_rate(req.pair)
+    if spot and usd_rate:
+        notional_usd = spot * req.qty * usd_rate
+        if notional_usd < MIN_CRYPTO_NOTIONAL_USD:
+            raise HTTPException(
+                status_code=400,
+                detail=(f"cost basis ${round(notional_usd, 2)} below Alpaca "
+                        f"${MIN_CRYPTO_NOTIONAL_USD:.0f} minimum (pair {req.pair.upper()}, "
+                        f"spot {spot:.6g} {req.pair.upper().split('/')[1]}, usd_rate {usd_rate:.4g})"))
+    elif spot:
+        # No quote→USD rate available: fall back to legacy USD-assumed check.
+        notional_usd = spot * req.qty
+        if notional_usd < MIN_CRYPTO_NOTIONAL_USD:
+            raise HTTPException(status_code=400,
+                                detail=f"cost basis ${round(notional_usd, 2)} below Alpaca ${MIN_CRYPTO_NOTIONAL_USD:.0f} minimum")
+    else:
+        notional_usd = req.limit_price or 0.0
     return {
         "preview": True, "proposal_token": token, "spot": spot,
         "risk_preview": {
-            "estimated_notional_usd": round(notional, 2),
-            "estimated_fee_usd": round(notional * 0.0026, 2),
-            "max_loss_est_usd": round(notional, 2),
+            "estimated_notional_usd": round(notional_usd, 2),
+            "estimated_fee_usd": round(notional_usd * 0.0026, 2),
+            "max_loss_est_usd": round(notional_usd, 2),
+            "quote_usd_rate": round(usd_rate, 6),
             "note": "Preview only — no execution. Echo proposal_token back to confirm.",
         },
     }
