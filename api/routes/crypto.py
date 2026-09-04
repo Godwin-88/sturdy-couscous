@@ -48,9 +48,10 @@ def tape(pair: str, days: int = 90):
 
 @router.get("/suggestions")
 def suggestions(pair: str, lens: str = "defensive", nav: float = 100_000.0,
-                regime: str | None = None):
+                regime: str | None = None, strategy: str | None = None):
     try:
-        return suggest_crypto(pair, lens=lens, nav=nav, regime_override=regime)
+        return suggest_crypto(pair, lens=lens, nav=nav, regime_override=regime,
+                              strategy_filter=strategy)
     except Exception as e:
         logger.error(f"crypto suggestions failed {pair}: {e}")
         raise HTTPException(status_code=502, detail=str(e))

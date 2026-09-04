@@ -21,6 +21,7 @@ export default function CryptoPanel() {
   const [sug, setSug] = useState<CryptoSuggestions | null>(null);
   const [lens, setLens] = useState<"defensive" | "average">("defensive");
   const [regime, setRegime] = useState<string | "">("");
+  const [strategyFilter, setStrategyFilter] = useState<string>("");
   const [nav, setNav] = useState(100000);
   const [loadingTape, setLoadingTape] = useState(false);
   const [loadingSug, setLoadingSug] = useState(false);
@@ -55,23 +56,23 @@ export default function CryptoPanel() {
     setLoadingTape(false);
   }, [pair]);
 
-  const loadSug = useCallback(async (p = pair, l = lens, r = regime, n = nav) => {
+  const loadSug = useCallback(async (p = pair, l = lens, r = regime, n = nav, st = strategyFilter) => {
     setLoadingSug(true); setSugErr(null);
     try {
-      const s = await cryptoApi.suggestions(p, l, n, r || null);
+      const s = await cryptoApi.suggestions(p, l, n, r || null, st || null);
       setSug(s);
     } catch (e: any) { setSugErr(String(e?.message || e)); setSug(null); }
     setLoadingSug(false);
-  }, [pair, lens, regime, nav]);
+  }, [pair, lens, regime, nav, strategyFilter]);
 
   const loadAll = useCallback(async (p = pair) => {
-    await Promise.all([loadTape(p), loadSug(p, lens, regime, nav)]);
+    await Promise.all([loadTape(p), loadSug(p, lens, regime, nav, strategyFilter)]);
     pub({});
-  }, [pair, lens, regime, nav, loadTape, loadSug, pub]);
+  }, [pair, lens, regime, nav, strategyFilter, loadTape, loadSug, pub]);
 
   // Initial load + whenever pair/filters change
   useEffect(() => { loadAll(pair); }, [pair]);
-  useEffect(() => { if (pair) loadSug(pair, lens, regime, nav); }, [lens, regime, nav]);
+  useEffect(() => { if (pair) loadSug(pair, lens, regime, nav, strategyFilter); }, [lens, regime, nav, strategyFilter]);
 
   // Universe search
   const search = useCallback(async (query = q) => {
@@ -80,7 +81,7 @@ export default function CryptoPanel() {
   useEffect(() => { search(q); }, [q]);
   useEffect(() => { search(""); }, []);
 
-  const pickPair = (p: string) => { setPair(p); setQ(""); };
+  const pickPair = (p: string) => { setPair(p); setQ(""); setStrategyFilter(""); };
 
   const openTicket = (card: CryptoCard) => {
     setPlacedCard(card);
@@ -160,6 +161,16 @@ export default function CryptoPanel() {
             <option value="">auto</option>
             {REGIMES.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
+          <span className="text-slate-500">strategy</span>
+          <select value={strategyFilter || ""} onChange={(e) => setStrategyFilter(e.target.value)}
+            className="bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-[10px] font-mono text-slate-300 max-w-[170px]">
+            <option value="">all strategies</option>
+            {(sug?.all_strategies ?? []).map((s) => (
+              <option key={s.name} value={s.name}>
+                {s.name}{s.computable === false ? " ⛔(spot-incompatible)" : ""}
+              </option>
+            ))}
+          </select>
           <span className="text-slate-500">nav</span>
           <input type="number" value={nav} onChange={(e) => setNav(Number(e.target.value) || 0)}
             className="w-24 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-[10px] font-mono text-slate-200" />
@@ -218,10 +229,18 @@ export default function CryptoPanel() {
         <div className="p-3 space-y-2">
           {sugErr ? <div className="text-xs font-mono text-red-400 bg-red-950/30 border border-red-800 rounded p-2">{sugErr}</div>
             : loadingSug && !sug ? <div className="flex items-center gap-2 text-xs text-slate-400 font-mono"><Loader2 size={12} className="animate-spin" /> Computing {pair} strategies from tape + KG…</div>
-            : !sug || sug.suggestions.length === 0 ? <div className="text-xs text-slate-500 font-mono">No strategies scored for {pair} right now — try another pair or lens.</div>
+            : !sug || sug.suggestions.length === 0 ? (
+              sug?.filter_note ? <div className="text-xs font-mono text-amber-300 bg-amber-950/20 border border-amber-800 rounded p-2">{sug.filter_note}</div>
+              : <div className="text-xs text-slate-500 font-mono">No strategies scored for {pair} right now — try another pair, lens, regime or strategy.</div>
+            )
             : sug.suggestions.map((s) => (
               <div key={s.strategy} className="rounded-lg border border-slate-700 bg-slate-950/40 p-2 flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold text-slate-100">{s.strategy}</span>
+                {s.activated !== false && s.activated !== undefined ? (
+                  <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-violet-600/20 text-violet-300 border border-violet-700">regime {s.regime ?? "—"}</span>
+                ) : (
+                  <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-slate-700/30 text-slate-400 border border-slate-600">not regime-active (forced)</span>
+                )}
                 <span className={clsx("text-[10px] font-mono px-1.5 py-0.5 rounded", s.side === "buy" ? "bg-emerald-600/20 text-emerald-300 border border-emerald-700" : "bg-red-600/20 text-red-300 border border-red-700")}>{s.side.toUpperCase()}</span>
                 <span className="text-[10px] font-mono text-slate-400">qty {s.qty_rec.toFixed(3)}</span>
                 <span className="text-[10px] font-mono text-amber-300">score {s.score.toFixed(1)}</span>
