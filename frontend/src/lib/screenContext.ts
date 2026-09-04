@@ -22,6 +22,10 @@ export interface ScreenContextData {
   strike?: number;
   /** Optional: loss-aversion lens */
   lens?: "average" | "defensive";
+  /** Optional: user-selected regime override (UI scenario playback) */
+  regime?: string;
+  /** Optional: crypto pair displayed (e.g. "BTC/USD") */
+  pair?: string;
   /** Optional: a pre-filled order draft from the Financial Engineer chat */
   prefillDraft?: OrderDraft;
   /** Optional: free-form extra context (spot, dte, liquidity notes …) */

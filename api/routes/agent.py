@@ -99,6 +99,8 @@ def agent_risk():
     # is sync and called from the FastAPI threadpool).
     nav_source = "initial_capital"
     nav = portfolio.get("nav") or float(os.getenv("INITIAL_CAPITAL_USD", "10000"))
+    broker_positions: list[dict] = []
+    cash = portfolio.get("cash", 0)
     try:
         from agent.alpaca_client import alpaca
         import asyncio
@@ -107,6 +109,7 @@ def agent_risk():
                 loop = asyncio.new_event_loop()
                 try:
                     acct = loop.run_until_complete(alpaca.get_account())
+                    broker_positions = loop.run_until_complete(alpaca.get_positions())
                 finally:
                     loop.close()
             except RuntimeError:
@@ -129,21 +132,73 @@ def agent_risk():
     concentration = []
     gross_exposure = 0.0
     net_exposure = 0.0
-    for p in positions:
-        mkt_val = abs(p["quantity"] * p["current_price"])
-        pct_nav = mkt_val / nav if nav else 0
-        sign = 1 if p["direction"] == "buy" else -1
-        gross_exposure += mkt_val
-        net_exposure += sign * mkt_val
-        concentration.append({
-            "ticker":   p["ticker"],
-            "mkt_val":  round(mkt_val, 2),
-            "pct_nav":  round(pct_nav, 4),
-            "direction": p["direction"],
-            "pnl":      round(p["unrealised_pnl"], 2),
-        })
+    option_book = []
+    # Internal (Postgres) positions first — format as broker-style rows.
+    internal_positions = [
+        {
+            "symbol": p["ticker"],
+            "qty": float(p["quantity"]) * (1 if p["direction"] == "buy" else -1),
+            "avg_entry_price": float(p["avg_entry_price"]),
+            "current_price": float(p["current_price"]),
+            "market_value": abs(float(p["quantity"]) * float(p["current_price"])),
+            "side": p["direction"],
+            "unrealised_pnl": float(p.get("unrealised_pnl") or 0),
+        }
+        for p in positions
+    ]
+    all_positions = internal_positions + [
+        {
+            "symbol": p.get("symbol"),
+            "qty": float(p.get("qty") or 0),
+            "avg_entry_price": float(p.get("avg_entry_price") or 0),
+            "current_price": float(p.get("current_price") or 0),
+            "market_value": abs(float(p.get("market_value") or 0)),
+            "side": "buy" if float(p.get("qty") or 0) >= 0 else "sell",
+            "unrealised_pnl": 0.0,
+        }
+        for p in broker_positions or []
+        if p.get("symbol")
+    ]
+    # Dedup by symbol (broker truth wins over the internal ledger).
+    _by_symbol: dict[str, dict] = {}
+    for p in all_positions:
+        _by_symbol[p["symbol"]] = p
+    merged_positions = list(_by_symbol.values())
 
-    concentration.sort(key=lambda x: x["pct_nav"], reverse=True)
+    try:
+        from agent.risk_book import build_risk_metrics, _dte
+        metrics = build_risk_metrics(merged_positions, nav)
+        gross_exposure = metrics["gross_exposure"]
+        net_exposure = metrics["net_exposure"]
+        concentration = metrics["concentration"]
+        option_book = metrics["option_book"]
+        n_broker_positions = metrics["n_positions"]
+        # surface the option book into the response for the chat/dashboard
+        for leg in option_book:
+            if leg.get("expiry") and leg.get("underlying"):
+                leg["dte"] = _dte(leg.get("expiry"))
+        # legacy fields from internal rows for P&L
+        for c in concentration:
+            sym = c["ticker"]
+            if sym in _by_symbol:
+                c["pnl"] = round(float(_by_symbol[sym].get("unrealised_pnl") or 0), 2)
+    except Exception:
+        # fall back to old internal-only aggregation (hermetic tests)
+        for p in positions:
+            mkt_val = abs(p["quantity"] * p["current_price"])
+            pct_nav = mkt_val / nav if nav else 0
+            sign = 1 if p["direction"] == "buy" else -1
+            gross_exposure += mkt_val
+            net_exposure += sign * mkt_val
+            concentration.append({
+                "ticker":   p["ticker"],
+                "mkt_val":  round(mkt_val, 2),
+                "pct_nav":  round(pct_nav, 4),
+                "direction": p["direction"],
+                "pnl":      round(p["unrealised_pnl"], 2),
+            })
+        concentration.sort(key=lambda x: x["pct_nav"], reverse=True)
+        option_book = []
 
     # Drawdown limit (configurable via env, default 10%)
     dd_limit = float(os.getenv("DRAWDOWN_LIMIT", "0.10"))
@@ -185,8 +240,10 @@ def agent_risk():
         "drawdown_remaining": round(dd_remaining, 4),
         "kelly_fraction":   kelly_fraction,
         "concentration":    concentration,
-        "n_positions":      len(positions),
+        "n_positions":      len(merged_positions) if 'merged_positions' in dir() else len(positions),
         "halted":           portfolio.get("halted", False),
+        "option_book":      option_book,
+        "exposure_source":  "broker_book" if broker_positions else "internal_ledger",
     }
 
 

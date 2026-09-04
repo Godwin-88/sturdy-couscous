@@ -43,8 +43,8 @@ export default function CryptoPanel() {
   const [busy, setBusy] = useState(false);
 
   const pub = useCallback((extra = {}) => {
-    setScreenContext("crypto", { screen: "crypto", underlying: pair, extra: { orderDraft: undefined as any, ...extra } });
-  }, [pair]);
+    setScreenContext("crypto", { screen: "crypto", underlying: pair, regime: regime || undefined, lens, extra: { orderDraft: undefined as any, regime: regime || null, lens, strategy: strategyFilter || null, ...extra } });
+  }, [pair, regime, lens, strategyFilter]);
   useMemo(() => pub({}), [pub]);
 
   const loadTape = useCallback(async (p = pair) => {

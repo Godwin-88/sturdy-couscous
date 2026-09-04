@@ -28,6 +28,7 @@ can never take down the agent loop.
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from typing import Any
 
 from loguru import logger
@@ -125,6 +126,33 @@ class HedgeAgent:
             try:
                 snap = options_provider.get_snapshot(symbol)
                 g = (snap or {}).get("greeks") or {}
+                greeks_source = "snapshot"
+                # Near-expiry / stale-quote contracts sometimes return None
+                # greeks from the broker — fill with local Black-Scholes so the
+                # portfolio hedge state is real (not zeroed) for the book.
+                def _zeroed(gg: dict) -> bool:
+                    return all(
+                        gg.get(k) is None or float(gg.get(k) or 0) == 0.0
+                        for k in ("delta", "gamma", "theta", "vega")
+                    )
+                if not g or _zeroed(g):
+                    try:
+                        from agent.option_utils import parse_contract_symbol
+                        root, expiry, right, strike = parse_contract_symbol(symbol)
+                        spot = await self.spot(root)
+                        if spot and spot > 0 and strike and strike > 0:
+                            dte = max(0, (expiry - datetime.utcnow().date()).days) if hasattr(expiry, "strftime") else 0
+                            T = dte / 365.0 if dte else 1.0 / 365.0
+                            from agent.risk_book import black_scholes_greeks
+                            iv = (snap or {}).get("implied_volatility") or 0.40
+                            bs = black_scholes_greeks(spot, float(strike), T, float(iv), right=str(right or "C"))
+                            if not g:
+                                g = bs
+                            else:
+                                g = {**bs, **{k: g.get(k) for k in bs if g.get(k) is not None}}
+                            greeks_source = "bs_local"
+                    except Exception as e:
+                        logger.debug(f"hedge_agent: BS fill failed for {symbol}: {e}")
                 contracts = abs(qty)
                 d = float(g.get("delta") or 0.0) * MULT * contracts
                 gm = float(g.get("gamma") or 0.0) * MULT * contracts
@@ -137,7 +165,8 @@ class HedgeAgent:
                 detail.append({"symbol": symbol, "cls": "option", "qty": qty,
                                "delta": round(d, 2), "gamma": round(gm, 4),
                                "theta": round(th, 2), "vega": round(v, 2),
-                               "iv": g.get("implied_volatility")})
+                               "iv": g.get("implied_volatility"),
+                               "greeks_source": greeks_source})
             except Exception as e:
                 logger.warning(f"hedge_agent: snapshot failed for {symbol}: {e}")
         for k in agg:
@@ -160,9 +189,37 @@ class HedgeAgent:
 
     async def spot(self, underlying: str) -> float | None:
         try:
+            # Primary: the AlpacaDataProvider (proven to return real bars — the
+            # bare StockHistoricalDataClient instance returns empty data.keys()).
+            from agent.alpaca_data import provider
+            df = provider.get_ohlcv(underlying.upper(), days=4)
+            if df is not None and not getattr(df, "empty", True) and "Close" in df.columns:
+                return float(df["Close"].iloc[-1])
+        except Exception as e:
+            logger.debug(f"hedge_agent: provider spot failed for {underlying}: {e}")
+        try:
             bars = await alpaca.get_bars(underlying.upper(), limit=2) if alpaca else []
             if bars:
                 return float(bars[-1]["c"])
+            # get_bars may have failed on key mismatch — try the Alpaca client directly
+            if alpaca and alpaca.is_configured():
+                from alpaca.data.requests import StockBarsRequest
+                from alpaca.data.timeframe import TimeFrame
+                req = StockBarsRequest(
+                    symbol_or_symbols=underlying.upper(), timeframe=TimeFrame.Day, limit=2
+                )
+                resp = alpaca.data_client.get_stock_bars(req)
+                # Alpaca keys by the requested symbol, but be tolerant of case/format
+                for key in (underlying.upper(), underlying, underlying.upper().replace("/", "-")):
+                    if key in resp:
+                        rows = resp[key] or []
+                        if rows:
+                            return float(rows[-1].close)
+                # fall back to the only series present
+                if hasattr(resp, "data"):
+                    for rows in resp.data.values():
+                        if rows:
+                            return float(rows[-1].close)
         except Exception as e:
             logger.warning(f"hedge_agent: spot failed for {underlying}: {e}")
         return None
