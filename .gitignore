@@ -135,3 +135,6 @@ build/
 
 # Build output (generated)
 frontend/dist/
+
+# Fernet dev key file (generated at runtime)
+api/.credentials_key

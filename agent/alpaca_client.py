@@ -69,6 +69,24 @@ class AlpacaClient:
     def is_configured(self) -> bool:
         return bool(self.key_id and self.secret_key and _ALPACA_AVAILABLE)
 
+    def configure(self, key_id: str, secret_key: str, base_url: str | None = None,
+                  paper: bool | None = None) -> None:
+        """Swap the active credentials at runtime (per-user settings vault).
+
+        Invalidates cached trading/data clients so the next call uses the new
+        account without a process restart.
+        """
+        self.key_id = key_id or ""
+        self.secret_key = secret_key or ""
+        if base_url:
+            self.base_url = base_url
+        if paper is not None:
+            self.paper = paper
+        else:
+            self.paper = self.base_url.startswith("https://paper-api")
+        self._client = None
+        self._data_client = None
+
     async def place_order(self, symbol: str, side: str, qty: float,
                           order_type: str = "market") -> AlpacaOrderResult:
         if not self.is_configured():

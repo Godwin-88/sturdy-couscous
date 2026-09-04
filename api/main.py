@@ -29,6 +29,7 @@ from routes.alpaca        import router as alpaca_router
 from routes.options       import router as options_router
 from routes.chat          import router as chat_router
 from routes.crypto         import router as crypto_router
+from routes.settings       import router as settings_router
 
 load_dotenv()
 
@@ -77,6 +78,7 @@ app.include_router(alpaca_router)
 app.include_router(options_router)
 app.include_router(chat_router)
 app.include_router(crypto_router)
+app.include_router(settings_router)
 
 
 # ── Global exception handler: ensures CORS headers on all error responses ─────

@@ -1677,3 +1677,70 @@ export const cryptoApi = {
   confirm:      (body: { pair: string; side: string; qty: number; order_type?: string; limit_price?: number | null; proposal_token: string }) =>
     apiFetch<CryptoConfirm>("/crypto/confirm", { method: "POST", body: JSON.stringify(body) }),
 };
+
+// ── Settings / credential vault ──────────────────────────────────────────────
+const AUTH_TOKEN_KEY = "ga_auth_token";
+
+export const authStore = {
+  getToken: (): string | null => {
+    try { return localStorage.getItem(AUTH_TOKEN_KEY); } catch { return null; }
+  },
+  setToken: (t: string | null) => {
+    try {
+      if (t) localStorage.setItem(AUTH_TOKEN_KEY, t);
+      else localStorage.removeItem(AUTH_TOKEN_KEY);
+    } catch { /* ignore */ }
+  },
+};
+
+export async function apiFetchAuth<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = authStore.getToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers ?? {}),
+    },
+  });
+  if (res.status === 401) authStore.setToken(null);
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.json()).detail ?? ""; } catch { /* noop */ }
+    throw new Error(detail || `${res.status} ${res.statusText} - ${path}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export interface BrokerCredListItem {
+  id: number; broker: string; nickname: string; key_id: string | null;
+  base_url: string; paper: boolean; is_active: boolean; last_verified_at: string | null;
+}
+export interface SettingsStatus {
+  brokers_configured: string[];
+  active: Record<string, { nickname?: string; id: number; paper?: boolean }>;
+  api_keys: string[];
+  risk_prefs: Record<string, string>;
+}
+
+export const settingsApi = {
+  register: (username: string, passphrase: string) =>
+    apiFetchAuth<{ token: string; user: string }>("/api/settings/register", { method: "POST", body: JSON.stringify({ username, passphrase }) }),
+  login: (username: string, passphrase: string) =>
+    apiFetchAuth<{ token: string; user: string }>("/api/settings/login", { method: "POST", body: JSON.stringify({ username, passphrase }) }),
+  me: () => apiFetchAuth<{ user_id: number; ok: boolean }>("/api/settings/me"),
+  status: () => apiFetchAuth<SettingsStatus>("/api/settings/status"),
+  listBrokers: () => apiFetchAuth<BrokerCredListItem[]>("/api/settings/brokers"),
+  saveBroker: (b: { broker: string; key_id: string; secret: string; nickname?: string; base_url?: string; paper?: boolean; cred_id?: number }) =>
+    apiFetchAuth<{ id: number; masked: string; broker: string }>("/api/settings/brokers", { method: "POST", body: JSON.stringify(b) }),
+  deleteBroker: (id: number) => apiFetchAuth<{ deleted: boolean }>(`/api/settings/brokers/${id}`, { method: "DELETE" }),
+  setActive: (broker: string, cred_id: number) =>
+    apiFetchAuth<{ ok: boolean }>("/api/settings/brokers/active", { method: "POST", body: JSON.stringify({ broker, cred_id }) }),
+  getRisk: () => apiFetchAuth<Record<string, string>>("/api/settings/risk"),
+  putRisk: (prefs: Record<string, string>) =>
+    apiFetchAuth<Record<string, string>>("/api/settings/risk", { method: "PUT", body: JSON.stringify(prefs) }),
+  saveApiKey: (provider: string, key: string, base_url = "", model = "") =>
+    apiFetchAuth<{ ok: boolean; provider: string; masked: string }>("/api/settings/apikeys", { method: "POST", body: JSON.stringify({ provider, key, base_url, model }) }),
+  testApiKey: (provider: string, key: string, base_url = "", model = "") =>
+    apiFetchAuth<{ ok: boolean; status?: number; models?: string[]; error?: string }>("/api/settings/apikeys/test", { method: "POST", body: JSON.stringify({ provider, key, base_url, model }) }),
+};

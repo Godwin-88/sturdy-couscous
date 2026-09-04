@@ -19,5 +19,7 @@ statsmodels
 scikit-learn
 openai
 alpaca-py==0.44.0
+cryptography>=42.0.0
+
 pytest
 pytest-asyncio

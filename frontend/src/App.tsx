@@ -4,7 +4,7 @@ import clsx from "clsx";
 import {
   Activity, GitBranch, BarChart2, Table2, Radio, ShieldAlert, Brain,
   FlaskConical, LayoutDashboard, Terminal, Download, Search,
-  Lightbulb, Zap, Shield, Edit3, ChevronDown, ChevronUp, Bot,
+  Lightbulb, Zap, Shield, Edit3, ChevronDown, ChevronUp, Bot, Sliders,
 } from "lucide-react";
 import Sigma from "sigma";
 import Graph from "graphology";
@@ -33,12 +33,13 @@ import SimulateModal       from "@/components/SimulateModal";
 import SignalLineageModal  from "@/components/SignalLineageModal";
 import RecommendationsPanel from "@/components/RecommendationsPanel";
 import ScreenChat from "@/components/ScreenChat";
+import SettingsPanel from "@/components/SettingsPanel";
 import { agentApi, researchApi, hypothesisApi } from "@/lib/api";
 import { getScreenContext } from "@/lib/screenContext";
 import { registerWebMCPTools, unregisterWebMCPTools, WEBMCP_TOOL_COUNT } from "@/webmcp/tools";
 import { LABEL_COLOR } from "@/lib/utils";
 
-type Tab = "dashboard" | "crypto" | "graph" | "signals" | "backtest" | "risk" | "intelligence" | "options";
+type Tab = "dashboard" | "crypto" | "graph" | "signals" | "backtest" | "risk" | "intelligence" | "options" | "settings";
 
 const OP_TABS: { id: Tab; label: string; icon: React.ReactNode; stage: string }[] = [
   { id: "dashboard",   label: "Dashboard",     icon: <LayoutDashboard size={14} />, stage: "MONITORING" },
@@ -48,6 +49,7 @@ const OP_TABS: { id: Tab; label: string; icon: React.ReactNode; stage: string }[
   { id: "backtest",    label: "Backtest",      icon: <BarChart2       size={14} />, stage: "TESTING" },
   { id: "intelligence",label: "Intelligence",  icon: <Brain           size={14} />, stage: "MONITORING" },
   { id: "graph",       label: "KG Explorer",   icon: <GitBranch       size={14} />, stage: "MONITORING" },
+  { id: "settings",    label: "Settings",      icon: <Sliders        size={14} />, stage: "MONITORING" },
 ];
 
 const ANALYSIS_ITEMS: { id: string; label: string; icon: React.ReactNode; path: string }[] = [
@@ -193,6 +195,7 @@ function OperationsShell({ opTab, onNavigate }: { opTab: string; onNavigate?: (t
       {opTab === "risk"      && <RiskWorkspaceTab onNavigate={onNavigate} />}
       {opTab === "backtest"  && <BacktestWorkspaceTab />}
       {opTab === "intelligence" && <IntelligenceTab />}
+      {opTab === "settings" && <SettingsTab />}
     </>
   );
 }
@@ -472,4 +475,8 @@ function BacktestWorkspaceTab() {
 
 function IntelligenceTab() {
   return <div className="h-full overflow-y-auto"><IntelligencePanel /></div>;
+}
+
+function SettingsTab() {
+  return <div className="h-full overflow-y-auto"><SettingsPanel /></div>;
 }

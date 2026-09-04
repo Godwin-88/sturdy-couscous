@@ -322,3 +322,47 @@ CREATE TABLE IF NOT EXISTS hypothesis_test_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_hypothesis_test_log_hid ON hypothesis_test_log(hypothesis_id);
+-- ── Per-user settings vault ──────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS users (
+    id               SERIAL PRIMARY KEY,
+    username         VARCHAR(64) NOT NULL UNIQUE,
+    passphrase_hash  TEXT NOT NULL,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS broker_credentials (
+    id                SERIAL PRIMARY KEY,
+    owner_id          INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    broker            VARCHAR(16) NOT NULL,   -- alpaca | kraken
+    nickname          VARCHAR(64) DEFAULT '',
+    key_id            TEXT,
+    secret_encrypted  TEXT NOT NULL,
+    base_url          TEXT DEFAULT '',
+    paper             BOOLEAN NOT NULL DEFAULT TRUE,
+    is_active         BOOLEAN NOT NULL DEFAULT FALSE,
+    last_verified_at  TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_broker_creds_owner ON broker_credentials(owner_id, broker);
+-- at most one active account per (owner, broker)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_broker_creds_active
+  ON broker_credentials(owner_id, broker) WHERE is_active;
+
+CREATE TABLE IF NOT EXISTS user_api_keys (
+    id             SERIAL PRIMARY KEY,
+    owner_id       INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider       VARCHAR(24) NOT NULL,   -- groq | featherless
+    key_encrypted  TEXT NOT NULL,
+    base_url       TEXT DEFAULT '',
+    model          TEXT DEFAULT '',
+    UNIQUE (owner_id, provider)
+);
+
+CREATE TABLE IF NOT EXISTS user_risk_prefs (
+    id       SERIAL PRIMARY KEY,
+    owner_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key      VARCHAR(64) NOT NULL,
+    value    TEXT NOT NULL,
+    UNIQUE (owner_id, key)
+);
