@@ -190,7 +190,7 @@ function OperationsShell({ opTab, onNavigate }: { opTab: string; onNavigate?: (t
       {opTab === "signals"   && <SignalsTab onNavigate={onNavigate} />}
       {opTab === "crypto"    && <CryptoTab />}
       {opTab === "options"   && <OptionsTab onNavigate={onNavigate} />}
-      {opTab === "risk"      && <RiskWorkspaceTab />}
+      {opTab === "risk"      && <RiskWorkspaceTab onNavigate={onNavigate} />}
       {opTab === "backtest"  && <BacktestWorkspaceTab />}
       {opTab === "intelligence" && <IntelligenceTab />}
     </>
@@ -458,10 +458,10 @@ function OptionsTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   return <OptionsPanel onNavigate={onNavigate} />;
 }
 
-function RiskWorkspaceTab() {
+function RiskWorkspaceTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   return (
     <div className="h-full overflow-hidden">
-      <RiskWorkspace />
+      <RiskWorkspace onNavigate={onNavigate} />
     </div>
   );
 }

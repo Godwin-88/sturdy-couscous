@@ -234,6 +234,7 @@ export interface EligibleStrategy {
 
 export interface RiskMetrics {
   nav:                number;
+  nav_source?:        string;
   gross_exposure:     number;
   net_exposure:       number;
   gross_pct_nav:      number;
@@ -245,6 +246,21 @@ export interface RiskMetrics {
   concentration:      { ticker: string; mkt_val: number; pct_nav: number; direction: string; pnl: number }[];
   n_positions:        number;
   halted:             boolean;
+  exposure_source?:   string;
+  option_book?: {
+    symbol:      string;
+    underlying?: string;
+    qty:         number;
+    mkt_val:     number;
+    side:        string;
+    right?:      string;
+    strike?:     number;
+    expiry?:     string;
+    dte?:        number;
+    iv?:         number | null;
+    greeks?:     Record<string, number> | null;
+    greeks_source?: string;
+  }[];
 }
 
 export interface NewsResult {
@@ -591,6 +607,11 @@ export const chatApi = {
     if (ctx.contract_type) p.set("contract_type", String(ctx.contract_type));
     if (ctx.contract_symbol) p.set("contract_symbol", String(ctx.contract_symbol));
     if (ctx.strike != null) p.set("strike", String(ctx.strike));
+    if (ctx.regime) p.set("regime", String(ctx.regime));
+    else {
+      const extra = (ctx as Record<string, any>).extra;
+      if (extra && typeof extra === "object" && extra.regime) p.set("regime", String(extra.regime));
+    }
     const qs = p.toString();
     return apiFetch<ChatContext>(`/chat/context/${screen}${qs ? `?${qs}` : ""}`);
   },

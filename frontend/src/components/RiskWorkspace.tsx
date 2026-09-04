@@ -6,9 +6,10 @@ import {
 import { agentApi, researchApi, optionsApi, RiskMetrics, AgentPerformance, ParityStatus, HedgeState } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
 import { getScreenContext } from "@/lib/screenContext";
-import { ShieldAlert, TrendingDown, Percent, Activity, GitCompare, FlaskConical, RefreshCw, Zap, Scale, Bot, Wallet, AlertTriangle, Shield, Clock, Link2 } from "lucide-react";
+import { ShieldAlert, TrendingDown, Percent, Activity, GitCompare, FlaskConical, RefreshCw, Zap, Scale, Bot, Wallet, AlertTriangle, Shield, Clock, Link2, ArrowLeft, HelpCircle } from "lucide-react";
 import { fmt$, fmtPct } from "@/lib/utils";
 import clsx from "clsx";
+import BrokerTable from "@/components/BrokerTable";
 import StressTestModal from "@/components/StressTestModal";
 import RebalancePanel from "@/components/RebalancePanel";
 import AgentPerformanceModal from "@/components/AgentPerformanceModal";
@@ -67,7 +68,7 @@ function useOptionsRiskData(chainUnderlying?: string) {
   return { hedgeState, loadingHedge, loadHedge };
 }
 
-export default function RiskWorkspace() {
+export default function RiskWorkspace({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const { data, loading } = usePolling<RiskMetrics>(agentApi.risk, 15_000);
   // Chain context shared by the Options panel — deep-link arrives with the
   // underlying/expiry of the chain the user was just looking at.
@@ -108,6 +109,11 @@ export default function RiskWorkspace() {
     { id: "parity",    label: "Parity",    icon: <GitCompare size={12} /> },
   ];
 
+  const goBack = () => {
+    if (onNavigate) { onNavigate("dashboard"); return; }
+    window.location.hash = "#/dashboard";
+  };
+
   const actions = [
     { icon: <FlaskConical size={14} />, label: "Stress Test", onClick: () => setStressOpen(true), color: "text-amber-400" },
     { icon: <Scale size={14} />,        label: "Rebalance",   onClick: () => setRebalanceOpen(true), color: "text-blue-400" },
@@ -138,6 +144,11 @@ export default function RiskWorkspace() {
                 {chainCtx.contract_type ? ` · ${chainCtx.contract_type}` : ""}
               </span>
             )}
+            <button onClick={goBack}
+              title="Back to where you came from (e.g. Dashboard)"
+              className="flex items-center gap-1 px-2 py-1.5 rounded text-[10px] font-mono bg-slate-800 border border-slate-600 text-slate-300 hover:bg-slate-700">
+              <ArrowLeft size={11} /> Back
+            </button>
             {actions.map(a => (
               <button key={a.label} onClick={a.onClick}
                 className="flex items-center gap-1 px-2 py-1.5 rounded text-[10px] font-mono bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-700">
@@ -219,6 +230,20 @@ export default function RiskWorkspace() {
                   <MetricBox label="NAV" value={fmt$(data.nav)} />
                 </div>
               </div>
+
+              {/* Full broker book — every Alpaca position (options + crypto + equity) */}
+              <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 bg-slate-950">
+                  <Wallet size={14} className="text-indigo-400" />
+                  <span className="text-xs text-slate-300 font-semibold uppercase tracking-widest">
+                    Broker Book <span className="text-slate-500">({data.n_positions} positions)</span>
+                  </span>
+                  <span className="ml-auto flex items-center gap-1 text-[10px] text-slate-500 font-mono">
+                    <HelpCircle size={11} /> hover a column for meaning · click Analyze per position
+                  </span>
+                </div>
+                <BrokerTable onNavigate={onNavigate} maxHeight="max-h-[360px]" />
+              </div>
             </div>
           )}
 
@@ -228,7 +253,22 @@ export default function RiskWorkspace() {
               loading={loadingHedge}
               onLoadHedge={loadHedge}
               nav={data.nav}
-            />
+            >
+              <div className="w-full">
+                <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 bg-slate-950">
+                    <Wallet size={14} className="text-indigo-400" />
+                    <span className="text-xs text-slate-300 font-semibold uppercase tracking-widest">
+                      Broker Book <span className="text-slate-500">(all Alpaca positions)</span>
+                    </span>
+                    <span className="ml-auto flex items-center gap-1 text-[10px] text-slate-500 font-mono">
+                      <HelpCircle size={11} /> hover a column for meaning
+                    </span>
+                  </div>
+                  <BrokerTable onNavigate={onNavigate} maxHeight="max-h-[340px]" />
+                </div>
+              </div>
+            </OptionsRiskSection>
           )}
 
           {subTab === "stress" && (
@@ -321,12 +361,13 @@ function Skeleton() {
 }
 
 function OptionsRiskSection({
-  hedgeState, loading, onLoadHedge, nav,
+  hedgeState, loading, onLoadHedge, nav, children,
 }: {
   hedgeState: HedgeState | null;
   loading: boolean;
   onLoadHedge: () => void;
   nav: number;
+  children?: React.ReactNode;
 }) {
   const premiumBudget = 0.15;
   const premiumUsed = hedgeState ? Math.abs(hedgeState.greeks.theta) * 30 : 0;
@@ -486,6 +527,11 @@ function OptionsRiskSection({
               </div>
             </div>
           )}
+        </div>
+
+        {/* Full broker book (children) */}
+        <div className="w-full pt-2">
+          {children}
         </div>
       </div>
     </div>
