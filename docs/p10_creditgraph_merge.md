@@ -445,5 +445,39 @@ See `docs/p9_tenets_financial_engineering.md` §3C (Agentic ledger A1–A7) and 
 
 ---
 
+## 20. Implementation status (built & validated)
+
+Implemented additive-only per §4 and validated **in Docker** (per repository
+policy — no host-side tests):
+
+| Artifact | Status | Evidence |
+|---|---|---|
+| `creditgraph/{attestation-service,execution-service}` | ✅ copied verbatim | images build; added `typecheck` script; both `npm run typecheck` pass (via `make creditgraph-test`) |
+| `api/creditgraph/` (33 files) | ✅ ported + namespaced | `app.` → `creditgraph.`; `from neo4j import AsyncDriver` type-only imports neutralized |
+| `api/creditgraph/db/neo4j.py` | ✅ async facade over sync 4.x | `asyncio.to_thread` wraps `GraphDatabase.driver`; full `session()/run()/single()/__aiter__` API |
+| `api/creditgraph/core/config.py` | ✅ re-pointed | falls back to GraphAlpha `NEO4J_HOST/PORT/PASSWORD` + `REDIS_HOST/PORT` |
+| `api/main.py` | ✅ +5 lines | router include at `/api/v1` (42 routes) + best-effort lifespan init |
+| `api/routes/creditgraph.py` | ✅ +4 thin endpoints | `/creditgraph/{services,candidates,status,health}` (prefix fix applied — name collision resolved) |
+| `agent/creditgraph_adapter.py` | ✅ 10 defensive fns | httpx clients to both Node services + merged gateway |
+| `agent/creditgraph_agent.py` | ✅ mirrors DreamDEXAgent | self-disable, chain probe, deterministic scoring, `creditgraph:*` Redis keys |
+| `agent/orchestrator.py` | ✅ +7 lines | import + instantiate + non-fatal run() in cycle (Step 2e) |
+| `frontend/src/components/credit/` | ✅ 14 components + workspace | scoped `credit.css` (127 rules); imports re-pointed; chart deps added |
+| `frontend/src/App.tsx` | ✅ +4 lines | "Credit" sidebar item → `CreditWorkspace` |
+| `frontend` typecheck + build | ✅ Docker | `tsc --noEmit` exit 0; `vite build` exit 0 |
+| Tests | ✅ 40 passed | `tests/test_creditgraph_*.py` (agent, credit_risk, evidence, execution, graphrag) |
+| Full suite | ✅ **222 passed** | `pytest tests -q` in api container (was 182 pre-P10) |
+| `Makefile` | ✅ `creditgraph-test` | typechecks both Node services + python suite, all in Docker |
+
+**Actual deviations from this plan (all additive, no scope reduction):**
+1. `core/config.py` uses `pydantic.Field(default_factory=...)` fallbacks instead of a separate `NEO4J_URI` env — same `.env`, one driver config for both stacks.
+2. The async facade (§7) lives in `api/creditgraph/db/neo4j.py`, not a shared `common/` module — keeps the port self-contained.
+3. Node services gained a `typecheck` script (they previously had only `build`).
+4. Test fakes were widened to accept the positional `run(query, params_dict)` neo4j contract (`*args` merged into `**params`).
+
+**Remaining (deferred to demo day, needs funded testnet keys):**
+- Sepolia/CC3 lifecycle proof — `attestation-service /verify` on a real tx + `execution-service /execute` (human-approved).
+- KG extension load — `graph/schema/creditgraph_extension.cypher` is written; `graph-loader` cat order already includes it (P9 commit).
+- `CREDITGRAPH_ENABLED=1` end-to-end with live services up.
+
 *End of P10 plan. Implementation order (see §16): Node services → KG extension → Python port → agent → frontend.*
 **Honest constraint (from `docs.attestcoin.org`):** the Attestcoin Protocol currently attests exactly two source chains — **Ethereum Sepolia (chainKey 1)** and **Ethereum Mainnet (chainKey 3)** — on Creditcoin CC3 testnet/mainnet. It does **not** attest Somnia. The merge therefore uses **Sepolia→Creditcoin as the functional attested chain**, and keeps DreamDEX on its own on-chain market status (unchanged from P9). We do not claim Somnia is Attestcoin-attested.

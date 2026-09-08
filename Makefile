@@ -136,5 +136,6 @@ creditgraph-logs:
 	docker compose logs -f --no-log-prefix attestation-service execution-service
 
 creditgraph-test:
-	cd creditgraph/attestation-service && npm run typecheck
-	cd creditgraph/execution-service && npm run typecheck
+	@docker run --rm -v "$$(pwd)/creditgraph/attestation-service":/app -w /app node:20-alpine sh -c 'npm ci --no-audit --no-fund >/dev/null 2>&1 && npm run typecheck'
+	@docker run --rm -v "$$(pwd)/creditgraph/execution-service":/app -w /app node:20-alpine sh -c 'npm ci --no-audit --no-fund >/dev/null 2>&1 && npm run typecheck'
+	@docker compose exec api sh -c 'cd /app && python -m pytest tests/test_creditgraph_agent.py tests/test_creditgraph_credit_risk.py tests/test_creditgraph_evidence.py tests/test_creditgraph_execution.py tests/test_creditgraph_graphrag.py -q'

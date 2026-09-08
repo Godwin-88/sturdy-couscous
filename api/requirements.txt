@@ -23,3 +23,7 @@ cryptography>=42.0.0
 
 pytest
 pytest-asyncio
+
+# ── CreditGraph (P10): Attestcoin × Creditcoin risk surface ───────────────
+pydantic-settings>=2.7.0,<3.0
+groq>=0.15.0

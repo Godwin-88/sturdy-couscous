@@ -38,6 +38,7 @@ from macro_calendar import MacroCalendarAgent
 from kg_signal_generator import KGSignalGenerator
 from hedge_agent import HedgeAgent
 from dreamdex_agent import DreamDEXAgent
+from creditgraph_agent import CreditGraphAgent
 from common.schema_validator import validate_signal
 from jsonschema import ValidationError as SchemaValidationError
 from common.versioning import validate_schema_version
@@ -90,6 +91,7 @@ class Orchestrator:
         self.kg_signals      = KGSignalGenerator()
         self.hedge_agent     = HedgeAgent()
         self.dreamdex_agent  = DreamDEXAgent()
+        self.creditgraph_agent = CreditGraphAgent()
         self.portfolio_peak  = 0.0
         self.halted          = False
         self._tick           = 0
@@ -207,6 +209,21 @@ class Orchestrator:
                     logger.info(f"DreamDEXAgent: {len(ec_candidates)} EC candidates")
             except Exception as e:
                 logger.warning(f"DreamDEXAgent failed: {e}")
+
+            # ── Step 2e: CreditGraph candidates (self-disabling, per-chain) ──
+            credit_candidates: list[dict] = []
+            try:
+                credit_candidates = await self.creditgraph_agent.run(
+                    regime=regime, signals=kg_signals
+                )
+                audit["steps"].append(
+                    {"agent": "CreditGraphAgent", "status": "ok",
+                     "candidates": len(credit_candidates)}
+                )
+                if credit_candidates:
+                    logger.info(f"CreditGraphAgent: {len(credit_candidates)} credit intents")
+            except Exception as e:
+                logger.warning(f"CreditGraphAgent failed: {e}")
 
             # ── Step 3: Price/vol signal generation ───────────────────────────
             cycle_id = str(uuid.uuid4())

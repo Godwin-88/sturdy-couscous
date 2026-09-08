@@ -1,0 +1,1 @@
+"""Neo4j domain graph layer (spec §25)."""

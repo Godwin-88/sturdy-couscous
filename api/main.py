@@ -31,6 +31,18 @@ from routes.chat          import router as chat_router
 from routes.crypto         import router as crypto_router
 from routes.settings       import router as settings_router
 from routes.dreamdex       import router as dreamdex_router
+from routes.creditgraph    import router as creditgraph_ui_router
+
+# ── CreditGraph (P10): Attestcoin × Creditcoin risk surface, mounted at /api/v1 ──
+try:
+    from creditgraph.api.v1.router import api_router as creditgraph_api_router
+    from creditgraph.db.neo4j import close_neo4j as creditgraph_close_neo4j
+    from creditgraph.db.neo4j import init_neo4j as creditgraph_init_neo4j
+    from creditgraph.db.redis_client import close_redis as creditgraph_close_redis
+    from creditgraph.db.redis_client import init_redis as creditgraph_init_redis
+    _CREDITGRAPH_AVAILABLE = True
+except Exception:  # pragma: no cover - import-time guard keeps gateway booting
+    _CREDITGRAPH_AVAILABLE = False
 
 load_dotenv()
 
@@ -43,7 +55,20 @@ REDIS_URL = (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("GraphAlpha API starting")
+    if _CREDITGRAPH_AVAILABLE:
+        try:
+            await creditgraph_init_neo4j()
+            await creditgraph_init_redis()
+            logger.info("CreditGraph dependencies connected")
+        except Exception as e:
+            logger.warning(f"CreditGraph init skipped (non-fatal): {e}")
     yield
+    if _CREDITGRAPH_AVAILABLE:
+        try:
+            await creditgraph_close_redis()
+            await creditgraph_close_neo4j()
+        except Exception as e:
+            logger.warning(f"CreditGraph close skipped (non-fatal): {e}")
     logger.info("GraphAlpha API shutting down")
 
 
@@ -81,6 +106,10 @@ app.include_router(chat_router)
 app.include_router(crypto_router)
 app.include_router(settings_router)
 app.include_router(dreamdex_router)
+app.include_router(creditgraph_ui_router)
+
+if _CREDITGRAPH_AVAILABLE:
+    app.include_router(creditgraph_api_router, prefix="/api/v1")
 
 
 # ── Global exception handler: ensures CORS headers on all error responses ─────
