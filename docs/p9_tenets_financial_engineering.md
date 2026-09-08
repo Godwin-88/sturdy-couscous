@@ -404,10 +404,10 @@ Each upgrade: **Principle** → **Concrete change to P9** → **Files** → **Ac
   with O(log N) membership proofs. Instead of attesting every decision
   individually on-chain, batch a period's roots into a Merkle root and anchor
   *that* — reuse P10's `Attestation` node semantics.
-- **Concrete change:** `evidence_chain.merkle_root(entries)`; the relay's
-  `POST /anchor` publishes the batched root to the `GraphAlphaAnchor` testnet
-  contract.
-- **Files:** `agent/evidence_chain.py`, `web3/src/anchor.ts`.
+- **Concrete change:** `evidence_chain.merkle_root(entries)`; the batched root
+  can be published by the `somnia-relay` (or a future anchor step) — no new
+  service, no new chain.
+- **Files:** `agent/evidence_chain.py`, `docs/p11_web3_defi_expansion.md`.
 - **Acceptance:** `merkle_root` is stable for the same input; proof verification
   walks the path in O(log N).
 
@@ -422,77 +422,73 @@ Each upgrade: **Principle** → **Concrete change to P9** → **Files** → **Ac
 - **Files:** `api/creditgraph/` consensus module, `.env.example`.
 - **Acceptance:** doc + config only; no behavior change when unset.
 
-### U28 — Impermanent-loss-aware LP gating (tenet D1: AMM IL)
+### U28 — EC edge-over-pay gate (tenet D1 re-grounded to DreamDEX Event Contracts)
 
-- **Principle.** *How to DeFi* Ch. 3: constant-product AMMs suffer IL — 3×
-  price change ≈ 13.4% loss vs HODL, 4× ≈ 20%, 5× ≈ 25.5%. A bot that LPs
-  without pricing IL will systematically overpay.
-- **Concrete change:** `defi_agent` D1 computes `edge = fee_yield − IL − gas`
-  using the book's divergence table (or live `x·y=k` rebalance math) and rejects
-  LP when `edge ≤ MIN_LP_EDGE_PCT`; range width comes from the KG vol regime.
-- **Files:** `agent/defi_agent.py` (D1), `tests/test_defi_agent.py`.
-- **Acceptance:** hermetic test asserts an LP candidate with
-  `fee − IL − gas ≤ 0` is rejected.
+- **Principle.** *How to DeFi* Ch. 3 teaches IL: an LP that overpays the risk
+  systematically loses. On DreamDEX EC, the analog is *overpaying an outcome*
+  — an agent that buys `UP` because the signal is positive ignores the ask and
+  systematically overpays. The fix is an edge gate.
+- **Concrete change:** `defi_agent` D5/D7 reject an EC candidate unless
+  `edge = your_p − ask ≥ MIN_EC_EDGE_PCT` (reuses P9 binary-Kelly sizing and
+  MIN_EDGE_PCT family). No AMM/LP logic.
+- **Files:** `agent/defi_agent.py`, `tests/test_defi_agent.py`.
+- **Acceptance:** hermetic test asserts an EC candidate with `your_p − ask ≤ 0`
+  is rejected.
 
-### U29 — Liquidation-distance guard (tenet D2: lending / collateral factor)
+### U29 — Settlement-distance / haircut guard (tenet D2 re-grounded)
 
-- **Principle.** Ch. 5: borrowing is governed by utilization and collateral
-  factors; liquidation happens on price moves. The agent must know its distance
-  to liquidation *before* adding leverage, and self-liquidate rather than let
-  the protocol fire (flash-loan rescue pattern, Ch. 15).
-- **Concrete change:** `defi_agent` D2 tracks `liquidation_distance_pct` for
-  each `BorrowerPosition`; alerts at a threshold and (in testnet mode) can
-  issue a self-close.
-- **Files:** `agent/defi_agent.py` (D2), `tests/test_defi_agent.py`.
-- **Acceptance:** distance math test — collat factor 1.5, price −20% moves
-  distance negative → alert raised.
+- **Principle.** Ch. 5's liquidation math is about *distance to the bad event*.
+  For EC, the analog is *distance to resolution* + settlement-variance haircut
+  (already P9 U1): short-τ windows or wide settlement variance get discounted.
+- **Concrete change:** `defi_agent` D5/D7 apply the P9 U1 haircut (τ<cutoff +
+  divergence band) to EC candidates; no lending/liquidation code.
+- **Files:** `agent/defi_agent.py`, `tests/test_defi_agent.py`.
+- **Acceptance:** test: a short-τ EC candidate shows the haircut (P9 U1 table).
 
 ### U30 — Oracle-staleness circuit-breaker (tenet D3: Black Thursday)
 
-- **Principle.** Ch. 13: on Black Thursday, stale Chainlink/Medianizer feeds
-  caused ~$8M of ETH collateral to be liquidated via wrong prices. Stale or
-  out-of-band oracle data must *stop* aggressive strategies, not throttle them.
-- **Concrete change:** every sector gate (D1–D8) checks `OracleFeed` freshness
-  (`ORACLE_STALE_MS`) and deviation band (`ORACLE_DEVIATION_BPS`); D6 governor
-  flips to `paused` for affected sectors.
+- **Principle.** Ch. 13: stale Chainlink/Medianizer feeds caused ~$8M of ETH
+  collateral liquidations. On DreamDEX, EC resolution feeds are the oracle —
+  staleness/deviation must *stop* EC candidates, not throttle them.
+- **Concrete change:** `defi_agent` D6 governor checks `OracleFeed` freshness
+  (`ORACLE_STALE_MS`) + deviation band (`ORACLE_DEVIATION_BPS`); flips
+  `paused: true` for D5/D7 when the EC resolution feed is stale.
 - **Files:** `agent/defi_agent.py` (D6), `tests/test_defi_agent.py`.
-- **Acceptance:** test: a feed with `updated_at` older than `ORACLE_STALE_MS`
-  (or outside the deviation band) → sector candidates empty + `paused: true`.
+- **Acceptance:** test: `updated_at` older than `ORACLE_STALE_MS` → candidates
+  empty + `paused: true`.
 
-### U31 — Flash-loan & approvals hygiene (tenet D4: exploit catalogue)
+### U31 — Signing & approvals hygiene (tenet D4 re-grounded to somnia-relay)
 
-- **Principle.** Ch. 15: flash loans (no default risk, no collateral, unlimited
-  size) power arb/self-liquidation/collateral-swap — but the same levers power
-  exploits. The *selling* discipline: approve-min, revoke-after,
-  simulate-first (`eth_call`), serialized nonces, hardware-wallet for live keys.
-- **Concrete change:** `web3/` relay enforces simulation-before-send
-  (`eth_call`), per-tx approval windows, and never holds live keys in `.env`.
-- **Files:** `web3/src/order.ts`, `web3/src/hygiene.ts`, docs.
-- **Acceptance:** static check (CI) asserts no `PRIVATE_KEY` literal outside
-  the signer module; relay refuses a live order without a prior simulation.
+- **Principle.** Ch. 15's exploit catalogue (flash loans, unlimited approvals)
+  is really about *key/approval hygiene*. On our execution path, that means the
+  `somnia-relay` signs with RFC-6979/nonce discipline, simulates before send,
+  and never holds a live key in `.env` (P9 U16 already established).
+- **Concrete change:** re-affirm P9 U16 for the Somnia key path; static check
+  (CI) asserts no `PRIVATE_KEY` literal outside the signer module.
+- **Files:** `dreamdex/src/` relay, CI hygiene gate, docs.
+- **Acceptance:** static check passes; relay refuses a live order without a
+  prior simulation.
 
-### U32 — Vault leverage guard (tenet D5: yield-aggregator leverage)
+### U32 — EC tail-hedge position cap (tenet D5 re-grounded)
 
-- **Principle.** Ch. 12 (Alpha Homora): leveraged yield farming multiplies both
-  returns *and* IL and liquidation risk. Leverage must be capped and priced
-  against liquidation distance, not chase raw farm APY.
-- **Concrete change:** `defi_agent` D3 caps effective leverage at
-  `MAX_LEVERAGE_X` and rejects farms whose `hack_prior` (age/audit status) is
-  too high.
-- **Files:** `agent/defi_agent.py` (D3), `tests/test_defi_agent.py`.
-- **Acceptance:** test asserts a candidate proposing leverage > cap is rejected.
+- **Principle.** Ch. 12 (Alpha Homora) is about *leverage amplifying loss*. For
+  EC tail-hedging (D7), the discipline is a hard portfolio cap so a Crisis-regime
+  hedge can never become a risk amplifier.
+- **Concrete change:** `defi_agent` D7 caps EC tail-hedge position at
+  `MAX_EC_TAILHEDGE_PCT` of portfolio (reuses P9 cap family). No yield-farm
+  leverage code.
+- **Files:** `agent/defi_agent.py` (D7), `tests/test_defi_agent.py`.
+- **Acceptance:** test asserts a D7 candidate exceeding the cap is rejected.
 
-### U33 — Bridge hygiene & attested cross-chain arb (tenet D6 + P10)
+### U33 — Attestation hygiene for EC resolution feeds (tenet D6 + P10)
 
-- **Principle.** Ch. 14 + the P10 merge: cross-chain messages are only as
-  trustworthy as their attestation. Use P10's attested data as the *input* to
-  D8 arb rather than trusting any bridge API, and cap per-bridge exposure.
-- **Concrete change:** `defi_agent` D8 consumes `CrossChainMessage` +
-  `Attestation` nodes from the shared KG; `MAX_BRIDGE_EXPOSURE_PCT` cap.
-- **Files:** `agent/defi_agent.py` (D8), `graph/schema/web3_extension.cypher`.
-- **Acceptance:** doc + cap enforced; D8 candidates only from attested messages.
-
----
+- **Principle.** Ch. 14 + the P10 merge: cross-chain data is only as trustworthy
+  as its attestation. On our data chain, that means only *attested* (P10)
+  resolution feeds should drive the D6 trust decision — no raw bridge API.
+- **Concrete change:** `defi_agent` D8 accepts an `OracleFeed` only when it has
+  a linked `Attestation` node (P10); per-feed cap.
+- **Files:** `agent/defi_agent.py` (D8), `graph/schema/defi_extension.cypher`.
+- **Acceptance:** doc + cap enforced; un-attested feed → D6 treats as stale.
 
 ## 5. Roll-up acceptance & demo delta
 
