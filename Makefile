@@ -70,11 +70,13 @@ shell-agent:
 	docker compose exec agent-worker bash
 
 # ── Testing ───────────────────────────────────────────────────────────────────
+# NOTE: must run `python -m pytest` (not bare `pytest`) so the api container's
+# cwd /app is on sys.path — `tests/*` import `agent.*` / `common.*` top-level.
 test:
-	docker compose exec api pytest /app/tests -v
+	docker compose exec api python -m pytest /app/tests -v
 
 test-agents:
-	docker compose exec api pytest /app/tests/test_agents.py -v
+	docker compose exec api python -m pytest /app/tests/test_agents.py -v
 
 # ── Backtesting ──────────────────────────────────────────────────────────────
 backtest:
@@ -112,3 +114,27 @@ enable-live-trading:
 	else \
 		echo "Aborted."; \
 	fi
+
+# ── DreamDEX relay (P9) — profiles:[dreamdex] ─────────────────────────────────
+dreamdex-up:
+	docker compose --profile dreamdex up -d --build somnia-relay
+	@echo "Relay: http://localhost:8450/status"
+
+dreamdex-logs:
+	docker compose logs -f --no-log-prefix somnia-relay
+
+dreamdex-test:
+	cd dreamdex && npm run typecheck && npm run hygiene && npm audit --omit=dev --audit-level=high
+
+# ── CreditGraph relays (P10) — profiles:[creditgraph] ────────────────────────
+creditgraph-up:
+	docker compose --profile creditgraph up -d --build attestation-service execution-service
+	@echo "Attestation: http://localhost:8080/health"
+	@echo "Execution:   http://localhost:8081/health"
+
+creditgraph-logs:
+	docker compose logs -f --no-log-prefix attestation-service execution-service
+
+creditgraph-test:
+	cd creditgraph/attestation-service && npm run typecheck
+	cd creditgraph/execution-service && npm run typecheck

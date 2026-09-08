@@ -21,6 +21,7 @@ import RiskWorkspace       from "@/components/RiskWorkspace";
 import IntelligencePanel   from "@/components/IntelligencePanel";
 import BrokerTablePanel   from "@/components/BrokerTablePanel";
 import CryptoPanel from "@/components/CryptoPanel";
+import DreamDEXPanel from "@/components/DreamDEXPanel";
 import OptionsPanel       from "@/components/OptionsPanel";
 import OptionPnlPanel     from "@/components/OptionPnlPanel";
 import AnalyticsPanel     from "@/components/AnalyticsPanel";
@@ -39,11 +40,12 @@ import { getScreenContext } from "@/lib/screenContext";
 import { registerWebMCPTools, unregisterWebMCPTools, WEBMCP_TOOL_COUNT } from "@/webmcp/tools";
 import { LABEL_COLOR } from "@/lib/utils";
 
-type Tab = "dashboard" | "crypto" | "graph" | "signals" | "backtest" | "risk" | "intelligence" | "options" | "settings";
+type Tab = "dashboard" | "crypto" | "dreamdex" | "graph" | "signals" | "backtest" | "risk" | "intelligence" | "options" | "settings";
 
 const OP_TABS: { id: Tab; label: string; icon: React.ReactNode; stage: string }[] = [
   { id: "dashboard",   label: "Dashboard",     icon: <LayoutDashboard size={14} />, stage: "MONITORING" },
   { id: "crypto",      label: "Crypto",        icon: <Zap             size={14} />, stage: "DEPLOYED" },
+  { id: "dreamdex",    label: "DreamDEX",      icon: <Shield          size={14} />, stage: "DEPLOYED" },
   { id: "options",     label: "Options",       icon: <Activity        size={14} />, stage: "DEPLOYED" },
   { id: "signals",     label: "Orders",       icon: <Table2          size={14} />, stage: "DEPLOYED" },
   { id: "backtest",    label: "Backtest",      icon: <BarChart2       size={14} />, stage: "TESTING" },
@@ -191,6 +193,7 @@ function OperationsShell({ opTab, onNavigate }: { opTab: string; onNavigate?: (t
       {opTab === "graph"     && <GraphTab />}
       {opTab === "signals"   && <SignalsTab onNavigate={onNavigate} />}
       {opTab === "crypto"    && <CryptoTab />}
+      {opTab === "dreamdex"  && <DreamDEXPanel />}
       {opTab === "options"   && <OptionsTab onNavigate={onNavigate} />}
       {opTab === "risk"      && <RiskWorkspaceTab onNavigate={onNavigate} />}
       {opTab === "backtest"  && <BacktestWorkspaceTab />}

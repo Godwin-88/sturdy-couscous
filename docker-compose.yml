@@ -37,7 +37,9 @@ services:
         condition: service_healthy
     volumes:
       - ./master.cypher:/graph/master.cypher:ro
-    entrypoint: ["/bin/sh", "-c", "cat /graph/master.cypher | cypher-shell --fail-at-end -u \"${NEO4J_USER:-neo4j}\" -p \"${NEO4J_PASSWORD:-graphalpha}\" -a bolt://neo4j:7687 && echo 'Graph loaded successfully'"]
+      - ./graph/schema/dreamdex_extension.cypher:/graph/dreamdex_extension.cypher:ro
+      - ./graph/schema/creditgraph_extension.cypher:/graph/creditgraph_extension.cypher:ro
+    entrypoint: ["/bin/sh", "-c", "cat /graph/master.cypher /graph/dreamdex_extension.cypher /graph/creditgraph_extension.cypher | cypher-shell --fail-at-end -u \"${NEO4J_USER:-neo4j}\" -p \"${NEO4J_PASSWORD:-graphalpha}\" -a bolt://neo4j:7687 && echo 'Graph loaded successfully'"]
     restart: "no"
 
   # ── Audit & portfolio state DB ───────────────────────────────────────────────
@@ -227,6 +229,53 @@ services:
       - /app/node_modules
     environment:
       VITE_API_URL: http://localhost:8000
+
+  # ── Somnia / DreamDEX relay (optional; profiles:[dreamdex] → invisible to make up) ──
+  somnia-relay:
+    build:
+      context: ./dreamdex
+      dockerfile: Dockerfile
+    container_name: graphalpha-somnia-relay
+    env_file:
+      - .env
+    environment:
+      - SOMNIA_RPC_URL=${SOMNIA_RPC_URL:-https://dream-rpc.somnia.network}
+      - SOMNIA_WALLET_ADDRESS=${SOMNIA_WALLET_ADDRESS:-}
+      - SOMNIA_PRIVATE_KEY=${SOMNIA_PRIVATE_KEY:-}
+      - DREAMDEX_TRADING_MODE=${DREAMDEX_TRADING_MODE:-paper}
+      - DRY_RUN=${DRY_RUN:-1}
+      - RELAY_API_KEY=${RELAY_API_KEY:-}
+    ports:
+      - "8450:8450"
+    profiles: ["dreamdex"]
+
+  # ── CreditGraph: Attestcoin relay (:8080) + execution relay (:8081) ─────────
+  attestation-service:
+    build:
+      context: ./creditgraph/attestation-service
+    container_name: graphalpha-attestation
+    env_file:
+      - .env
+    environment:
+      - SOURCE_RPC_URL=${SOURCE_RPC_URL:-https://sepolia.infura.io/v3/}
+      - CREDITCOIN_RPC_URL=${CREDITCOIN_RPC_URL:-https://rpc.cc3-testnet.creditcoin.network}
+      - ATTESTCOIN_PROVER_URL=${ATTESTCOIN_PROVER_URL:-https://proof-gen-api.cc3-testnet.creditcoin.network}
+    ports:
+      - "8080:8080"
+    profiles: ["creditgraph"]
+
+  execution-service:
+    build:
+      context: ./creditgraph/execution-service
+    container_name: graphalpha-execution
+    env_file:
+      - .env
+    environment:
+      - CREDITCOIN_WS_URL=${CREDITCOIN_WS_URL:-wss://rpc.cc3-testnet.creditcoin.network}
+      - CREDITCOIN_EXECUTOR_SEED=${CREDITCOIN_EXECUTOR_SEED:-}
+    ports:
+      - "8081:8081"
+    profiles: ["creditgraph"]
 
 volumes:
   neo4j_data:

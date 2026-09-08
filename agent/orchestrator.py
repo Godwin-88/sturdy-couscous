@@ -37,6 +37,7 @@ from news_agent import NewsAgent
 from macro_calendar import MacroCalendarAgent
 from kg_signal_generator import KGSignalGenerator
 from hedge_agent import HedgeAgent
+from dreamdex_agent import DreamDEXAgent
 from common.schema_validator import validate_signal
 from jsonschema import ValidationError as SchemaValidationError
 from common.versioning import validate_schema_version
@@ -88,6 +89,7 @@ class Orchestrator:
         self.macro_agent     = MacroCalendarAgent()
         self.kg_signals      = KGSignalGenerator()
         self.hedge_agent     = HedgeAgent()
+        self.dreamdex_agent  = DreamDEXAgent()
         self.portfolio_peak  = 0.0
         self.halted          = False
         self._tick           = 0
@@ -190,6 +192,21 @@ class Orchestrator:
                                        "signals": len(kg_signals)})
             except Exception as e:
                 logger.warning(f"KGSignalGenerator failed: {e}")
+
+            # ── Step 2d: DreamDEX Event-Contract candidates (self-disabling) ─
+            ec_candidates: list[dict] = []
+            try:
+                ec_candidates = await self.dreamdex_agent.run(
+                    regime=regime, signals=kg_signals
+                )
+                audit["steps"].append(
+                    {"agent": "DreamDEXAgent", "status": "ok",
+                     "candidates": len(ec_candidates)}
+                )
+                if ec_candidates:
+                    logger.info(f"DreamDEXAgent: {len(ec_candidates)} EC candidates")
+            except Exception as e:
+                logger.warning(f"DreamDEXAgent failed: {e}")
 
             # ── Step 3: Price/vol signal generation ───────────────────────────
             cycle_id = str(uuid.uuid4())
