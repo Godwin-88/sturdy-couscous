@@ -377,6 +377,123 @@ Each upgrade: **Principle** → **Concrete change to P9** → **Files** → **Ac
 
 ---
 
+## 4B. Upgrades U25–U33 (P11 — Web3 DeFi sector expansion)
+
+> Applied to the P11 plan (`docs/p11_web3_defi_expansion.md`). Sources:
+> *Cryptographic Primitives in Blockchain Technology* (Bolfing) and
+> *How to DeFi: Advanced* (CoinGecko). Each row: principle → concrete change →
+> files → acceptance. New files only; the P9/P10 file lists are untouched.
+
+### U25 — Sign everything (tenet C7: digital signatures)
+
+- **Principle.** Bolfing Ch. 3.3.2.4: a digital signature scheme provides
+  authentication, data integrity, and non-repudiation. If the bot's decisions
+  are signed, *nobody* (including the operator) can later deny or silently
+  rewrite a decision; tampering invalidates the signature before any dispute.
+- **Concrete change:** `agent/evidence_chain.py` canonicalizes each cycle's
+  decisions (sorted keys, stable floats), hashes, signs the root over the
+  chain wallet; `api/routes/defi.py /evidence` exposes `verify_root`, panel
+  shows the verified badge.
+- **Files:** `agent/evidence_chain.py`, `api/routes/defi.py`, `DefiWorkspace.tsx`.
+- **Acceptance:** a unit test tampers with one stored decision and asserts
+  `verify_chain()` returns `False`; `verify_root(pubkey, root, sig)` matches.
+
+### U26 — Merkle-batch attestations (tenet C8: Merkle trees)
+
+- **Principle.** Bolfing Ch. 3.5: Merkle trees aggregate N leaves into one root
+  with O(log N) membership proofs. Instead of attesting every decision
+  individually on-chain, batch a period's roots into a Merkle root and anchor
+  *that* — reuse P10's `Attestation` node semantics.
+- **Concrete change:** `evidence_chain.merkle_root(entries)`; the relay's
+  `POST /anchor` publishes the batched root to the `GraphAlphaAnchor` testnet
+  contract.
+- **Files:** `agent/evidence_chain.py`, `web3/src/anchor.ts`.
+- **Acceptance:** `merkle_root` is stable for the same input; proof verification
+  walks the path in O(log N).
+
+### U27 — Quorum with authentication (tenet C9: Byzantine agreement)
+
+- **Principle.** Bolfing Ch. 5.3.8: without authenticated messages consensus
+  needs n > 3f; with signed messages the honest set can be smaller. For the
+  CreditGraph consensus layer, signed attestation confirmations allow a
+  *relaxed* quorum (e.g. 2-of-3 signed) instead of 3-of-3.
+- **Concrete change:** a config knob `CREDITGRAPH_QUORUM_SIGNED` (default 2)
+  and documentation; P10's `Attestation` nodes gain a `signed` flag.
+- **Files:** `api/creditgraph/` consensus module, `.env.example`.
+- **Acceptance:** doc + config only; no behavior change when unset.
+
+### U28 — Impermanent-loss-aware LP gating (tenet D1: AMM IL)
+
+- **Principle.** *How to DeFi* Ch. 3: constant-product AMMs suffer IL — 3×
+  price change ≈ 13.4% loss vs HODL, 4× ≈ 20%, 5× ≈ 25.5%. A bot that LPs
+  without pricing IL will systematically overpay.
+- **Concrete change:** `defi_agent` D1 computes `edge = fee_yield − IL − gas`
+  using the book's divergence table (or live `x·y=k` rebalance math) and rejects
+  LP when `edge ≤ MIN_LP_EDGE_PCT`; range width comes from the KG vol regime.
+- **Files:** `agent/defi_agent.py` (D1), `tests/test_defi_agent.py`.
+- **Acceptance:** hermetic test asserts an LP candidate with
+  `fee − IL − gas ≤ 0` is rejected.
+
+### U29 — Liquidation-distance guard (tenet D2: lending / collateral factor)
+
+- **Principle.** Ch. 5: borrowing is governed by utilization and collateral
+  factors; liquidation happens on price moves. The agent must know its distance
+  to liquidation *before* adding leverage, and self-liquidate rather than let
+  the protocol fire (flash-loan rescue pattern, Ch. 15).
+- **Concrete change:** `defi_agent` D2 tracks `liquidation_distance_pct` for
+  each `BorrowerPosition`; alerts at a threshold and (in testnet mode) can
+  issue a self-close.
+- **Files:** `agent/defi_agent.py` (D2), `tests/test_defi_agent.py`.
+- **Acceptance:** distance math test — collat factor 1.5, price −20% moves
+  distance negative → alert raised.
+
+### U30 — Oracle-staleness circuit-breaker (tenet D3: Black Thursday)
+
+- **Principle.** Ch. 13: on Black Thursday, stale Chainlink/Medianizer feeds
+  caused ~$8M of ETH collateral to be liquidated via wrong prices. Stale or
+  out-of-band oracle data must *stop* aggressive strategies, not throttle them.
+- **Concrete change:** every sector gate (D1–D8) checks `OracleFeed` freshness
+  (`ORACLE_STALE_MS`) and deviation band (`ORACLE_DEVIATION_BPS`); D6 governor
+  flips to `paused` for affected sectors.
+- **Files:** `agent/defi_agent.py` (D6), `tests/test_defi_agent.py`.
+- **Acceptance:** test: a feed with `updated_at` older than `ORACLE_STALE_MS`
+  (or outside the deviation band) → sector candidates empty + `paused: true`.
+
+### U31 — Flash-loan & approvals hygiene (tenet D4: exploit catalogue)
+
+- **Principle.** Ch. 15: flash loans (no default risk, no collateral, unlimited
+  size) power arb/self-liquidation/collateral-swap — but the same levers power
+  exploits. The *selling* discipline: approve-min, revoke-after,
+  simulate-first (`eth_call`), serialized nonces, hardware-wallet for live keys.
+- **Concrete change:** `web3/` relay enforces simulation-before-send
+  (`eth_call`), per-tx approval windows, and never holds live keys in `.env`.
+- **Files:** `web3/src/order.ts`, `web3/src/hygiene.ts`, docs.
+- **Acceptance:** static check (CI) asserts no `PRIVATE_KEY` literal outside
+  the signer module; relay refuses a live order without a prior simulation.
+
+### U32 — Vault leverage guard (tenet D5: yield-aggregator leverage)
+
+- **Principle.** Ch. 12 (Alpha Homora): leveraged yield farming multiplies both
+  returns *and* IL and liquidation risk. Leverage must be capped and priced
+  against liquidation distance, not chase raw farm APY.
+- **Concrete change:** `defi_agent` D3 caps effective leverage at
+  `MAX_LEVERAGE_X` and rejects farms whose `hack_prior` (age/audit status) is
+  too high.
+- **Files:** `agent/defi_agent.py` (D3), `tests/test_defi_agent.py`.
+- **Acceptance:** test asserts a candidate proposing leverage > cap is rejected.
+
+### U33 — Bridge hygiene & attested cross-chain arb (tenet D6 + P10)
+
+- **Principle.** Ch. 14 + the P10 merge: cross-chain messages are only as
+  trustworthy as their attestation. Use P10's attested data as the *input* to
+  D8 arb rather than trusting any bridge API, and cap per-bridge exposure.
+- **Concrete change:** `defi_agent` D8 consumes `CrossChainMessage` +
+  `Attestation` nodes from the shared KG; `MAX_BRIDGE_EXPOSURE_PCT` cap.
+- **Files:** `agent/defi_agent.py` (D8), `graph/schema/web3_extension.cypher`.
+- **Acceptance:** doc + cap enforced; D8 candidates only from attested messages.
+
+---
+
 ## 5. Roll-up acceptance & demo delta
 
 | U | One-line acceptance test (stub-based, no testnet needed) | Demo delta |
