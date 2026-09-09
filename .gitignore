@@ -138,3 +138,7 @@ frontend/dist/
 
 # Fernet dev key file (generated at runtime)
 api/.credentials_key
+
+# Reference materials (huge, external, never committed)
+REF/
+stellcasp/
