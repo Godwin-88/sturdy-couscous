@@ -422,28 +422,32 @@ Each upgrade: **Principle** → **Concrete change to P9** → **Files** → **Ac
 - **Files:** `api/creditgraph/` consensus module, `.env.example`.
 - **Acceptance:** doc + config only; no behavior change when unset.
 
-### U28 — EC edge-over-pay gate (tenet D1 re-grounded to DreamDEX Event Contracts)
+### U28 — Edge-over-pay gate (tenet D1: AMM IL) → EC + EVM/Sepolia
 
 - **Principle.** *How to DeFi* Ch. 3 teaches IL: an LP that overpays the risk
-  systematically loses. On DreamDEX EC, the analog is *overpaying an outcome*
-  — an agent that buys `UP` because the signal is positive ignores the ask and
-  systematically overpays. The fix is an edge gate.
-- **Concrete change:** `defi_agent` D5/D7 reject an EC candidate unless
-  `edge = your_p − ask ≥ MIN_EC_EDGE_PCT` (reuses P9 binary-Kelly sizing and
-  MIN_EDGE_PCT family). No AMM/LP logic.
-- **Files:** `agent/defi_agent.py`, `tests/test_defi_agent.py`.
-- **Acceptance:** hermetic test asserts an EC candidate with `your_p − ask ≤ 0`
-  is rejected.
+  systematically loses. The fix is an edge gate — applied twice:
+  - **EC (DreamDEX):** buying an outcome because the signal is positive
+    ignores the ask → overpay. Reject unless `edge = your_p − ask ≥ MIN_EC_EDGE_PCT`.
+  - **EVM (Sepolia, D1):** real Uniswap V3 IL — reject LP when
+    `fee_yield − IL(x·y=k) − gas ≤ MIN_LP_EDGE_PCT` (the book's 13.4%/20%/25.5% table).
+- **Concrete change:** `defi_agent` D1/D5/D7 apply the venue-appropriate edge
+  gate (EC: binary-Kelly edge; EVM: IL-adjusted edge from live pool math).
+- **Files:** `agent/defi_agent.py`, `agent/web3_adapters/ethereum.py`, `tests/test_defi_agent.py`.
+- **Acceptance:** hermetic tests — EC candidate with `your_p − ask ≤ 0` rejected;
+  EVM LP candidate with `fee − IL − gas ≤ 0` rejected (stub book-divergence table).
 
-### U29 — Settlement-distance / haircut guard (tenet D2 re-grounded)
+### U29 — Liquidation/settlement-distance guard (tenet D2) → EC + Aave V3
 
-- **Principle.** Ch. 5's liquidation math is about *distance to the bad event*.
-  For EC, the analog is *distance to resolution* + settlement-variance haircut
-  (already P9 U1): short-τ windows or wide settlement variance get discounted.
-- **Concrete change:** `defi_agent` D5/D7 apply the P9 U1 haircut (τ<cutoff +
-  divergence band) to EC candidates; no lending/liquidation code.
-- **Files:** `agent/defi_agent.py`, `tests/test_defi_agent.py`.
-- **Acceptance:** test: a short-τ EC candidate shows the haircut (P9 U1 table).
+- **Principle.** Ch. 5's liquidation math is *distance to the bad event*. Apply
+  per venue:
+  - **EC (DreamDEX):** distance-to-resolution + settlement-variance haircut
+    (P9 U1) — short-τ windows or wide settlement variance get discounted.
+  - **EVM (Sepolia, D2):** real Aave V3 liquidation distance — collateral
+    factor, utilization; alert before the protocol fires.
+- **Concrete change:** `defi_agent` D2/D5/D7 apply the venue-appropriate guard.
+- **Files:** `agent/defi_agent.py`, `agent/web3_adapters/ethereum.py`, `tests/test_defi_agent.py`.
+- **Acceptance:** tests — EC short-τ candidate shows haircut; Aave V3 candidate
+  with collat×price below liquidation threshold → alert raised.
 
 ### U30 — Oracle-staleness circuit-breaker (tenet D3: Black Thursday)
 
@@ -452,33 +456,36 @@ Each upgrade: **Principle** → **Concrete change to P9** → **Files** → **Ac
   staleness/deviation must *stop* EC candidates, not throttle them.
 - **Concrete change:** `defi_agent` D6 governor checks `OracleFeed` freshness
   (`ORACLE_STALE_MS`) + deviation band (`ORACLE_DEVIATION_BPS`); flips
-  `paused: true` for D5/D7 when the EC resolution feed is stale.
+  `paused: true` for the affected venues (D1–D8) when the feed is stale.
 - **Files:** `agent/defi_agent.py` (D6), `tests/test_defi_agent.py`.
 - **Acceptance:** test: `updated_at` older than `ORACLE_STALE_MS` → candidates
   empty + `paused: true`.
 
-### U31 — Signing & approvals hygiene (tenet D4 re-grounded to somnia-relay)
+### U31 — Signing & approvals hygiene (tenet D4 → somnia-relay + web3-relay)
 
 - **Principle.** Ch. 15's exploit catalogue (flash loans, unlimited approvals)
-  is really about *key/approval hygiene*. On our execution path, that means the
-  `somnia-relay` signs with RFC-6979/nonce discipline, simulates before send,
-  and never holds a live key in `.env` (P9 U16 already established).
-- **Concrete change:** re-affirm P9 U16 for the Somnia key path; static check
-  (CI) asserts no `PRIVATE_KEY` literal outside the signer module.
-- **Files:** `dreamdex/src/` relay, CI hygiene gate, docs.
-- **Acceptance:** static check passes; relay refuses a live order without a
-  prior simulation.
+  is really about *key/approval hygiene*. Both execution relays sign with
+  RFC-6979/nonce discipline, simulate before send, approve-min/revoke-after,
+  and never hold a live key in `.env` (P9 U16 + stellcasp's
+  `build_transaction({nonce, gas, gasPrice})`/`wait_for_receipt(status==1)`
+  pattern already implements CE-I).
+- **Concrete change:** re-affirm P9 U16 for the Somnia + EVM key paths; static
+  check (CI) asserts no `PRIVATE_KEY` literal outside the signer modules.
+- **Files:** `dreamdex/src/`, `agent/web3_adapters/ethereum.py`, CI hygiene gate, docs.
+- **Acceptance:** static check passes; both relays refuse a live order without
+  a prior simulation.
 
-### U32 — EC tail-hedge position cap (tenet D5 re-grounded)
+### U32 — Position/leverage cap (tenet D5) → EC tail-hedge + EVM vault leverage
 
-- **Principle.** Ch. 12 (Alpha Homora) is about *leverage amplifying loss*. For
-  EC tail-hedging (D7), the discipline is a hard portfolio cap so a Crisis-regime
-  hedge can never become a risk amplifier.
-- **Concrete change:** `defi_agent` D7 caps EC tail-hedge position at
-  `MAX_EC_TAILHEDGE_PCT` of portfolio (reuses P9 cap family). No yield-farm
-  leverage code.
-- **Files:** `agent/defi_agent.py` (D7), `tests/test_defi_agent.py`.
-- **Acceptance:** test asserts a D7 candidate exceeding the cap is rejected.
+- **Principle.** Ch. 12 (Alpha Homora) is about *leverage amplifying loss*.
+  Apply per venue:
+  - **EC (D7):** hard portfolio cap so a Crisis-regime tail hedge can't become
+    a risk amplifier (`MAX_EC_TAILHEDGE_PCT`).
+  - **EVM (D3):** yield-farm leverage capped at `MAX_LEVERAGE_X`, priced against
+    liquidation distance (not chased APY).
+- **Concrete change:** `defi_agent` D3/D7 enforce the venue-appropriate cap.
+- **Files:** `agent/defi_agent.py`, `agent/web3_adapters/ethereum.py`, `tests/test_defi_agent.py`.
+- **Acceptance:** tests — EC D7 size ≤ cap; EVM D3 candidate with leverage > cap rejected.
 
 ### U33 — Attestation hygiene for EC resolution feeds (tenet D6 + P10)
 

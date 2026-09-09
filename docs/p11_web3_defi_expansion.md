@@ -36,12 +36,22 @@ The two source books supply the **two halves of one machine**:
 
 **The target:** GraphAlpha as a **KG-gated, on-chain-attested agent platform** —
 one Neo4j reasoning over Equities (existing), Somnia prediction markets (P9,
-execution via `somnia-relay`), and Creditcoin attested credit (P10, via
-`attestation-service`/`execution-service`). **P11's strategy catalogue is
-re-grounded onto those two chains — there is no third ("web3") relay.**
-The *How to DeFi* sector tactics that require an EVM mainnet venue (AMMs,
-lending, yield farms) are explicitly **parked as future scope**, not invented
-into a phantom testnet.
+execution via `somnia-relay`), **Ethereum/Sepolia EVM DeFi** (this plan's
+`web3-relay`, template-ported from the `stellcasp` repo), and Creditcoin
+attested credit (P10, via `attestation-service`/`execution-service`).
+
+**P11 grounded as three execution venues:**
+1. **DreamDEX Event Contracts — Somnia 50312** (current default; `somnia-relay` :8450).
+2. **EVM DeFi — Ethereum Sepolia testnet** (`web3-relay` :8460, **ported from
+   `stellcasp/zkkyc/adapters/ethereum.py`** — a working web3.py EVM client with
+   Sepolia RPC, contract ABI calls, build/sign/send/wait-receipt — plus the
+   Foundry + Solidity contracts in `stellcasp/ethereum/`). D1–D4 attach here.
+3. **CreditGraph — Sepolia→Creditcoin** (attested data; P10 services).
+
+The *How to DeFi* catalogue (D1–D4) executes here on **real Sepolia testnet**
+contracts (Uniswap V3 / Aave V3) through a **real, already-written code path**
+ported from `stellcasp` — no invention, no phantom. The `web3-relay` is a
+first-class venue alongside the existing Somnia and Creditcoin services.
 
 ---
 
@@ -73,12 +83,12 @@ All line references are to the markdown exports in this repo.
 | Insurance (Ch. 8) | Cover pricing/claims; capital efficiency | Tail-hedge premium model keyed to KG regime (Crisis/Stress → buy cover). |
 | Multi-chain / bridges (Ch. 14) | Cross-chain protocols, bridge risk | Already P10 (Attestcoin Sepolia→Creditcoin). Audited-attested feeds only (D8). |
 
-> **Scope note (v2).** The AMM/Lending/Yield/Derivatives rows above are the
-> *book's* sector catalogue — educational ground truth for the strategies, NOT
-> things P11 builds. They require an EVM mainnet venue (Uniswap/Aave/…) we do
-> not run, so **D1–D4 are parked**. P11 implements only what executes on the
-> two live chains: DreamDEX Event Contracts (Somnia) + CreditGraph attested
-> data (Sepolia→Creditcoin): **D5–D8**.
+> **Scope note (v3).** The AMM/Lending/Yield/Derivatives rows above are the
+> *book's* sector catalogue — ground truth for the strategies. They now have a
+> **real venue**: **Ethereum Sepolia testnet**, where Uniswap V3 and Aave V3
+> have live testnet deployments. `web3-relay` :8460 executes D1–D4 via a
+> **ported EVM adapter from `stellcasp/zkkyc/adapters/ethereum.py`** (a working
+> web3.py Sepolia client). D5–D8 execute on DreamDEX/Somnia as before.
 
 ---
 
@@ -88,30 +98,35 @@ All line references are to the markdown exports in this repo.
                     ┌─────────────────────────── GraphAlpha ONE (this repo) ────────────────────────────┐
                     │  ONE Neo4j KG: Concept/Formula/Strategy/Regime/Category +                          │
                     │     EventContract (P9) + Borrower/Evidence/CreditDecision (P10)                    │
-                    │     + EventWindow/outcome/evidence edges (P11 — additive to existing types)        │
-                    │  ONE Redis: agent_status, signals, evidence_chain, dreamdex:*, creditgraph:* keys   │
+                    │     + EventWindow/AMMPool/LendingPool/VaultStrategy/OracleFeed (P11, additive)     │
+                    │  ONE Redis: agent_status, signals, evidence_chain, dreamdex:*, creditgraph:*,      │
+                    │             defi:* keys                                                            │
                     │                                                                                    │
   Somnia (P9, EXEC) │   orchestrator.py (= registry: DreamDEX, CreditGraph + NEW DeFiAgent hook)         │
-  Creditcoin (P10)  │     ├─ DreamDEXAgent ───────► somnia-relay (:8450, Node, markets-sdk)  X  EXEC   │
-  (attested data)   │     ├─ CreditGraphAgent ─────► attestation (:8080) + execution (:8081)             │
-  NEW (P11)         │     └─ DeFiAgent ─────────────► (same DreamDEX executions, EC strategies)          │
+  EVM (P11, EXEC)   │     ├─ DreamDEXAgent ───────► somnia-relay (:8450, Node, markets-sdk)              │
+  Creditcoin (P10)  │     ├─ CreditGraphAgent ─────► attestation (:8080) + execution (:8081)             │
+  (attested data)   │     └─ DeFiAgent ─────────────► web3-relay (:8460, EVM DeFi, Sepolia)              │
                     │           │   reads: Regime + KGStrategies + Attestation(creditgraph) integrity    │
                     │           ▼                                                                        │
                     │   evidence_chain.py: sign → sha256 → hash-chain → Merkle-batch → optional anchor    │
-                    │   api/routes/defi/* + DefiWorkspace.tsx (EC strategies / EvidenceChain)            │
+                    │   api/routes/defi/* + DefiWorkspace.tsx (EC + EVM DeFi / EvidenceChain)            │
                     └────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Execution chain = DreamDEX Event Contracts on Somnia (chain 50312), via the
-  existing `somnia-relay` (:8450).** The P11 `DeFiAgent` produces *candidate
-  intents* that the same DreamDEX execution path (RiskAgent sizing →
-  `somnia-relay` order) fills — **no new relay, no new port, no third chain.**
-- **Data chain = Ethereum Sepolia → Creditcoin (P10).** `Attestation` nodes
-  (Merkle+continuity proofs) inform which EC windows' resolution data is
+- **Execution venue A — DreamDEX Event Contracts on Somnia (chain 50312), via
+  `somnia-relay` (:8450).** D5–D8 candidates flow through the existing
+  DreamDEX path (unchanged).
+- **Execution venue B — Ethereum/Sepolia EVM DeFi via `web3-relay` (:8460).**
+  D1–D4 (AMM-LP, lending carry, yield-farm, perp funding) execute here. The
+  relay is **ported from `stellcasp/zkkyc/adapters/ethereum.py`** (web3.py
+  Sepolia client + `build_transaction`/`sign_transaction`/`wait_for_receipt`
+  = the U2/U3 action path) plus **`stellcasp/ethereum/` Foundry contracts**
+  (Soulbound ERC-721 anchor + UltraHonk verifier).
+- **Data venue — Ethereum Sepolia → Creditcoin (P10).** `Attestation` nodes
+  (Merkle+continuity proofs) inform which EC resolution + EVM data feeds are
   trustworthy (D6/D8).
-- P11 is additive **within the existing infra**: a new agent module + the
-  `evidence_chain.py` assurance layer; both invisible unless enabled. Nothing
-  about the Somnia or Creditcoin services changes.
+- P11 is additive across **all three venues**; `web3-relay` is `profiles: [web3]`
+  (invisible to `make up`), exactly like `dreamdex`/`creditgraph`.
 
 ---
 
@@ -162,50 +177,67 @@ P9/P10 extensions. Loaded by `graph-loader` after `master.cypher`,
 `dreamdex_extension.cypher`, `creditgraph_extension.cypher` (any order — all
 applied once, idempotent).
 
-**Scope correction (v2):** the earlier AMM/Lending/Vault/Perp/Insurance types
-implied an EVM DeFi venue we do not run. **Withdrawn.** P11 extends only the
-**types that already exist** on the two live chains:
+**Scope correction (v3):** the AMM/Lending/Vault/Perp/Insurance types are
+**restored** — they now point at a **real venue (Ethereum Sepolia testnet)**,
+and their runtime nodes are upserted by the ported EVM adapter (stellcasp).
 
 ```
 EventWindow        — a DreamDEX EC market window (reuses P9 EventContract)
 Outcome            — EC resolution outcome (YES/NO, P9)
 Attestation        — P10 Merkle+continuity proof (Sepolia→Creditcoin)
+── EVM DeFi types (ported strategy nodes; venue = Sepolia) ──────────
+AMMPool            — Uniswap V3 testnet pool
+LendingPool        — Aave V3 testnet market
+VaultStrategy      — yield-aggregator strategy (book Ch.12)
+PerpetualMarket    — perp venue + funding rate
+OracleFeed         — EC/EVM price feed freshness + deviation
 
 (EventWindow)-[:ACTIVATES_IN]->(Regime)            ← shared market-state spine
 (EventWindow)-[:GOVERNED_BY]->(Strategy)           ← shared strategy spine
 (EventWindow)-[:CORRELATED_WITH]->(Ticker)         ← spot/EC correlation (D5)
 (EventWindow)-[:RESOLVED_BY]->(OracleFeed)         ← EC resolution oracle (D6)
+(AMMPool)-[:PROVIDES_LIQUIDITY_TO]->(LiquidityRange)
+(BorrowerPosition)-[:HELD_AT]->(LendingPool)
+(VaultStrategy)-[:INVESTS_IN]->(AMMPool)
+(PerpetualMarket)-[:PRICED_BY]->(OracleFeed)
 (OracleFeed)-[:AUTHENTICATED_BY]->(Attestation)    ← P10 tie-in (D8)
 ```
 
-`OracleFeed` is a **thin additive node** (name/type/`updated_at`/`deviation_bps`)
-that records the EC resolution feed's freshness — the D6 circuit-breaker reads
-it. No new "sector" labels, no AMM/lending types.
+The EVM types' runtime upsert comes from the **ported stellcasp adapter**
+(`agent/web3_adapters/ethereum.py`), which already returns structured
+`chain_id`/`contract_address`/`network` data (stellcasp `DeploymentInfo`) →
+field-mapped into these KG nodes. No new "sector" labels beyond these;
+`OracleFeed` is the thin freshness/over-noded guard the D6 breaker reads.
 
 Runtime agents upsert nodes exactly like `dreamdex_agent._upsert_kg_nodes()`
 (non-blocking, `except: logger.warning`).
 
 ---
 
-## 6. Strategy catalogue (grounded on DreamDEX + attested data)
+## 6. Strategy catalogue (grounded: Ethereum/Sepolia EVM + DreamDEX/Somnia EC)
 
-**Scope correction (v2):** D1 (AMM-LP), D2 (lending carry), D3 (yield-farm),
-and D4 (perp funding) require an **EVM mainnet DeFi venue** we do not run.
-They are **parked (future scope)** — their tenet rows (U28/U29/U32) are kept
-for the day a venue is added, but no phantom `web3/` relay is built for them.
+**Scope correction (v3):** D1–D4 are **re-enabled** — they execute on
+**Ethereum Sepolia testnet** via `web3-relay` (:8460), ported from
+`stellcasp/zkkyc/adapters/ethereum.py` (web3.py EVM client + Sepolia RPC) with
+Uniswap V3 / Aave V3 testnet contracts. D5–D8 remain on DreamDEX/Somnia.
 
 | # | Sector (grounded) | Edge model (KG-gated) | Execution | Risk gates |
 |---|---|---|---|---|
-| **D5** | EC cross-hedge (P9++) | KG `CORRELATED_WITH` (EventWindow ↔ Ticker) high → hedge a spot position with EC shares | **DreamDEX via somnia-relay (:8450)** | binary-Kelly (U9), correlation minimum, EC-position cap |
-| **D6** | EC resolution-oracle integrity breaker | EC settles on an oracle → staleness/deviations (`OracleFeed`) pause aggressive EC candidates (Black-Thursday lesson) | n/a (risk governor over D5/D7/D8) | U30 staleness + deviation band |
+| **D1** | AMM concentrated-LP | fee-yield − IL(`x·y=k`) − gas > threshold (`MIN_LP_EDGE_PCT`); range width from KG vol regime | **Ethereum/Sepolia via web3-relay (:8460)** — ported Uniswap V3 adapter | U28, slippage cap, range-width cap |
+| **D2** | Lending carry | lend-rate − borrow-rate spread > cost (`MIN_LENDING_SPREAD_PCT`); utilization trend from KG | **Ethereum/Sepolia via web3-relay (:8460)** — ported Aave V3 adapter | U29 liquidation-distance, collateral factor |
+| **D3** | Yield-farm ranking | risk-adj APY = raw − hack-prior − IL − liq-risk | **Ethereum/Sepolia via web3-relay (:8460)** | U32 leverage guard, per-farm cap, hack-prior |
+| **D4** | Perp funding carry | \|funding\| > threshold ∧ KG regime agrees → delta-neutral book | **Ethereum/Sepolia via web3-relay (:8460)** | funding-change stop, basis risk, venue cap |
+| **D5** | EC cross-hedge (P9++) | KG `CORRELATED_WITH` (EventWindow ↔ Ticker) high → hedge spot with EC | **DreamDEX via somnia-relay (:8450)** | binary-Kelly (U9), correlation minimum, EC-position cap |
+| **D6** | EC/EVM resolution-oracle integrity breaker | EC/spot settles on an oracle → staleness/deviations (`OracleFeed`) pause aggressive candidates (Black-Thursday lesson) | n/a (risk governor over D1–D8) | U30 staleness + deviation band |
 | **D7** | EC tail-hedge | regime=Crisis/Stress → buy EC shares as portfolio tail hedge ($0/$1 contingent claim) | **DreamDEX via somnia-relay (:8450)** | premium cap, strike/tenor from KG vol, regime gate |
-| **D8** | Attested-data edge | P10 `Attestation` (Sepolia→Creditcoin) marks which EC resolution feeds are trustworthy → filters D5/D7 | n/a (data governor) | U33: only attested feeds; per-feed cap |
+| **D8** | Attested-data edge | P10 `Attestation` (Sepolia→Creditcoin) marks which EC + EVM resolution feeds are trustworthy → filters D1/D5/D7 | n/a (data governor) | U33: only attested feeds; per-feed cap |
 
 **Every strategy implements the same interface** as `DreamDEXAgent.run(regime,
-signals) → candidates[]` — one more registry entry in the orchestrator, zero
-changes to the **existing DreamDEX Risk/sizing/execution path** (candidates
-flow into the same `somnia-relay` order flow; nothing parallel, no new relay).
-Parked D1–D4 would slot in identically the day a venue exists.
+signals) → candidates[]` — one more registry entry in the orchestrator. Each
+strategy's *execution venue* is selected by the adapter registry (ported from
+stellcasp's `AdapterRegistry`) → D1–D4 dispatch to `web3-relay` (Ethereum/
+Sepolia), D5–D8 to `somnia-relay` (DreamDEX). The Risk/Execution spine is
+unchanged; the relay selection is data, not branching.
 
 ---
 
@@ -214,7 +246,7 @@ Parked D1–D4 would slot in identically the day a venue exists.
 | Level | What | Mode | Gate to advance |
 |---|---|---|---|
 | L0 | Lab sandbox (already) | paper fills, deterministic quant, backtests | edge OOS-validated |
-| L1 | **DreamDEX testnet (Somnia 50312)** — P11 grounded | EC paper fills + evidence-chain continuity; `somnia-relay` in dry-run | N testnet cycles + evidence-chain unbroken + tests green |
+| L1 | **DreamDEX testnet (Somnia 50312)** + **Ethereum/Sepolia testnet** | EC paper fills + EVM/DeFi testnet orders via `web3-relay` (Sepolia faucets) + evidence-chain continuity | N testnet cycles + evidence-chain unbroken + tests green |
 | L2 | Live small-cap, audited | `live` with per-market caps, kill-switch, air-gapped signer | human-approve each sector + evidence-chain public |
 | L3 | Scaled multi-sector | portfolio-level KG risk (sector correlation on the graph) | regime stops, per-sector caps, periodic anchoring |
 
@@ -226,52 +258,78 @@ human sign-off (U6 freeze/controls, P7 human authority).
 
 ## 8. Files + allowed edits (definitive)
 
-**New:**
+**New (ported from `stellcasp/` — reuse, don't reinvent):**
 ```
-agent/defi_agent.py           EC strategy orchestrator (D5–D8 registry) — same
-                              run(regime, signals) interface as DreamDEXAgent
-agent/evidence_chain.py       hash-chain, Merkle, verify, nonce (§4) — ✅ built
-api/routes/defi.py            Redis-backed read-only: /defi/{candidates,positions,evidence}
-graph/schema/defi_extension.cypher   additive KG types (§5) — reuses P9 EventContract
+web3/                         Node relay :8460 — Ethereum/Sepolia EVM DeFi.
+                              Render of: zkkyc/adapters/ethereum.py (web3.py EVM
+                              client), ethereum/contracts/*.sol (Foundry), deploy.sh
+agent/defi_agent.py          strategy orchestrator (D1–D8) — same run() interface
+agent/web3_adapters/base.py  ← stellcasp zkkyc/adapters/base.py (PassportAdapterBase)
+agent/web3_adapters/registry.py ← stellcasp zkkyc/adapters/registry.py (AdapterRegistry)
+agent/web3_adapters/ethereum.py ← stellcasp zkkyc/adapters/ethereum.py (web3.py Sepolia)
+agent/evidence_chain.py      hash-chain, Merkle, verify, nonce (§4) — ✅ built
+api/routes/defi.py           Redis-backed read-only: /defi/{candidates,positions,evidence}
+graph/schema/defi_extension.cypher   additive KG types (§5)
 frontend/src/components/DefiWorkspace.tsx   tabs + EvidenceChain viewer
 frontend/src/lib/defiApi.ts
+frontend/src/lib/web3Api.ts (optional, future charting)
 tests/test_evidence_chain.py   ✅ built (16 tests)
-tests/test_defi_agent.py       D5–D8 gates + U30 breaker hermetic tests
-.env.example                  +§9 vars (all reuse existing DREAMDEX_/SOMNIA_/CREDITGRAPH_ names)
+tests/test_defi_agent.py       D1–D8 gates + U30 breaker hermetic tests
+.env.example                  +§9 vars (EVM + DreamDEX names)
+docker-compose.yml            +web3-relay block, profiles: [web3]
 ```
 
-**No new relay, no new port, no new container.** P11 executes entirely through
-the existing `somnia-relay` (:8450) + the P10 attestation services.
+**Ported `stellcasp` artifacts (exact sources):**
+- `zkkyc/adapters/{base,registry,ethereum,stellar,algorand,sui,aptos,polkadot,casper,icp,hedera}.py`
+  → evm/chain adapter family (one interface, N chains — EP-08 pattern).
+- `ethereum/{contracts,foundry.toml,scripts/deploy.sh,.env.example,README.md}`
+  → deployed Sepolia contracts + Foundry deploy (anchor/verifier).
+- `zkkyc/agents/settlement.py` + `toolkit/*` + `payments/x402.py`
+  → registry-based settlement dispatcher + optional x402 payment clearing.
 
-**Edits to existing files — exactly 3 (same pattern as P9/P10):**
+**Edits to existing files — exactly 4 (same pattern as P9/P10):**
 1. `agent/orchestrator.py` — +4 lines: import, instantiate, non-fatal `run()`
    hook, evidence-chain flush.
 2. `api/main.py` — +1 line: `app.include_router(defi_router)`.
 3. `frontend/src/App.tsx` — +1 menu item "DeFi" → `DefiWorkspace`.
+4. `docker-compose.yml` — `web3-relay` service block (profiles: [web3]);
+   `graph-loader` cat unchanged (defi_extension idempotent).
 
-(`docker-compose.yml` is NOT touched — no new service block; `graph-loader`
-cat order is unchanged because `defi_extension.cypher` types are additive to
-types `master.cypher` already creates via P9/P10, and the file is idempotent.)
+---
 
 ## 9. Environment variables (append to `.env.example`)
 
 ```env
-# ── P11 (grounded on DreamDEX/Somnia + P10 attestation) ───────────
-DEFI_ENABLED=0                 # master switch; defi_agent self-disables
-DEFI_EC_CROSSHEDGE=1           # D5 on/off
-DEFI_EC_TAILHEDGE=1            # D7 on/off
-DEFI_EC_ORACLE_BREAKER=1       # D6 on/off
-MIN_EC_EDGE_PCT=0.03           # D5/D7 edge gate (reuses P9 MIN_EDGE_PCT family)
-MAX_EC_TAILHEDGE_PCT=0.02      # D7 cap (reuses P9 MAX_EC_POSITION_PCT_PORTFOLIO)
-MIN_CORRELATION=0.60           # D5 EC↔spot correlation floor
-ORACLE_STALE_MS=600000         # D6 staleness breaker (EC resolution feed)
-ORACLE_DEVIATION_BPS=50        # D6 deviation band
+# ── EVM DeFi (P11) — Ethereum Sepolia testnet (ported from stellcasp ETHEREUM_*) ─
+WEB3_ENABLED=0                 # master switch; defi_agent self-disables
+WEB3_RPC_URL=https://rpc.sepolia.org      # Sepolia testnet RPC (stellcasp default)
+WEB3_CHAIN_ID=11155111         # Sepolia chain id
+WEB3_PASSPORT_CONTRACT=0x0     # deployed ZKPassport anchor (stellcasp ethereum/)
+WEB3_VERIFIER_CONTRACT=0x0     # deployed UltraHonk verifier
+WEB3_ORACLE_AUTHORITY_PRIVATE_KEY=  # signing key (RFC-6979; never commit)
+WEB3_RELAY_URL=http://localhost:8460
+WEB3_RELAY_API_KEY=            # shared with dreamdex RELAY_API_KEY
+MIN_LP_EDGE_PCT=0.05           # D1 gate (fee−IL−gas)
+MIN_LENDING_SPREAD_PCT=0.02    # D2 gate
+MIN_FUNDING_CARRY_PCT=0.10     # D4 gate
+MAX_LEVERAGE_X=2.0             # D3/U32 leverage cap
+MAX_BRIDGE_EXPOSURE_PCT=0.05   # D8/U33 cap
+ORACLE_STALE_MS=600000         # D6/U30 staleness breaker
+ORACLE_DEVIATION_BPS=50        # D6/U30 deviation band
+# ── Existing P11 EC vars (unchanged, D5–D8) ──
+DEFI_ENABLED=0                 # master switch for the orchestrator hook
+DEFI_EC_CROSSHEDGE=1           # D5
+DEFI_EC_TAILHEDGE=1            # D7
+DEFI_EC_ORACLE_BREAKER=1       # D6
+MIN_EC_EDGE_PCT=0.03           # D5/D7 edge gate
+MAX_EC_TAILHEDGE_PCT=0.02      # D7 cap
+MIN_CORRELATION=0.60           # D5 correlation floor
 ```
 
-**No new `WEB3_*` names.** All P11 vars reuse the existing `DREAMDEX_*`/`SOMNIA_*`
-and `CREDITGRAPH_*` env families already in this repo — P11 adds only the seven
-D5–D8 gating/control knobs above plus the §4 assurance knobs
-(`EVIDENCE_CHAIN_NAMESPACE`). No `WEB3_RPC_URL`, no `:8460`.
+Reuses the `DREAMDEX_*`/`SOMNIA_*`/`CREDITGRAPH_*` families for the EC + data
+venues; the **new** `WEB3_*` block is the Ethereum/Sepolia venue, mirroring
+stellcasp's `ETHEREUM_RPC_URL/CHAIN_ID/PASSPORT_CONTRACT/VERIFIER_CONTRACT`
+names. If `WEB3_ENABLED=0`, D1–D4 self-disable; GraphAlpha boots identically.
 
 ---
 
@@ -284,30 +342,29 @@ Full rows appended to `p9_tenets_financial_engineering.md` §4B (after U24):
 | U25 | Sign everything (Crypto: DS) | decisions signed via `evidence_chain.py`; root verified in API + panel | unit test: tampered decision → `verify_chain()==False` |
 | U26 | Merkle-batch attestations (Crypto: Merkle) | decision roots → Merkle batch; P10 `Attestation` reuse | test: proof length O(log n) |
 | U27 | Quorum with auth (Crypto: Byzantine) | signed confirmations ⇒ relaxed quorum in CreditGraph consensus | doc + config knob |
-| U28 | EC edge over pay (DeFi Ch3 IL→EC) | **re-grounded:** never overpay — `edge = your-p − ask` gate (P9 binary-Kelly) | hermetic test: low-edge EC rejected |
-| U29 | Liquidation-distance guard (DeFi Ch5) | **now EC:** distance-to-resolution / settlement haircut (P9 U1) | test: short-τ candidate shows haircut |
-| U30 | Oracle-staleness breaker (DeFi Ch13) | EC resolution feed stale/deviation → pause D5/D7 (Black Thursday) | test: stale feed → paused |
-| U31 | Signing hygiene (DeFi Ch15→relay) | `somnia-relay` RFC-6979/nonce, simulate-first, approve-min; no live key in `.env` | static check + relay tests (P9 U16) |
-| U32 | Position cap (DeFi Ch12→EC tail) | **re-grounded:** EC tail-hedge position cap = fraction of portfolio | test: D7 size ≤ cap |
-| U33 | Bridge/attestation hygiene (DeFi Ch14+P10) | only attested (P10) resolution feeds drive D8 filtering; per-feed cap | doc + caps enforced |
+| U28 | IL-aware LP gating (DeFi Ch3→Sepolia) | **re-grounded:** real IL (`x·y=k` on Uniswap V3 Sepolia) — reject LP when fee−IL−gas ≤ 0 | hermetic test w/ IL table |
+| U29 | Liquidation-distance guard (DeFi Ch5→Sepolia) | **re-grounded:** Aave V3 liquidation distance (collat factor, utilization) | test: distance math |
+| U30 | Oracle-staleness breaker (DeFi Ch13) | EC/EVM feed stale/deviation → pause D1–D8 (Black Thursday) | test: stale feed → paused |
+| U31 | Signing hygiene (DeFi Ch15→both relays) | web3-relay + somnia-relay RFC-6979/nonce, simulate-first, approve-min; no live key in `.env` | static check + relay tests |
+| U32 | Vault leverage guard (DeFi Ch12→Sepolia) | yield-farm leverage capped (MAX_LEVERAGE_X) + liquidation distance | test: leverage ≤ bound |
+| U33 | Bridge/attestation hygiene (DeFi Ch14+P10) | only attested (P10) feeds filter D1/D5/D7; per-bridge cap | doc + caps enforced |
 
 ---
 
 ## 11. Build & test sequence (Docker-first; each stage independently stub-able)
 
 1. `evidence_chain.py` + `tests/test_evidence_chain.py` ✅ (16 tests, hermetic).
-2. `agent/defi_agent.py` (D5–D8) + `tests/test_defi_agent.py` — hermetic (stub
-   `get_markets`/`suggest_crypto`/`Attestation`), paper mode end-to-end.
-3. KG `graph/schema/defi_extension.cypher` (additive `OracleFeed`/edges) + load
-   in Neo4j (idempotent).
-4. API routes (`/defi/*`) + `DefiWorkspace.tsx` + App menu item (read-only,
-   Redis-backed).
-5. `.env.example` append + `Makefile` `web3-test`? no — **`Makefile` untouched**;
-   run the new tests via the existing `pytest` target + a `pytest tests/test_defi_agent.py`
-   selection. Full suite in Docker.
-6. Demo wiring: DreamDEX/Somnia testnet lifecycle — `somnia-relay` dry-run →
-   one paper EC order → evidence-chain appended → EvidenceChain tab shows
-   hash-chain + Merkle root.
+2. **Port stellcasp adapters** → `agent/web3_adapters/{base,registry,ethereum}.py`
+   (copy + rename; web3.py already a dep). `pytest tests/test_web3_adapters.py`.
+3. `agent/defi_agent.py` (D1–D8) + `tests/test_defi_agent.py` — hermetic (stub
+   relay/get_markets/suggest_crypto/Attestation), paper mode end-to-end.
+4. KG `graph/schema/defi_extension.cypher` (additive types) + load in Neo4j.
+5. API routes (`/defi/*`) + `DefiWorkspace.tsx` + App menu item.
+6. `web3/` relay + Foundry deploy (`ethereum/scripts/deploy.sh` on Sepolia) —
+   D1–D4 orders against Uniswap V3 / Aave V3 Sepolia testnet, `make web3-test`.
+7. Demo wiring: Somnia EC lifecycle + **Sepolia EVM lifecycle** — `web3-relay`
+   dry-run → one testnet AMM/LP/lend order → evidence-chain appended →
+   EvidenceChain tab shows hash-chain + Merkle root (+ ERC-721 anchor if funded).
 
 ---
 
@@ -315,29 +372,14 @@ Full rows appended to `p9_tenets_financial_engineering.md` §4B (after U24):
 
 | Risk | Mitigation |
 |---|---|
-| EC resolution-oracle divergence (Ch. 13 Black Thursday analog) | U30 breaker + `OracleFeed` freshness; P9 U1 haircut re-grounded |
-| EC settlement/void variance | P9 U1/U9: code-is-law, treat voids as losses, τ<cutoff haircut |
-| Overpaying EC (book's IL lesson analog) | U28 EC edge gate (`your-p − ask`) + binary-Kelly sizing |
-| Tail-hedge over-risk | U32 D7 portfolio cap; premium cap; regime gate (Crisis/Stress only) |
-| MEV/front-running on discrete EC | simulate-first; the `somnia-relay` nonce serialization (P9 U2/U3) |
-| Attestation/bridge trust (Ch. 14 + P10) | U33 only attested feeds filter D8; per-feed cap |
-| Key custody (Ch. 15) | `somnia-relay` RFC-6979, air-gapped signer for live Somnia key; never in `.env` |
-| Regulatory | testnet-first (Somnia 50312); USD-pegged permissioning docs in repo |
-
----
-
-## 13. Judging alignment
-
-- **Somnia × DreamDEX:** the P9 core plus D5 (EC cross-hedge) and D6/D7
-  deepening makes "KG-gated EC agent" a richer, stronger demo.
-- **Creditcoin/Attestcoin (AI track):** attested cross-chain data (P10)
-  *driving* DeFi decisions (D8, `OracleFeed ← Attestation` edges) is precisely
-  "AI apps that process cryptographically verified cross-chain data … without
-  centralized oracle operators". P11 makes the KG the decision spine fed by
-  attested data.
-- **Both:** 90-sec demo arc — regime → KG strategy fired → evidence-chain
-  signed+batched+Merkle-anchored → testnet order → fill with tx_hash → panel
-  shows the hash chain.
+| EC resolution-oracle divergence (Black Thursday analog) | U30 breaker + `OracleFeed` freshness; P9 U1 haircut |
+| EVM smart-contract exploit (Ch. 15: code-in-production) | audited-protocols-only (Uniswap V3/Aave V3), small testnet caps, U28/U32 gates |
+| EVM/slots IL (Ch. 3) | U28 real IL table + range-width from KG vol |
+| EVM liquidation cascade (Ch. 5) | U29 liquidation-distance guard + collateral-swap rescue |
+| MEV/front-running (Ch. 3,15) | simulate-first (`eth_call`), REP of stellcasp relay nonce/gas (U2/U3), private RPC (lab) |
+| Attestation/bridge trust (Ch. 14 + P10) | U33 only attested feeds; per-bridge cap |
+| Key custody (Ch. 15) | web3-relay + somnia-relay RFC-6979, air-gapped signer for live keys; never in `.env` |
+| Regulatory | testnet-first (Somnia 50312 + Sepolia); USD-pegged permissioning docs in repo |
 
 ---
 
