@@ -63,7 +63,11 @@ def _live_screen_data(screen: str, params: dict | None = None) -> dict:
     """
     base_url = f"http://localhost:{os.getenv('API_PORT', '8000')}"
     out: dict = {}
-    params = params or {}
+    params = dict(params or {})
+    # normalize nested page-context (frontend may nest regime under extra)
+    extra = params.get("extra")
+    if isinstance(extra, dict) and extra.get("regime") and not params.get("regime"):
+        params["regime"] = extra["regime"]
 
     def _get(path: str, key: str) -> None:
         try:
@@ -96,9 +100,12 @@ def _live_screen_data(screen: str, params: dict | None = None) -> dict:
             opt_underlying = (params.get("underlying") or "SPY").upper()
             opt_exp = params.get("expiration") or ""
             opt_type = params.get("contract_type") or "call"
+            opt_regime = params.get("regime")
             sugg_path = f"/options/suggestions?underlying={opt_underlying}&contract_type={opt_type}"
             if opt_exp:
                 sugg_path += f"&expiration={opt_exp}"
+            if opt_regime:
+                sugg_path += f"&regime={opt_regime}"
             _get(sugg_path, "options_suggestions")
 
     if screen == "crypto":
@@ -106,8 +113,12 @@ def _live_screen_data(screen: str, params: dict | None = None) -> dict:
         _get("/alpaca/positions", "alpaca_positions")
         pair = (params.get("pair") or params.get("underlying") or "BTC/USD").upper()
         lens = params.get("lens") or "defensive"
+        regime = params.get("regime")
         _get(f"/crypto/tape?pair={pair}&days=90", "crypto_tape")
-        _get(f"/crypto/suggestions?pair={pair}&lens={lens}", "crypto_suggestions")
+        sugg_path = f"/crypto/suggestions?pair={pair}&lens={lens}"
+        if regime:
+            sugg_path += f"&regime={regime}"
+        _get(sugg_path, "crypto_suggestions")
 
     if screen == "intelligence":
         _get("/agent/regime-forecast", "regime_forecast")
@@ -117,6 +128,21 @@ def _live_screen_data(screen: str, params: dict | None = None) -> dict:
 
     if screen == "graph":
         _get("/graph/nodes?node_type=Strategy&limit=30", "strategy_nodes")
+
+    # Authoritative screen regime for options/crypto = its OWN tape-derived
+    # regime (or user override), NOT the global SPY label. The LLM is
+    # instructed (REGIME AUTHORITY RULE) to use this for these screens.
+    if screen in ("options", "crypto"):
+        src_key = "crypto_suggestions" if screen == "crypto" else "options_suggestions"
+        src = out.get(src_key) or {}
+        as_ = out.get("agent_status") or {}
+        out["screen_regime"] = {
+            "screen": screen,
+            "regime": src.get("regime") or as_.get("regime") or "Neutral",
+            "regime_confidence": src.get("regime_confidence") or as_.get("regime_confidence") or 0.0,
+            "regime_source": src.get("regime_source") or "underlying_tape",
+            "note": (f"{screen} uses its own tape-derived regime, not the global SPY label"),
+        }
 
     return out
 

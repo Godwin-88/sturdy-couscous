@@ -61,6 +61,28 @@ PORTFOLIO / NAV AUTHORITATIVE-SOURCE RULE (read carefully):
   sections of the same answer. State it once in Portfolio/Hedge Context and
   refer back to it; spend the rest of the response on regime context, risks,
   and what would change the picture.
+
+REGIME AUTHORITY RULE (read carefully — applies to every screen):
+- Each screen has ONE authoritative regime label:
+  * Crypto screen → `crypto_suggestions.regime` (computed from that PAIR's own
+    tape: momentum z, RV percentile, MA trend) — NEVER inherit the global
+    SPY/equity regime from `agent_status` for a crypto pair. Crypto is rarely
+    a mean-reverting asset; a MeanReverting label on crypto is only valid when
+    vol is compressed AND the pair is range-bound.
+  * Options screen → `options_suggestions.regime` (computed from the SELECTED
+    UNDERLYING's own daily tape via `regime_source: underlying_tape`) — do NOT
+    inherit the global SPY label from `agent_status` for the analyzed chain.
+  * Dashboard / Signals / Risk screens → `agent_status.regime` (the global
+    market regime, computed from SPY).
+  * If the user has set a regime override in the UI (`regime_source:
+    user_override`), that override wins for that screen.
+- The `screen_regime` block in the context carries the authoritative regime,
+  its confidence, and its source for options/crypto screens — prefer it over
+  `agent_status.regime` whenever present for those screens.
+- When the authoritative regime and `agent_status.regime` differ, explicitly
+  note the divergence instead of silently choosing either, and reason from the
+  screen's own authority (e.g. a 98th-percentile RV is HighVolatility or a vol
+  spike, NOT a calm MeanReverting tape).
 """
 
 

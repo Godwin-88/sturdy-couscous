@@ -19,6 +19,7 @@ from datetime import date, datetime
 from typing import Any
 
 import numpy as np
+import pandas as pd  # noqa: F401  (used by _underlying_tape_idx)
 from loguru import logger
 
 try:
@@ -106,6 +107,91 @@ async def current_regime() -> dict:
         logger.warning(f"regime lookup failed for options suggestions: {e}")
         _regime_cache = {"at": now, "regime": "Neutral", "confidence": 0.0}
     return {"regime": _regime_cache["regime"], "confidence": _regime_cache["confidence"]}
+
+
+def _underlying_tape_idx(underlying: str) -> dict:
+    """Tape indices from the UNDERLYING's own daily series (features-only).
+
+    Used to classify a per-underlying regime so options suggestions do not
+    inherit the global SPY/equity label (e.g. MeanReverting 1.0 for every
+    underlying, which was the bug: TSLA/MCHP/XRP all got the SPY label).
+    """
+    idx: dict[str, Any] = {}
+    try:
+        try:
+            from agent.alpaca_data import provider as _prov
+        except ModuleNotFoundError:
+            from alpaca_data import provider as _prov  # type: ignore
+        df = _prov.get_ohlcv(underlying, days=500)
+        if df is None or getattr(df, "empty", True):
+            return idx
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [c[0] for c in df.columns]
+        close = df["Close"].astype(float)
+        if len(close) < 40:
+            return idx
+        rets = close.pct_change().dropna()
+        rv = rets.rolling(21).std().dropna() * np.sqrt(252)
+        if len(rv) >= 2 and rv.iloc[-1] == rv.iloc[-1]:
+            idx["spot"] = float(close.iloc[-1])
+            idx["rv_21"] = round(float(rv.iloc[-1]), 4)
+            idx["rv_pctile"] = round(float((rv <= rv.iloc[-1]).mean()), 4)
+            idx["rv_21_z"] = round(float((rv.iloc[-1] - rv.mean()) / (rv.std() or 1)), 2)
+        m12 = close.pct_change(12).dropna()
+        if len(m12) >= 21:
+            idx["mom_12_1_z"] = round(float((m12.iloc[-1] - m12.mean()) / (m12.std() or 1)), 2)
+        m21 = (close.rolling(21).mean() / close.rolling(7).mean() - 1).dropna()
+        if len(m21) >= 21:
+            idx["mom_21_7_z"] = round(float((m21.iloc[-1] - m21.mean()) / (m21.std() or 1)), 2)
+        ma200 = close.rolling(200).mean()
+        if len(close) >= 200 and not np.isnan(ma200.iloc[-1]):
+            idx["above_200ma"] = bool(close.iloc[-1] > ma200.iloc[-1])
+            idx["dist_200ma_pct"] = round(float(close.iloc[-1] / ma200.iloc[-1] - 1), 4)
+        else:
+            ma50 = close.rolling(50).mean()
+            ma20 = close.rolling(20).mean()
+            if len(close) >= 50 and ma50.iloc[-1] == ma50.iloc[-1]:
+                idx["ma_cross"] = bool(ma50.iloc[-1] > ma20.iloc[-1])
+    except Exception as e:
+        logger.warning(f"_underlying_tape_idx failed for {underlying}: {e}")
+    return idx
+
+
+def classify_underlying_regime(underlying: str) -> tuple[str, float]:
+    """Per-underlying regime from its OWN tape (past data, no lookahead).
+
+    Deterministic, mirrors the crypto per-pair classifier so equity/ETF
+    underlyings are not forced into the global SPY label. Same thresholds:
+    crypto/underlyings are rarely 'mean-reverting' — MeanReverting is only
+    issued when vol is compressed AND price is range-bound.
+    """
+    idx = _underlying_tape_idx(underlying)
+    rvp = idx.get("rv_pctile")
+    mz = idx.get("mom_12_1_z", 0.0) or 0.0
+    above = idx.get("above_200ma")
+    cross = idx.get("ma_cross")
+    if above is None:
+        above = cross
+    dist = abs(float(idx.get("dist_200ma_pct") or 0.0))
+    if rvp is None or idx.get("spot") is None:
+        return "Neutral", 0.3
+
+    if rvp >= 0.9 and mz <= -1.0:
+        return "Crisis", 0.75
+    if rvp >= 0.8:
+        return "HighVolatility", 0.7
+    if abs(mz) >= 0.8 and rvp <= 0.75:
+        if above is not None:
+            aligned = (mz > 0 and above) or (mz < 0 and not above)
+        else:
+            aligned = True
+        if aligned:
+            return "Trending", 0.65
+    if rvp <= 0.25 and abs(mz) < 0.5:
+        return "LowVolatility", 0.6
+    if rvp <= 0.4 and abs(mz) < 0.7 and dist < 0.06:
+        return "MeanReverting", 0.5
+    return "Neutral", 0.4
 
 
 def _kg_option_strategies(regime: str) -> list[dict]:
@@ -852,13 +938,19 @@ def compute_suggestions(underlying: str, expiration: str | None,
         except Exception:
             expiration = None
 
-    regime_state = {"regime": "Neutral", "confidence": 0.0}
+    regime_state = {"regime": "Neutral", "confidence": 0.0, "source": "underlying_tape"}
     if regime:
         regime = str(regime).strip()
+        regime_state = {"regime": regime, "confidence": confidence or 0.9, "source": "user_override"}
     else:
-        regime_state = asyncio.run(current_regime())
-        regime = regime_state["regime"]
+        # Per-underlying regime from its OWN tape — NOT the global SPY label.
+        # (Previously this called current_regime() = RegimeAgent = SPY, which
+        # labelled EVERY underlying MeanReverting at 1.0. Bug fixed.)
+        reg, conf = classify_underlying_regime(underlying)
+        regime = reg
+        regime_state = {"regime": reg, "confidence": conf, "source": "underlying_tape"}
     confidence = confidence or float(regime_state["confidence"])
+    regime_source = str(regime_state.get("source") or "underlying_tape")
 
     rows = _chain_rows(underlying, expiration, contract_type)
     by_key: dict[str, dict] = {}
@@ -1003,6 +1095,7 @@ def compute_suggestions(underlying: str, expiration: str | None,
         "expiration": expiration,
         "regime": regime,
         "regime_confidence": confidence,
+        "regime_source": regime_source,
         "spot_estimate": spot,
         "dte": dte,
         "chain_size": len(rows),
