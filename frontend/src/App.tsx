@@ -4,7 +4,7 @@ import clsx from "clsx";
 import {
   Activity, GitBranch, BarChart2, Table2, Radio, ShieldAlert, Brain,
   FlaskConical, LayoutDashboard, Terminal, Download, Search,
-  Lightbulb, Zap, Shield, Edit3, ChevronDown, ChevronUp, Bot, Sliders,
+  Lightbulb, Zap, Shield, Edit3, ChevronDown, ChevronUp, Bot, Sliders, Waves,
 } from "lucide-react";
 import Sigma from "sigma";
 import Graph from "graphology";
@@ -22,6 +22,7 @@ import IntelligencePanel   from "@/components/IntelligencePanel";
 import BrokerTablePanel   from "@/components/BrokerTablePanel";
 import CryptoPanel from "@/components/CryptoPanel";
 import DreamDEXPanel from "@/components/DreamDEXPanel";
+import DefiWorkspace from "@/components/DefiWorkspace";
 import CreditWorkspace from "@/components/credit/CreditWorkspace";
 import OptionsPanel       from "@/components/OptionsPanel";
 import OptionPnlPanel     from "@/components/OptionPnlPanel";
@@ -41,13 +42,14 @@ import { getScreenContext } from "@/lib/screenContext";
 import { registerWebMCPTools, unregisterWebMCPTools, WEBMCP_TOOL_COUNT } from "@/webmcp/tools";
 import { LABEL_COLOR } from "@/lib/utils";
 
-type Tab = "dashboard" | "crypto" | "dreamdex" | "credit" | "graph" | "signals" | "backtest" | "risk" | "intelligence" | "options" | "settings";
+type Tab = "dashboard" | "crypto" | "dreamdex" | "credit" | "defi" | "graph" | "signals" | "backtest" | "risk" | "intelligence" | "options" | "settings";
 
 const OP_TABS: { id: Tab; label: string; icon: React.ReactNode; stage: string }[] = [
   { id: "dashboard",   label: "Dashboard",     icon: <LayoutDashboard size={14} />, stage: "MONITORING" },
   { id: "crypto",      label: "Crypto",        icon: <Zap             size={14} />, stage: "DEPLOYED" },
   { id: "dreamdex",    label: "DreamDEX",      icon: <Shield          size={14} />, stage: "DEPLOYED" },
   { id: "credit",      label: "Credit",        icon: <FlaskConical    size={14} />, stage: "DEPLOYED" },
+  { id: "defi",        label: "DeFi",          icon: <Waves           size={14} />, stage: "TESTING" },
   { id: "options",     label: "Options",       icon: <Activity        size={14} />, stage: "DEPLOYED" },
   { id: "signals",     label: "Orders",       icon: <Table2          size={14} />, stage: "DEPLOYED" },
   { id: "backtest",    label: "Backtest",      icon: <BarChart2       size={14} />, stage: "TESTING" },
@@ -196,6 +198,7 @@ function OperationsShell({ opTab, onNavigate }: { opTab: string; onNavigate?: (t
       {opTab === "signals"   && <SignalsTab onNavigate={onNavigate} />}
       {opTab === "crypto"    && <CryptoTab />}
       {opTab === "dreamdex"  && <DreamDEXPanel />}
+      {opTab === "defi"      && <DefiWorkspace />}
       {opTab === "credit"    && <CreditWorkspace />}
       {opTab === "options"   && <OptionsTab onNavigate={onNavigate} />}
       {opTab === "risk"      && <RiskWorkspaceTab onNavigate={onNavigate} />}

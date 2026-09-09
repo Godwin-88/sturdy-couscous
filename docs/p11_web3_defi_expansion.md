@@ -361,7 +361,11 @@ Full rows appended to `p9_tenets_financial_engineering.md` §4B (after U24):
 4. KG `graph/schema/defi_extension.cypher` (additive types) + load in Neo4j ✅
    (verified live: 6 constraints — EventWindow/AMMPool/LendingPool/VaultStrategy/
    PerpetualMarket/OracleFeed — plus 3 seeded OracleFeed nodes).
-5. API routes (`/defi/*`) + `DefiWorkspace.tsx` + App menu item.
+5. API routes (`/defi/*`) + `DefiWorkspace.tsx` + App menu item ✅
+   (7 routes — candidates/governor/sectors/positions/evidence/status/health —
+   Redis-backed, read-only; panel tabs: Candidates/Sectors/Governor/Evidence;
+   evidence tab shows the tamper-evident chain head/root/merkle. 9 hermetic
+   route tests; full suite 284 passed; frontend typecheck + build green.)
 6. `web3/` relay + Foundry deploy (`ethereum/scripts/deploy.sh` on Sepolia) —
    D1–D4 orders against Uniswap V3 / Aave V3 Sepolia testnet, `make web3-test`.
 7. Demo wiring: Somnia EC lifecycle + **Sepolia EVM lifecycle** — `web3-relay`
