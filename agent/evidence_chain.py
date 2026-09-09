@@ -188,18 +188,29 @@ def verify_merkle_proof(leaf: str, proof: list[tuple[str, str]], root: str) -> b
     for side, sib in proof:
         cur = _pair_hash(sib, cur) if side == "L" else _pair_hash(cur, sib)
     return cur == root
+_HEX_CHARS = set("0123456789abcdefABCDEF")
+
+
+def _is_evm_private_key(key: str) -> bool:
+    """True if `key` is a 32-byte EVM private key (64 hex chars, optional 0x)."""
+    k = key[2:] if key.startswith("0x") else key
+    return len(k) == 64 and all(c in _HEX_CHARS for c in k)
+
+
+def _is_evm_signature(sig: str) -> bool:
+    """True if `sig` is an eth-account ECDSA signature (0x + 130 hex chars)."""
+    return sig.startswith("0x") and len(sig) == 132 and all(
+        c in _HEX_CHARS for c in sig[2:]
+    )
+
+
 class EvidenceChain:
     """
     Hash-chained decision ledger. Backed by any dict-like store (Redis, in-mem,
     or a testing fake). Entries:
 
         {
-          "cycle_id":   str,
-          "regime":     str,
-          "prev_root":  str (first entry: genesis root),
-          "root":       str (sha256 of prev_root|cycle_id|regime|decision_hashes),
-          "decision_hashes": [leaf, ...],
-          "ts":         float,
+          ...
         }
 
     .verify_chain() walks from the head backward, recomputing each root and
@@ -278,10 +289,13 @@ class EvidenceChain:
     # ── batch attestation root over all stored entries (U26) ──────────────
     def merkle_root(self) -> str:
         return merkle_root([e["root"] for e in self._get_entries()])
-# ── signing (U25): ECDSA when eth_account is present, HMAC otherwise ───
+
+    # ── signing (U25): ECDSA when eth_account is present AND the key is a
+    #    valid 32-byte EVM private key; HMAC otherwise (paper/lab — the
+    #    documented graceful-degradation contract).
     @staticmethod
     def sign_root(root: str, private_key: str) -> str:
-        if Account is not None:
+        if Account is not None and _is_evm_private_key(private_key):
             from eth_account.messages import encode_defunct  # type: ignore
             msg = encode_defunct(text=root)
             sig = Account.sign_message(msg, private_key=private_key)  # type: ignore
@@ -292,7 +306,7 @@ class EvidenceChain:
 
     @staticmethod
     def verify_root(public_key: str, root: str, signature: str) -> bool:
-        if Account is not None:
+        if Account is not None and _is_evm_signature(signature):
             from eth_account.messages import encode_defunct  # type: ignore
             from eth_utils import to_checksum_address  # type: ignore
             msg = encode_defunct(text=root)

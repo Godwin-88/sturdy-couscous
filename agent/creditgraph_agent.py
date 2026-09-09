@@ -34,26 +34,35 @@ except ImportError:                          # pragma: no cover
 ENABLED = os.getenv("CREDITGRAPH_ENABLED", "0").lower() in ("1", "true", "yes")
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-DEMO_BORROWERS_JSON = os.getenv(
-    "CREDITGRAPH_DEMO_BORROWERS",
-    json.dumps([
+DEMO_BORROWERS_JSON = json.dumps([
         {"borrower_id": "demo_borrower_1", "fico_score": 645.0,
          "dti_ratio": 0.35, "loan_to_value": 0.60,
          "requested_amount": 100_000.0},
         {"borrower_id": "demo_borrower_2", "fico_score": 720.0,
          "dti_ratio": 0.22, "loan_to_value": 0.45,
          "requested_amount": 60_000.0},
-    ]),
-)
+    ])
 MIN_CREDIT_SCORE = float(os.getenv("CREDITGRAPH_MIN_SCORE", "50.0"))
 
 
 def _demo_borrowers() -> list[dict]:
-    try:
-        raw = json.loads(DEMO_BORROWERS_JSON)
-        return raw if isinstance(raw, list) else []
-    except Exception:
-        return []
+    """Return the demo borrower set.
+
+    Robustness (defense-in-depth): the env override `CREDITGRAPH_DEMO_BORROWERS`
+    is tried first, but is only honoured when it parses to a list. Any parse
+    failure — including the Docker Compose `.env` quirk where a trailing inline
+    comment becomes part of the value — falls back to the built-in default set.
+    """
+    for candidate in (os.getenv("CREDITGRAPH_DEMO_BORROWERS"), DEMO_BORROWERS_JSON):
+        if not candidate:
+            continue
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            continue
+        if isinstance(parsed, list):
+            return parsed
+    return []
 
 
 class CreditGraphAgent:
