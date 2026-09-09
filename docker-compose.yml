@@ -278,6 +278,33 @@ services:
       - "8081:8081"
     profiles: ["creditgraph"]
 
+# ── EVM DeFi relay (P11) — Sepolia testnet; profiles:[web3] → invisible to make up ──
+  web3-relay:
+    build:
+      context: ./web3
+    container_name: graphalpha-web3-relay
+    env_file:
+      - .env
+    environment:
+      - WEB3_ENABLED=${WEB3_ENABLED:-0}
+      - WEB3_TRADING_MODE=${WEB3_TRADING_MODE:-paper}
+      - WEB3_NETWORK=${WEB3_NETWORK:-sepolia}
+      - WEB3_RPC_URL=${WEB3_RPC_URL:-https://rpc.sepolia.org}
+      - WEB3_CHAIN_ID=${WEB3_CHAIN_ID:-11155111}
+      - WEB3_PASSPORT_CONTRACT=${WEB3_PASSPORT_CONTRACT:-0x0}
+      - WEB3_VERIFIER_CONTRACT=${WEB3_VERIFIER_CONTRACT:-0x0}
+      - WEB3_ORACLE_AUTHORITY_PRIVATE_KEY=${WEB3_ORACLE_AUTHORITY_PRIVATE_KEY:-}
+      - WEB3_WALLET_ADDRESS=${WEB3_WALLET_ADDRESS:-}
+      - DRY_RUN=${DRY_RUN:-1}
+      - RELAY_API_KEY=${WEB3_RELAY_API_KEY:-}
+      - MIN_LP_EDGE_PCT=${MIN_LP_EDGE_PCT:-0.05}
+      - MIN_LENDING_SPREAD_PCT=${MIN_LENDING_SPREAD_PCT:-0.02}
+      - MIN_FUNDING_CARRY_PCT=${MIN_FUNDING_CARRY_PCT:-0.10}
+      - MAX_LEVERAGE_X=${MAX_LEVERAGE_X:-2.0}
+    ports:
+      - "8460:8460"
+    profiles: ["web3"]
+
 volumes:
   neo4j_data:
   neo4j_logs:

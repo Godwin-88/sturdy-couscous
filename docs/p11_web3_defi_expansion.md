@@ -366,8 +366,13 @@ Full rows appended to `p9_tenets_financial_engineering.md` §4B (after U24):
    Redis-backed, read-only; panel tabs: Candidates/Sectors/Governor/Evidence;
    evidence tab shows the tamper-evident chain head/root/merkle. 9 hermetic
    route tests; full suite 284 passed; frontend typecheck + build green.)
-6. `web3/` relay + Foundry deploy (`ethereum/scripts/deploy.sh` on Sepolia) —
-   D1–D4 orders against Uniswap V3 / Aave V3 Sepolia testnet, `make web3-test`.
+6. `web3/` relay + Foundry contracts (ported from `stellcasp/ethereum/`) ✅
+   (contracts `ZKPassport`/`UltraVerifier`/`UltraHonkVerifier` + `foundry.toml` +
+   `scripts/deploy.sh` copied verbatim; relay :8460 — typecheck exit 0,
+   crypto-hygiene exit 0, `Image sturdy-couscous-web3-relay Built`, boot smoke
+   `listening :8460 mode=paper dryRun=true network=sepolia`, `/status` returns the
+   U17 shape; `pytest tests/test_defi_agent.py tests/test_defi_routes.py` →
+   34 passed; compose `profiles: [web3]`, Makefile `web3-up/logs/test`.)
 7. Demo wiring: Somnia EC lifecycle + **Sepolia EVM lifecycle** — `web3-relay`
    dry-run → one testnet AMM/LP/lend order → evidence-chain appended →
    EvidenceChain tab shows hash-chain + Merkle root (+ ERC-721 anchor if funded).
