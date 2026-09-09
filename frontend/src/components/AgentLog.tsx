@@ -58,7 +58,7 @@ function classifyEvent(msg: AgentEvent): FilterType {
 
 const FILTER_COLORS: Record<FilterType, string> = {
   ALL:    "bg-slate-700 text-slate-300 border-slate-600",
-  SIGNAL: "bg-indigo-900/60 text-indigo-300 border-indigo-700",
+  SIGNAL: "bg-brand-900/60 text-brand-300 border-brand-700",
   TRADE:  "bg-emerald-900/60 text-emerald-300 border-emerald-700",
   ERROR:  "bg-red-900/60 text-red-300 border-red-700",
   REGIME: "bg-purple-900/60 text-purple-300 border-purple-700",
@@ -66,7 +66,7 @@ const FILTER_COLORS: Record<FilterType, string> = {
 
 const FILTER_ACTIVE: Record<FilterType, string> = {
   ALL:    "bg-slate-600 text-white border-slate-400",
-  SIGNAL: "bg-indigo-700 text-white border-indigo-500",
+  SIGNAL: "bg-brand-700 text-white border-brand-500",
   TRADE:  "bg-emerald-700 text-white border-emerald-500",
   ERROR:  "bg-red-700 text-white border-red-500",
   REGIME: "bg-purple-700 text-white border-purple-500",
@@ -99,7 +99,7 @@ export default function AgentLog() {
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700 shrink-0">
         <div className="flex items-center gap-2">
-          <Radio size={13} className="text-indigo-400" />
+          <Radio size={13} className="text-brand-400" />
           <span className="text-xs font-mono uppercase tracking-wider text-slate-300">
             Live Agent Stream
           </span>
@@ -158,7 +158,7 @@ function EventRow({ msg, type }: { msg: AgentEvent; type: FilterType }) {
 
   const rowClass = {
     ERROR:  "bg-red-950/50 border-l-2 border-red-600",
-    SIGNAL: "border-l-2 border-indigo-600/50",
+    SIGNAL: "border-l-2 border-brand-600/50",
     TRADE:  "border-l-2 border-emerald-600/50",
     REGIME: "border-l-2 border-purple-600/50",
     ALL:    "",
@@ -166,7 +166,7 @@ function EventRow({ msg, type }: { msg: AgentEvent; type: FilterType }) {
 
   const textClass = {
     ERROR:  "text-red-300 font-bold",
-    SIGNAL: "text-indigo-200",
+    SIGNAL: "text-brand-200",
     TRADE:  "text-emerald-200",
     REGIME: "text-purple-200",
     ALL:    "text-slate-300",
@@ -174,7 +174,7 @@ function EventRow({ msg, type }: { msg: AgentEvent; type: FilterType }) {
 
   const icon = {
     ERROR:  <AlertCircle size={11} className="text-red-400 mt-0.5 shrink-0" />,
-    SIGNAL: <Zap size={11} className="text-indigo-400 mt-0.5 shrink-0" />,
+    SIGNAL: <Zap size={11} className="text-brand-400 mt-0.5 shrink-0" />,
     TRADE:  <TrendingUp size={11} className="text-emerald-400 mt-0.5 shrink-0" />,
     REGIME: <RefreshCw size={11} className="text-purple-400 mt-0.5 shrink-0" />,
     ALL:    <span className="w-3 shrink-0" />,

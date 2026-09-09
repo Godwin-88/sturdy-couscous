@@ -2,12 +2,12 @@ import { TrendingDown, TrendingUp, DollarSign, AlertTriangle, ArrowUp, ArrowDown
 
 const ASSET_CLASS_ORDER = ["equity", "vol", "rates", "commodity", "crypto", "fx", "other"];
 const ASSET_CLASS_COLOR: Record<string, string> = {
-  equity:    "text-blue-500",
+  equity:    "text-brand-500",
   vol:       "text-red-500",
   rates:     "text-yellow-500",
   commodity: "text-orange-500",
   crypto:    "text-purple-500",
-  fx:        "text-cyan-500",
+  fx:        "text-brand-500",
   other:     "text-slate-500",
 };
 import {
@@ -115,7 +115,7 @@ export default function PnLDashboard({ onNavigate }: { onNavigate?: (tab: string
 
       {/* Tab bar — chart is the primary, positions now live in their own table below */}
       <div className="flex border-b border-slate-700">
-        <span className="px-4 py-2 text-xs font-mono uppercase tracking-wider text-indigo-400 border-b-2 border-indigo-500 bg-slate-800">
+        <span className="px-4 py-2 text-xs font-mono uppercase tracking-wider text-brand-400 border-b-2 border-brand-500 bg-slate-800">
           NAV
         </span>
       </div>

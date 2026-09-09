@@ -32,7 +32,7 @@ export default function AlpacaPanel({ onNavigate }: { onNavigate?: (tab: string)
   };
 
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden transition-all duration-200 hover:border-slate-500 hover:shadow-lg hover:shadow-indigo-500/10 hover:-translate-y-0.5 cursor-pointer">
+    <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden transition-all duration-200 hover:border-slate-500 hover:shadow-lg hover:shadow-brand-500/10 hover:-translate-y-0.5 cursor-pointer">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700 bg-slate-950">
         <div className="flex items-center gap-2">

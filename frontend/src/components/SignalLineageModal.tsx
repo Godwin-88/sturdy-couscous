@@ -56,7 +56,7 @@ export default function SignalLineageModal({ open, onClose }: Props) {
                 onChange={e => setStrategy(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleSearch()}
                 list="strategy-list"
-                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-indigo-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-brand-500"
                 placeholder="Type or select a strategy..."
               />
               <datalist id="strategy-list">
@@ -64,7 +64,7 @@ export default function SignalLineageModal({ open, onClose }: Props) {
               </datalist>
             </div>
             <button onClick={handleSearch} disabled={loading || !strategy.trim()}
-              className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">
+              className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white disabled:opacity-50">
               <Search size={12} />{loading ? "..." : "Search"}
             </button>
           </div>
@@ -88,7 +88,7 @@ export default function SignalLineageModal({ open, onClose }: Props) {
                   <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Regimes</div>
                   <div className="flex flex-wrap gap-1.5">
                     {lineage.regimes.map(r => (
-                      <span key={r} className="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-950 text-blue-300 border border-blue-800">{r}</span>
+                      <span key={r} className="px-2 py-0.5 rounded text-[10px] font-mono bg-brand-950 text-brand-300 border border-brand-800">{r}</span>
                     ))}
                   </div>
                 </div>
@@ -101,7 +101,7 @@ export default function SignalLineageModal({ open, onClose }: Props) {
                   <div className="space-y-2">
                     {lineage.concepts.map((c, i) => (
                       <div key={i} className="border border-slate-700 rounded p-2">
-                        <div className="text-xs font-semibold text-indigo-300">{c.name}</div>
+                        <div className="text-xs font-semibold text-brand-300">{c.name}</div>
                         {c.definition && <div className="text-[10px] text-slate-400 mt-0.5">{c.definition}</div>}
                         <div className="flex gap-2 mt-1 text-[10px] text-slate-500">
                           {c.category && <span>Category: {c.category}</span>}

@@ -119,7 +119,7 @@ export default function OptionOrderModal({ initial, onClose, onSuccess }: { init
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => setOrderClass("simple")}
                 className={clsx("px-2 py-1.5 rounded border text-[11px] font-bold font-mono",
-                  orderClass === "simple" ? "bg-indigo-600/30 border-indigo-500/50 text-indigo-200" : "bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800")}>
+                  orderClass === "simple" ? "bg-brand-600/30 border-brand-500/50 text-brand-200" : "bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800")}>
                 SIMPLE (1 leg)
               </button>
               <button onClick={() => { setOrderClass("vertical"); if (spreadLegs.length === 0) setSpreadLegs([{ symbol: ticker.trim(), strike: opt?.strike ?? 0, contract_type: opt?.type === "P" ? "put" : "call", mid: mid0, delta: null, contracts: 1, side: side === "buy" ? "buy_to_open" : "sell_to_open" }]); }}

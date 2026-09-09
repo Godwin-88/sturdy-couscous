@@ -51,7 +51,7 @@ export default function AgentPerformanceModal({ open, onClose }: Props) {
                 </div>
                 <div className="bg-slate-800 rounded-lg p-2.5 border border-slate-700">
                   <div className="text-[10px] text-slate-500 uppercase">Avg Confidence</div>
-                  <div className="text-lg font-bold font-mono text-indigo-400">{data.summary.avg_regime_confidence != null ? (data.summary.avg_regime_confidence * 100).toFixed(0) + "%" : "—"}</div>
+                  <div className="text-lg font-bold font-mono text-brand-400">{data.summary.avg_regime_confidence != null ? (data.summary.avg_regime_confidence * 100).toFixed(0) + "%" : "—"}</div>
                 </div>
                 <div className="bg-slate-800 rounded-lg p-2.5 border border-slate-700">
                   <div className="text-[10px] text-slate-500 uppercase">Cycles w/ Signals</div>

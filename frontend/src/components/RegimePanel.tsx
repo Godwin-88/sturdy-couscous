@@ -229,7 +229,7 @@ export default function RegimePanel({ onNavigate }: { onNavigate?: (tab: string)
               className={clsx(
                 "text-[10px] font-mono px-1.5 py-0.5 rounded border",
                 strategy === ""
-                  ? "bg-indigo-900 border-indigo-500 text-indigo-200"
+                  ? "bg-brand-900 border-brand-500 text-brand-200"
                   : "bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-400"
               )}
               data-testid="strategy-chip-all"
@@ -246,7 +246,7 @@ export default function RegimePanel({ onNavigate }: { onNavigate?: (tab: string)
                   className={clsx(
                     "text-[10px] font-mono px-1.5 py-0.5 rounded border transition",
                     active
-                      ? "bg-indigo-900 border-indigo-500 text-indigo-200"
+                      ? "bg-brand-900 border-brand-500 text-brand-200"
                       : liveActiveSet.has(s.name)
                         ? "bg-emerald-950 border-emerald-700 text-emerald-300 hover:border-emerald-500"
                         : "bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-400"
@@ -268,7 +268,7 @@ export default function RegimePanel({ onNavigate }: { onNavigate?: (tab: string)
           {data.active_strategies.length === 0
             ? <span className="text-xs text-slate-500">None activated for this regime</span>
             : data.active_strategies.map(s => (
-                <div key={s} className="text-xs font-mono text-indigo-300 py-0.5">{s}</div>
+                <div key={s} className="text-xs font-mono text-brand-300 py-0.5">{s}</div>
               ))
           }
         </div>
@@ -347,7 +347,7 @@ function TopSuggestionCard({
       {top ? (
         <div className="rounded border border-slate-700 bg-slate-900/50 p-2 space-y-1">
           <div className="flex items-baseline justify-between">
-            <div className="text-[11px] font-mono text-indigo-300">{top.strategy}</div>
+            <div className="text-[11px] font-mono text-brand-300">{top.strategy}</div>
             <div className="text-[10px] font-mono text-slate-500">
               score <span className="text-slate-200">{top.score?.toFixed(1) ?? "—"}</span>
             </div>
@@ -370,7 +370,7 @@ function TopSuggestionCard({
           </div>
           <button
             onClick={onOpenOptions}
-            className="w-full text-[10px] font-mono px-2 py-1 rounded bg-indigo-900 border border-indigo-700 text-indigo-200 hover:bg-indigo-800 transition flex items-center justify-center gap-1"
+            className="w-full text-[10px] font-mono px-2 py-1 rounded bg-brand-900 border border-brand-700 text-brand-200 hover:bg-brand-800 transition flex items-center justify-center gap-1"
           >
             Open in Options <ExternalLink size={9} />
           </button>

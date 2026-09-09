@@ -139,11 +139,11 @@ export default function App() {
 
       <aside className="w-52 shrink-0 flex flex-col bg-slate-900 border-r border-slate-800 h-full">
         <div className="flex items-center gap-2 px-4 py-4 border-b border-slate-800">
-          <div className="w-7 h-7 rounded bg-indigo-600 flex items-center justify-center">
+          <div className="w-7 h-7 rounded bg-brand-600 flex items-center justify-center">
             <Radio size={14} className="text-white" />
           </div>
           <span className="text-sm font-bold text-slate-100 font-mono tracking-tight">
-            Graph<span className="text-indigo-400">Alpha</span>
+            Graph<span className="text-brand-400">Alpha</span>
           </span>
         </div>
 
@@ -155,7 +155,7 @@ export default function App() {
               <button key={t.id} onClick={() => handleOpNav(t.id)}
                 className={clsx("flex items-center gap-2.5 w-full px-3 py-2 text-xs font-mono rounded-lg transition-colors text-left",
                   isActive
-                    ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
+                    ? "bg-brand-600/20 text-brand-400 border border-brand-500/30"
                     : "text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-transparent"
                 )}>
                 {t.icon}{t.label}
@@ -325,7 +325,7 @@ function GraphTab() {
 
   const actions = [
     { icon: <Terminal size={14} />, label: "Query",    onClick: () => setShowConsole(!showConsole), active: showConsole, color: "text-emerald-400" },
-    { icon: <Edit3 size={14} />,    label: "Edit",     onClick: () => setEditOpen(true),             active: false,        color: "text-blue-400" },
+    { icon: <Edit3 size={14} />,    label: "Edit",     onClick: () => setEditOpen(true),             active: false,        color: "text-brand-400" },
     { icon: <Zap size={14} />,      label: "Simulate", onClick: () => setSimOpen(true),              active: false,        color: "text-amber-400" },
     { icon: <Search size={14} />,   label: "Lineage",  onClick: () => setLineageOpen(true),          active: false,        color: "text-purple-400" },
     { icon: <Shield size={14} />,   label: "Conflicts",onClick: () => setContraOpen(true),           active: false,        color: "text-red-400" },
@@ -399,7 +399,7 @@ function GraphTab() {
                   <div key={c.name} className="flex items-center gap-2 text-xs font-mono">
                     <span className="text-slate-600 w-4">{i + 1}.</span>
                     <span className="text-slate-300 flex-1 truncate">{c.name}</span>
-                    <span className="text-indigo-400">{c.centrality}</span>
+                    <span className="text-brand-400">{c.centrality}</span>
                   </div>
                 ))}
               </div>

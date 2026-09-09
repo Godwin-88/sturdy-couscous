@@ -243,7 +243,7 @@ export default function OrderTicketModal({
             </button>
             {!proposalToken ? (
               <button onClick={preview} disabled={submitting || !ticker.trim() || qty <= 0}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded bg-indigo-600/30 border border-indigo-500/40 text-xs font-bold text-indigo-300 hover:bg-indigo-600/50 disabled:opacity-50">
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded bg-brand-600/30 border border-brand-500/40 text-xs font-bold text-brand-300 hover:bg-brand-600/50 disabled:opacity-50">
                 {submitting ? <Radio size={12} className="animate-pulse" /> : <Zap size={12} />} Preview
               </button>
             ) : (

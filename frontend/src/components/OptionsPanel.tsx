@@ -134,6 +134,7 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
       contract_symbol: selected?.symbol ?? undefined,
       strike: selected?.strike_price ?? undefined,
       lens,
+      regime: regimeOverride || sugMeta?.regime || undefined,
       extra: {
         spot_estimate: sugMeta?.spot_estimate ?? undefined,
         dte: sugMeta?.dte ?? undefined,
@@ -433,11 +434,11 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
     <div className="h-full overflow-y-auto p-3 space-y-3">
       <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 bg-slate-950">
-          <Activity size={14} className="text-indigo-400" />
+          <Activity size={14} className="text-brand-400" />
           <span className="text-xs text-slate-300 font-semibold uppercase tracking-widest">Options - Alpaca Paper</span>
           <div className="ml-auto flex items-center gap-1.5">
             <button onClick={goToAnalyze} disabled={!rows.length} title="Deep-link this chain into Analytics (default = underlying series)"
-              className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-semibold font-mono bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-600/50 disabled:opacity-40 disabled:cursor-not-allowed">
+              className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-semibold font-mono bg-brand-600/30 border border-brand-500/40 text-brand-300 hover:bg-brand-600/50 disabled:opacity-40 disabled:cursor-not-allowed">
               <LineChart size={11} /> Analyze
             </button>
             <button onClick={goToRisk} title="Open Risk — chain context carries over"
@@ -458,10 +459,10 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") searchUnderlyings(); }}
               placeholder="Search any underlying (SPY, QQQ, AAPL, TSLA, XLF...)"
-              className="flex-1 bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-xs font-mono text-slate-200 placeholder:text-slate-600 outline-none focus:border-indigo-500"
+              className="flex-1 bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-xs font-mono text-slate-200 placeholder:text-slate-600 outline-none focus:border-brand-500"
             />
             <button onClick={searchUnderlyings} disabled={searching}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-indigo-600/30 border border-indigo-500/40 text-xs text-indigo-300 hover:bg-indigo-600/50 disabled:opacity-50">
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-brand-600/30 border border-brand-500/40 text-xs text-brand-300 hover:bg-brand-600/50 disabled:opacity-50">
               {searching ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />} Search
             </button>
           </div>
@@ -486,12 +487,12 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
             <span className="text-xs text-slate-500 font-mono">Underlying:</span>
             {["SPY", "QQQ", "AAPL", "TSLA"].map(s => (
               <button key={s} onClick={() => pickUnderlying(s)}
-                className={clsx("px-2.5 py-1 rounded text-xs font-mono", underlying === s ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-300")}>
+                className={clsx("px-2.5 py-1 rounded text-xs font-mono", underlying === s ? "bg-brand-600 text-white" : "bg-slate-800 text-slate-300")}>
                 {s}
               </button>
             ))}
             {!["SPY", "QQQ", "AAPL", "TSLA"].includes(underlying) && (
-              <span className="px-2.5 py-1 rounded text-xs font-mono bg-indigo-600 text-white">{underlying}</span>
+              <span className="px-2.5 py-1 rounded text-xs font-mono bg-brand-600 text-white">{underlying}</span>
             )}
 
             <select value={expiration} onChange={e => onExpirationChange(e.target.value)}
@@ -504,7 +505,7 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
               {MOODS.map(m => (
                 <button key={m} onClick={() => onMoodChange(m)}
                   className={clsx("px-3 py-1 text-xs font-mono uppercase",
-                    mood === m ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400")}>
+                    mood === m ? "bg-brand-600 text-white" : "bg-slate-800 text-slate-400")}>
                   {m}
                 </button>
                              ))}
@@ -551,7 +552,7 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
                       <tr key={r.symbol}
                         onClick={() => { setSelected(r); loadSuggestions(); }}
                         className={clsx("border-b border-slate-800 cursor-pointer hover:bg-slate-800/60 group",
-                          selected?.symbol === r.symbol ? "bg-indigo-600/10 ring-1 ring-inset ring-indigo-500/40" : "",
+                          selected?.symbol === r.symbol ? "bg-brand-600/10 ring-1 ring-inset ring-brand-500/40" : "",
                           isAtm && selected?.symbol !== r.symbol ? "bg-slate-800/30" : "")}>
                         <td className="py-1.5 px-2 text-slate-200 font-bold sticky left-0 bg-slate-950 group-hover:bg-slate-800 z-[5]">{fmtN(r.strike_price)}</td>
                         <td className="py-1 px-2 text-right text-slate-400 whitespace-nowrap">{r.symbol}</td>
@@ -957,7 +958,7 @@ function OrderModal({
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => setOrderClass("simple")}
               className={clsx("px-2 py-1.5 rounded border text-[11px] font-bold font-mono",
-                orderClass === "simple" ? "bg-indigo-600/30 border-indigo-500/50 text-indigo-200" : "bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800")}>
+                orderClass === "simple" ? "bg-brand-600/30 border-brand-500/50 text-brand-200" : "bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800")}>
               SIMPLE (1 leg)
             </button>
             <button onClick={() => setOrderClass("vertical")}
@@ -1189,7 +1190,7 @@ function StrategyCard({ s, sugMeta, onOpenTicket }: { s: OptionSuggestion; sugMe
           </span>
         )}
         <span className={clsx("ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded",
-          s.regime === "Crisis" || s.regime === "SystemicStress" ? "bg-red-950/60 text-red-300" : "bg-indigo-950/60 text-indigo-300")}>
+          s.regime === "Crisis" || s.regime === "SystemicStress" ? "bg-red-950/60 text-red-300" : "bg-brand-950/60 text-brand-300")}>
           {s.regime} · w{s.regime_weight.toFixed(2)}
         </span>
         <span className="text-[10px] font-mono text-emerald-400">score {s.score.toFixed(2)}</span>

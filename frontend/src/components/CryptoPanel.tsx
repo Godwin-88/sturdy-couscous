@@ -185,7 +185,7 @@ export default function CryptoPanel() {
       {/* Tape — the chain-equivalent */}
       <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 bg-slate-950">
-          <LineIcon size={14} className="text-sky-400" />
+          <LineIcon size={14} className="text-brand-400" />
           <span className="text-xs font-semibold uppercase tracking-widest text-slate-300">{pair} · 90d tape</span>
           {atmDelta != null && (
             <span className="ml-auto text-xs font-mono text-slate-200">
@@ -203,7 +203,7 @@ export default function CryptoPanel() {
                   <XAxis dataKey="t" hide />
                   <YAxis domain={["auto", "auto"]} tick={{ fontSize: 9, fill: "#64748b" }} width={62} />
                   <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", fontSize: 11 }} />
-                  <Line type="monotone" dataKey="close" stroke="#38bdf8" dot={false} strokeWidth={1.5} />
+                  <Line type="monotone" dataKey="close" stroke="#58a6ff" dot={false} strokeWidth={1.5} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

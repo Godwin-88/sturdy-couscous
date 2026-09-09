@@ -75,17 +75,17 @@ export default function SettingsPanel() {
 
   const setRiskVal = (k: string, v: string) => setRisk({ ...risk, [k]: v });
   const input = "w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200";
-  const btn = "px-3 py-1.5 rounded bg-indigo-600/30 border border-indigo-500/40 text-xs text-indigo-200 hover:bg-indigo-600/50 disabled:opacity-50";
+  const btn = "px-3 py-1.5 rounded bg-brand-600/30 border border-brand-500/40 text-xs text-brand-200 hover:bg-brand-600/50 disabled:opacity-50";
   return (
     <div className="px-4 py-3 h-full overflow-y-auto">
       <div className="flex items-center gap-2 mb-3">
-        <Sliders size={16} className="text-indigo-300" />
+        <Sliders size={16} className="text-brand-300" />
         <span className="text-sm font-semibold text-slate-200 uppercase tracking-widest">Settings</span>
       </div>
       {msg && <div className="mb-2 text-[11px] font-mono text-amber-300 bg-amber-950/20 border border-amber-800 rounded p-2">{msg}</div>}
       {!token ? (
         <div className="max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
-          <div className="flex items-center gap-2"><KeyRound size={14} className="text-indigo-300" /><span className="text-xs font-semibold text-slate-200">Sign in</span></div>
+          <div className="flex items-center gap-2"><KeyRound size={14} className="text-brand-300" /><span className="text-xs font-semibold text-slate-200">Sign in</span></div>
           <input className={input} placeholder="username" value={user} onChange={(e) => setUser(e.target.value)} />
           <input className={input} type="password" placeholder="passphrase (min 6)" value={pass} onChange={(e) => setPass(e.target.value)} />
           <div className="flex gap-2">
@@ -99,7 +99,7 @@ export default function SettingsPanel() {
           <div className="flex gap-2 mb-3 flex-wrap">
             {([["account","Account"],["brokers","Brokers"],["keys","API Keys"],["risk","Risk"]] as const).map(([id,l]) => (
               <button key={id} onClick={() => setTab(id)}
-                className={`px-3 py-1.5 rounded text-xs ${tab === id ? "bg-indigo-600/40 text-indigo-100 border border-indigo-500/50" : "bg-slate-800 text-slate-300 border border-slate-700"}`}>{l}</button>
+                className={`px-3 py-1.5 rounded text-xs ${tab === id ? "bg-brand-600/40 text-brand-100 border border-brand-500/50" : "bg-slate-800 text-slate-300 border border-slate-700"}`}>{l}</button>
             ))}
             <button onClick={logout} className="ml-auto px-3 py-1.5 rounded text-xs bg-rose-800/30 text-rose-300 border border-rose-700">Logout</button>
           </div>
@@ -139,7 +139,7 @@ export default function SettingsPanel() {
                     {b.is_active && <span className="text-[10px] bg-emerald-900/40 border border-emerald-700 px-1.5 rounded text-emerald-300">ACTIVE</span>}
                     <span className={`text-[10px] ${b.paper ? "text-slate-500" : "text-rose-400"}`}>{b.paper ? "paper" : "LIVE"}</span>
                     <div className="ml-auto flex gap-2">
-                      {!b.is_active && <button className="text-[10px] text-indigo-300 hover:underline" onClick={() => setActive(b.id, b.broker)}>Set active</button>}
+                      {!b.is_active && <button className="text-[10px] text-brand-300 hover:underline" onClick={() => setActive(b.id, b.broker)}>Set active</button>}
                       <button className="text-[10px] text-rose-400 hover:underline" onClick={() => delBroker(b.id)}>Delete</button>
                     </div>
                   </div>

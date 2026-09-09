@@ -65,7 +65,7 @@ export default function OrderDetailDrawer({ orderId, strategy, ticker, direction
         </div>
         <div className="flex items-center gap-2">
           <button onClick={onAnalyze}
-            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-500/30">
+            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold bg-brand-600/20 text-brand-400 hover:bg-brand-600/30 border border-brand-500/30">
             <BarChart size={10} /> Analyze
           </button>
           <button onClick={onHypothesis}
@@ -85,7 +85,7 @@ export default function OrderDetailDrawer({ orderId, strategy, ticker, direction
             className={clsx(
               "flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold font-mono border-b-2 transition-colors",
               tab === t.id
-                ? "text-indigo-400 border-indigo-400"
+                ? "text-brand-400 border-brand-400"
                 : "text-slate-500 border-transparent hover:text-slate-300"
             )}>
             {t.icon}{t.label}
@@ -219,7 +219,7 @@ export default function OrderDetailDrawer({ orderId, strategy, ticker, direction
             {lineage ? (
               <>
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="font-semibold text-indigo-300">{lineage.strategy}</span>
+                  <span className="font-semibold text-brand-300">{lineage.strategy}</span>
                   {lineage.strategy_desc && <span className="text-slate-500">— {lineage.strategy_desc}</span>}
                 </div>
 
@@ -243,7 +243,7 @@ export default function OrderDetailDrawer({ orderId, strategy, ticker, direction
                           <div className="text-[11px] font-semibold text-slate-200">{c.name}</div>
                           {c.definition && <div className="text-[10px] text-slate-500">{c.definition}</div>}
                           <div className="flex gap-1 mt-0.5 text-[9px]">
-                            <span className="text-indigo-500">{c.category}</span>
+                            <span className="text-brand-500">{c.category}</span>
                             <span className={clsx("px-1 rounded",
                               c.difficulty === "hard" ? "bg-red-900/50 text-red-300" :
                               c.difficulty === "medium" ? "bg-yellow-900/50 text-yellow-300" :

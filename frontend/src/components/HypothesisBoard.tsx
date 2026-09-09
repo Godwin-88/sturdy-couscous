@@ -17,12 +17,12 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  IDEA: "text-blue-400 border-blue-500/30 bg-blue-500/10",
+  IDEA: "text-brand-400 border-brand-500/30 bg-brand-500/10",
   TESTING: "text-amber-400 border-amber-500/30 bg-amber-500/10",
   VALIDATED: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
   REJECTED: "text-red-400 border-red-500/30 bg-red-500/10",
   DEPLOYED: "text-purple-400 border-purple-500/30 bg-purple-500/10",
-  MONITORING: "text-cyan-400 border-cyan-500/30 bg-cyan-500/10",
+  MONITORING: "text-brand-400 border-brand-500/30 bg-brand-500/10",
 };
 
 const STATUS_ORDER = ["IDEA", "TESTING", "VALIDATED", "REJECTED", "DEPLOYED", "MONITORING"];
@@ -458,11 +458,11 @@ function HypothesisDetail({
               <div key={i} className="flex items-center gap-2 text-xs font-mono text-slate-300 bg-slate-800 rounded-lg p-2">
                 <span className={clsx(
                   "text-[9px] px-1 py-0.5 rounded",
-                  e.tier === "descriptive" && "text-blue-400 bg-blue-500/10",
+                  e.tier === "descriptive" && "text-brand-400 bg-brand-500/10",
                   e.tier === "diagnostic" && "text-amber-400 bg-amber-500/10",
                   e.tier === "predictive" && "text-emerald-400 bg-emerald-500/10",
                   e.tier === "prescriptive" && "text-purple-400 bg-purple-500/10",
-                  e.tier === "cognitive" && "text-cyan-400 bg-cyan-500/10",
+                  e.tier === "cognitive" && "text-brand-400 bg-brand-500/10",
                 )}>{e.tier}</span>
                 <span>{e.label || e.evidence_type}</span>
                 {e.series_id && <span className="text-slate-500">({e.series_id})</span>}
@@ -474,9 +474,9 @@ function HypothesisDetail({
 
       {/* AI Synthesis */}
       {h.ai_synthesis && (
-        <div className="rounded-xl border border-cyan-800/50 bg-cyan-950/20 p-3">
-          <div className="text-[10px] text-cyan-400 uppercase tracking-wider font-semibold mb-1">AI Synthesis</div>
-          <p className="text-xs text-cyan-200 font-mono whitespace-pre-wrap">{h.ai_synthesis}</p>
+        <div className="rounded-xl border border-brand-800/50 bg-brand-950/20 p-3">
+          <div className="text-[10px] text-brand-400 uppercase tracking-wider font-semibold mb-1">AI Synthesis</div>
+          <p className="text-xs text-brand-200 font-mono whitespace-pre-wrap">{h.ai_synthesis}</p>
         </div>
       )}
     </div>

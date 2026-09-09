@@ -115,7 +115,7 @@ export default function DreamDEXPanel() {
             onClick={() => setTab(t)}
             className={clsx(
               "text-xs px-3 py-1 rounded capitalize transition-colors",
-              tab === t ? "bg-indigo-600 text-white" : "text-gray-400 hover:text-white"
+              tab === t ? "bg-brand-600 text-white" : "text-gray-400 hover:text-white"
             )}
           >
             {t}
@@ -165,7 +165,7 @@ export default function DreamDEXPanel() {
           {candidates.map((c, i) => {
             const okay = (c.net_edge_pct ?? 0) > 0;
             return (
-              <div key={i} className={clsx("border rounded p-3 space-y-1", okay ? "border-indigo-500/40" : "border-gray-700")}>
+              <div key={i} className={clsx("border rounded p-3 space-y-1", okay ? "border-brand-500/40" : "border-gray-700")}>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-white font-mono">{c.symbol ?? c.market_id ?? "ec"}</span>
                   <span className={clsx("text-xs font-bold", c.side === "up" ? "text-green-400" : "text-red-400")}>

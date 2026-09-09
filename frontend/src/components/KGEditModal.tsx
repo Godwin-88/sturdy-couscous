@@ -63,7 +63,7 @@ export default function KGEditModal({ open, onClose, onSuccess }: Props) {
               {OPERATIONS.map(op => (
                 <button key={op.id} onClick={() => setOperation(op.id)}
                   className={clsx("px-2.5 py-1 rounded text-xs font-mono transition-colors",
-                    operation === op.id ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400 hover:text-slate-200"
+                    operation === op.id ? "bg-brand-600 text-white" : "bg-slate-800 text-slate-400 hover:text-slate-200"
                   )}>
                   {op.label}
                 </button>
@@ -76,13 +76,13 @@ export default function KGEditModal({ open, onClose, onSuccess }: Props) {
             <div className="space-y-1">
               <label className="text-[10px] text-slate-500 uppercase">Source Name</label>
               <input value={source} onChange={e => setSource(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-indigo-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-brand-500"
                 placeholder="e.g. MomentumStrategy" />
             </div>
             <div className="space-y-1">
               <label className="text-[10px] text-slate-500 uppercase">Target Name</label>
               <input value={target} onChange={e => setTarget(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-indigo-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-brand-500"
                 placeholder="e.g. TrendFollowing" />
             </div>
           </div>
@@ -91,7 +91,7 @@ export default function KGEditModal({ open, onClose, onSuccess }: Props) {
           <div className="space-y-1">
             <label className="text-[10px] text-slate-500 uppercase">Relationship Type</label>
             <input value={relType} onChange={e => setRelType(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-indigo-500"
+              className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-brand-500"
               placeholder="DERIVED_FROM / ACTIVATED_BY / CONTRADICTED_BY" />
           </div>
 
@@ -99,7 +99,7 @@ export default function KGEditModal({ open, onClose, onSuccess }: Props) {
           <div className="space-y-1">
             <label className="text-[10px] text-slate-500 uppercase">Properties (JSON)</label>
             <textarea value={properties} onChange={e => setProperties(e.target.value)} rows={3}
-              className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-indigo-500 resize-none"
+              className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-brand-500 resize-none"
               placeholder='{"name": "MyNode", "description": "..."}' />
           </div>
 
@@ -109,7 +109,7 @@ export default function KGEditModal({ open, onClose, onSuccess }: Props) {
 
           {/* Submit */}
           <button onClick={handleSubmit} disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">
+            className="flex items-center gap-2 px-4 py-2 rounded text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white disabled:opacity-50">
             <Save size={14} />{loading ? "Saving..." : "Apply Edit"}
           </button>
         </div>

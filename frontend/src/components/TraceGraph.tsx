@@ -27,19 +27,19 @@ export interface TraceGraphProps {
 
 const KIND_STYLE: Record<TraceNodeKind, { fill: string; stroke: string; text: string }> = {
   book:     { fill: "#f59e0b22", stroke: "#f59e0b", text: "#fbbf24" },
-  chapter:  { fill: "#6366f122", stroke: "#6366f1", text: "#a5b4fc" },
+  chapter:  { fill: "#1f6feb22", stroke: "#1f6feb", text: "#79c0ff" },
   section:  { fill: "#47556922", stroke: "#64748b", text: "#cbd5e1" },
   concept:  { fill: "#a855f722", stroke: "#a855f7", text: "#d8b4fe" },
   formula:  { fill: "#10b98122", stroke: "#10b981", text: "#6ee7b7" },
-  strategy: { fill: "#0ea5e922", stroke: "#0ea5e9", text: "#7dd3fc" },
-  tool:     { fill: "#06b6d422", stroke: "#06b6d4", text: "#67e8f9" },
+  strategy: { fill: "#58a6ff22", stroke: "#58a6ff", text: "#79c0ff" },
+  tool:     { fill: "#0969da22", stroke: "#0969da", text: "#79c0ff" },
   output:   { fill: "#f9731622", stroke: "#f97316", text: "#fdba74" },
   ok:       { fill: "#22c55e22", stroke: "#22c55e", text: "#86efac" },
   err:      { fill: "#ef444422", stroke: "#ef4444", text: "#fca5a5" },
   draft:    { fill: "#eab30822", stroke: "#eab308", text: "#fde047" },
 };
 
-const RANK_COLORS = ["#f59e0b", "#6366f1", "#a855f7", "#10b981", "#0ea5e9", "#06b6d4"];
+const RANK_COLORS = ["#f59e0b", "#1f6feb", "#a855f7", "#10b981", "#58a6ff", "#0969da"];
 
 function rankOf(kind: TraceNodeKind): number {
   const order: TraceNodeKind[] = ["book", "chapter", "section", "concept", "strategy", "formula", "tool", "output", "draft", "ok", "err"];

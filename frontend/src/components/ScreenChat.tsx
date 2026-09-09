@@ -283,23 +283,23 @@ export default function ScreenChat({ screen }: { screen: string }) {
         title="Financial Engineer (screen-aware chat)"
         className={clsx(
           "fixed bottom-4 right-4 z-[60] flex items-center gap-2 px-3.5 py-2.5 rounded-full shadow-lg border transition-colors",
-          open ? "bg-slate-800 border-slate-600 text-slate-200" : "bg-indigo-600 hover:bg-indigo-500 border-indigo-400/40 text-white",
+          open ? "bg-slate-800 border-slate-600 text-slate-200" : "bg-brand-600 hover:bg-brand-500 border-brand-400/40 text-white",
         )}
       >
         {open ? <X size={16} /> : <Brain size={16} />}
         <span className="text-xs font-semibold">{open ? "Close" : "Financial Engineer"}</span>
-        {sourceCount > 0 && !open && <span className="text-[10px] font-mono text-indigo-200">{sourceCount}</span>}
+        {sourceCount > 0 && !open && <span className="text-[10px] font-mono text-brand-200">{sourceCount}</span>}
       </button>
 
       {open && (
         <div className="fixed inset-y-0 right-0 z-[55] flex w-[400px] max-w-[92vw] flex-col border-l border-slate-700 bg-slate-900 shadow-2xl">
           <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-700 bg-slate-950/50">
-            <Brain size={15} className="text-indigo-400" />
+            <Brain size={15} className="text-brand-400" />
             <div className="flex-1 min-w-0">
               <div className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Financial Engineer</div>
               <div className="text-[10px] font-mono text-slate-500">screen: {screen}</div>
               {screenContextLabel(getScreenContext(screen)) && (
-                <div className="text-[10px] font-mono text-indigo-300 truncate mt-0.5">
+                <div className="text-[10px] font-mono text-brand-300 truncate mt-0.5">
                   Analyzing: {screenContextLabel(getScreenContext(screen))}
                 </div>
               )}
@@ -318,7 +318,7 @@ export default function ScreenChat({ screen }: { screen: string }) {
                 onClick={() => setShowSources((s) => !s)}
                 className={clsx(
                   "flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded border",
-                  showSources ? "bg-indigo-600/20 border-indigo-500/40 text-indigo-300" : "bg-slate-800 border-slate-600 text-slate-400",
+                  showSources ? "bg-brand-600/20 border-brand-500/40 text-brand-300" : "bg-slate-800 border-slate-600 text-slate-400",
                 )}
               >
                 <BookOpen size={11} /> Sources ({sourceCount})
@@ -391,7 +391,7 @@ export default function ScreenChat({ screen }: { screen: string }) {
               <div key={i} className={clsx("space-y-1", m.role === "user" ? "text-right" : "text-left")}>
                 <div className={clsx(
                   "inline-block max-w-[90%] rounded-lg px-3 py-2 text-xs",
-                  m.role === "user" ? "bg-indigo-600/30 border border-indigo-500/30 text-slate-100 whitespace-pre-wrap" : "bg-slate-800 border border-slate-700 text-slate-200",
+                  m.role === "user" ? "bg-brand-600/30 border border-brand-500/30 text-slate-100 whitespace-pre-wrap" : "bg-slate-800 border border-slate-700 text-slate-200",
                 )}>
                   {m.role === "user" ? m.content : <Markdown text={m.content} />}
                 </div>
@@ -400,7 +400,7 @@ export default function ScreenChat({ screen }: { screen: string }) {
                   <div className="text-left mt-1.5">
                     <button
                       onClick={() => setShowSources((v) => !v)}
-                      className="flex items-center gap-1 text-[10px] font-mono text-indigo-300 hover:text-indigo-200"
+                      className="flex items-center gap-1 text-[10px] font-mono text-brand-300 hover:text-brand-200"
                     >
                       <BookOpen size={10} /> Sources ({m.sources.length})
                       <ChevronDown size={10} className={clsx("transition-transform", showSources ? "rotate-180" : "")} />
@@ -541,12 +541,12 @@ args: ${JSON.stringify(st.args)}`,
               onKeyDown={(e) => { if (e.key === "Enter") send(input); }}
               placeholder="Ask as a financial engineer…"
               disabled={busy}
-              className="flex-1 min-w-0 rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+              className="flex-1 min-w-0 rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-brand-500"
             />
             <button
               onClick={() => send(input)}
               disabled={busy || !input.trim()}
-              className="px-3 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-3 py-2 rounded-lg bg-brand-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Send size={14} />
             </button>

@@ -116,7 +116,7 @@ export default function RiskWorkspace({ onNavigate }: { onNavigate?: (tab: strin
 
   const actions = [
     { icon: <FlaskConical size={14} />, label: "Stress Test", onClick: () => setStressOpen(true), color: "text-amber-400" },
-    { icon: <Scale size={14} />,        label: "Rebalance",   onClick: () => setRebalanceOpen(true), color: "text-blue-400" },
+    { icon: <Scale size={14} />,        label: "Rebalance",   onClick: () => setRebalanceOpen(true), color: "text-brand-400" },
     { icon: <Bot size={14} />,          label: "Agents",      onClick: () => setAgentOpen(true), color: "text-purple-400" },
     { icon: <GitCompare size={14} />,   label: "Parity",      onClick: () => setParityOpen(true), color: "text-emerald-400" },
   ];
@@ -130,7 +130,7 @@ export default function RiskWorkspace({ onNavigate }: { onNavigate?: (tab: strin
             {subTabs.map(t => (
               <button key={t.id} onClick={() => setSubTab(t.id)}
                 className={clsx("flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold font-mono rounded-md transition-colors",
-                  subTab === t.id ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"
+                  subTab === t.id ? "bg-brand-600 text-white" : "text-slate-400 hover:text-slate-200"
                 )}>
                 {t.icon}{t.label}
               </button>
@@ -164,7 +164,7 @@ export default function RiskWorkspace({ onNavigate }: { onNavigate?: (tab: strin
               {/* Header */}
               <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-4">
                 <div className="flex items-center gap-2">
-                  <ShieldAlert size={14} className="text-indigo-400" />
+                  <ShieldAlert size={14} className="text-brand-400" />
                   <span className="text-sm font-semibold text-slate-200">Risk Dashboard</span>
                   {data.halted && (
                     <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-red-900 text-red-300 font-mono font-bold animate-pulse">HALTED</span>
@@ -219,7 +219,7 @@ export default function RiskWorkspace({ onNavigate }: { onNavigate?: (tab: strin
                           ]} />
                         <Bar dataKey="pct_nav" radius={[0, 3, 3, 0]}>
                           {data.concentration.map((entry, i) => (
-                            <Cell key={i} fill={entry.direction === "buy" ? "#6366f1" : "#f43f5e"} />
+                            <Cell key={i} fill={entry.direction === "buy" ? "#1f6feb" : "#f43f5e"} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -238,7 +238,7 @@ export default function RiskWorkspace({ onNavigate }: { onNavigate?: (tab: strin
               {/* Full broker book — every Alpaca position (options + crypto + equity) */}
               <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
                 <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 bg-slate-950">
-                  <Wallet size={14} className="text-indigo-400" />
+                  <Wallet size={14} className="text-brand-400" />
                   <span className="text-xs text-slate-300 font-semibold uppercase tracking-widest">
                     Broker Book <span className="text-slate-500">({data.n_positions} positions)</span>
                   </span>
@@ -261,7 +261,7 @@ export default function RiskWorkspace({ onNavigate }: { onNavigate?: (tab: strin
               <div className="w-full">
                 <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
                   <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 bg-slate-950">
-                    <Wallet size={14} className="text-indigo-400" />
+                    <Wallet size={14} className="text-brand-400" />
                     <span className="text-xs text-slate-300 font-semibold uppercase tracking-widest">
                       Broker Book <span className="text-slate-500">(all Alpaca positions)</span>
                     </span>
@@ -295,12 +295,12 @@ export default function RiskWorkspace({ onNavigate }: { onNavigate?: (tab: strin
             <div className="max-w-lg mx-auto">
               <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
                 <div className="flex items-center gap-2 mb-4">
-                  <Scale size={14} className="text-blue-400" />
+                  <Scale size={14} className="text-brand-400" />
                   <span className="text-sm font-semibold text-slate-200">Portfolio Rebalance</span>
                 </div>
                 <p className="text-xs text-slate-500 mb-4">View current vs KG-optimal portfolio weights and suggested trades.</p>
                 <button onClick={() => setRebalanceOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white">
+                  className="flex items-center gap-2 px-4 py-2 rounded text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white">
                   <Scale size={14} /> Open Rebalance
                 </button>
               </div>
@@ -485,7 +485,7 @@ function OptionsRiskSection({
               <Activity size={24} className="text-slate-600" />
               <span className="text-xs text-slate-500 text-center">Load hedge state to view 3D Greeks exposure</span>
               <button onClick={onLoadHedge} disabled={loading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-600/50 disabled:opacity-50">
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono bg-brand-600/30 border border-brand-500/40 text-brand-300 hover:bg-brand-600/50 disabled:opacity-50">
                 {loading ? "Loading..." : "Load Hedge State"}
               </button>
             </div>
@@ -495,7 +495,7 @@ function OptionsRiskSection({
           {hedgeState && hedgeState.positions.length > 0 && (
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <Clock size={14} className="text-cyan-400" />
+                <Clock size={14} className="text-brand-400" />
                 <span className="text-sm font-semibold text-slate-200">Options Positions</span>
               </div>
               <div className="space-y-2">
@@ -515,7 +515,7 @@ function OptionsRiskSection({
                       </div>
                       <div>
                         <span className="text-slate-500">Γ</span>{" "}
-                        <span className="text-indigo-400">{p.gamma.toFixed(3)}</span>
+                        <span className="text-brand-400">{p.gamma.toFixed(3)}</span>
                       </div>
                       <div>
                         <span className="text-slate-500">Θ</span>{" "}

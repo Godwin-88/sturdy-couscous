@@ -19,7 +19,7 @@ export default function RiskPanel() {
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-4">
       <div className="flex items-center gap-2">
-        <ShieldAlert size={14} className="text-indigo-400" />
+        <ShieldAlert size={14} className="text-brand-400" />
         <span className="text-sm font-semibold text-slate-200">Risk Dashboard</span>
         {data.halted && (
           <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-red-900 text-red-300 font-mono font-bold animate-pulse">
@@ -110,7 +110,7 @@ export default function RiskPanel() {
                 {data.concentration.map((entry, i) => (
                   <Cell
                     key={i}
-                    fill={entry.direction === "buy" ? "#6366f1" : "#f43f5e"}
+                    fill={entry.direction === "buy" ? "#1f6feb" : "#f43f5e"}
                   />
                 ))}
               </Bar>

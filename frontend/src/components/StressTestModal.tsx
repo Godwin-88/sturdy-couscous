@@ -72,7 +72,7 @@ export default function StressTestModal({ open, onClose }: Props) {
                 <button onClick={() => removeRow(i)} className="p-1 text-slate-500 hover:text-red-400 rounded">✕</button>
               </div>
             ))}
-            <button onClick={addRow} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-mono">+ Add shock</button>
+            <button onClick={addRow} className="text-[10px] text-brand-400 hover:text-brand-300 font-mono">+ Add shock</button>
           </div>
 
           {error && <div className="flex items-center gap-1.5 text-xs text-red-400"><AlertCircle size={12} />{error}</div>}

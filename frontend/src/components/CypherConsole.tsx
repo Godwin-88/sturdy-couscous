@@ -50,8 +50,8 @@ export default function CypherConsole() {
               className={clsx(
                 "flex items-center gap-1 px-3 py-1 rounded text-xs font-semibold transition-colors",
                 loading
-                  ? "bg-indigo-800/50 text-indigo-300 cursor-not-allowed"
-                  : "bg-indigo-600 hover:bg-indigo-500 text-white"
+                  ? "bg-brand-800/50 text-brand-300 cursor-not-allowed"
+                  : "bg-brand-600 hover:bg-brand-500 text-white"
               )}
             >
               <Play size={12} />

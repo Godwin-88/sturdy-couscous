@@ -79,9 +79,9 @@ export default function ContradictionsPanel() {
                       </span>
                     </div>
                     <div className="mt-1 text-slate-400">
-                      via <span className="text-indigo-300">{c.via_concept_a}</span>
+                      via <span className="text-brand-300">{c.via_concept_a}</span>
                       {" "}↔{" "}
-                      <span className="text-indigo-300">{c.via_concept_b}</span>
+                      <span className="text-brand-300">{c.via_concept_b}</span>
                     </div>
                   </div>
                   <button

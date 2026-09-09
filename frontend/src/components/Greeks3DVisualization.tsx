@@ -43,7 +43,7 @@ export default function Greeks3DVisualization({ greeks, title = "Portfolio Greek
     const maxVal = Math.max(Math.abs(greeks.delta), Math.abs(greeks.gamma) * 10, Math.abs(greeks.theta) / 10, Math.abs(greeks.vega), 1);
     return [
       { label: "Δ", value: greeks.delta, color: "#10b981", max: maxVal },
-      { label: "Γ", value: greeks.gamma * 10, color: "#6366f1", max: maxVal },
+      { label: "Γ", value: greeks.gamma * 10, color: "#1f6feb", max: maxVal },
       { label: "Θ", value: greeks.theta / 10, color: "#f59e0b", max: maxVal },
       { label: "V", value: greeks.vega, color: "#ec4899", max: maxVal },
     ];
@@ -206,10 +206,10 @@ export function GreekSurfacePlot({ spotRange, dteRange, values, label, colorSche
   const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
 
   const colorMap = {
-    delta: ["#1e1b4b", "#10b981", "#34d399"],
-    gamma: ["#1e1b4b", "#6366f1", "#a5b4fc"],
-    theta: ["#1e1b4b", "#f59e0b", "#fcd34d"],
-    vega: ["#1e1b4b", "#ec4899", "#f9a8d4"],
+    delta: ["#011b38", "#10b981", "#34d399"],
+    gamma: ["#011b38", "#1f6feb", "#79c0ff"],
+    theta: ["#011b38", "#f59e0b", "#fcd34d"],
+    vega: ["#011b38", "#ec4899", "#f9a8d4"],
     pnl: ["#f43f5e", "#334155", "#10b981"],
   };
 

@@ -237,7 +237,7 @@ export default function AnalyticsPanel() {
       {/* ── Universal Time Series Selector ─────────────────────────────────── */}
       <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
         <div className="flex items-center gap-2">
-          <Search size={14} className="text-indigo-400" />
+          <Search size={14} className="text-brand-400" />
           <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Time Series Selector</span>
           {chainUnderlying && (
             <span className="ml-auto flex items-center gap-1 text-[10px] font-mono text-violet-300 bg-violet-950/40 border border-violet-500/30 rounded px-2 py-0.5">
@@ -304,9 +304,9 @@ export default function AnalyticsPanel() {
 
       {/* ── Chain Profile card (descriptive/diagnostic context for the chain) ── */}
       {chainUnderlying && (
-        <div className="rounded-xl border border-indigo-500/30 bg-slate-900 overflow-hidden">
+        <div className="rounded-xl border border-brand-500/30 bg-slate-900 overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 bg-slate-950">
-            <Gauge size={14} className="text-indigo-400" />
+            <Gauge size={14} className="text-brand-400" />
             <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Chain Profile</span>
             <span className="text-[10px] font-mono text-slate-500 truncate">
               {chainUnderlying}{chainExpiration ? ` · ${chainExpiration}` : ""}{chainContractType ? ` · ${chainContractType}s` : ""}
@@ -333,7 +333,7 @@ export default function AnalyticsPanel() {
             className={clsx(
               "flex items-center gap-1.5 px-4 py-2 text-xs font-mono whitespace-nowrap transition-colors border-b-2 -mb-px",
               activeTier === t.id
-                ? "border-indigo-500 text-indigo-400"
+                ? "border-brand-500 text-brand-400"
                 : "border-transparent text-slate-400 hover:text-slate-200"
             )}>
             {t.icon} {t.label}
@@ -341,7 +341,7 @@ export default function AnalyticsPanel() {
           </button>
         ))}
         <button onClick={fetchData} disabled={loading || !selectedSeries}
-          className="ml-auto px-3 py-2 text-xs text-slate-400 hover:text-indigo-400">
+          className="ml-auto px-3 py-2 text-xs text-slate-400 hover:text-brand-400">
           <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
         </button>
       </div>
@@ -422,7 +422,7 @@ function ChainProfileCard({ profile }: { profile: OptionChainProfile }) {
         <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Implied Volatility</div>
         <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-mono">
           <span className="text-slate-500">ATM strike</span><span className="text-slate-200 text-right">{iv.atm_strike != null ? fmt$(iv.atm_strike) : "—"}</span>
-          <span className="text-slate-500">ATM IV</span><span className="text-indigo-300 text-right">{iv.atm_iv != null ? fmtPct(iv.atm_iv) : "—"}</span>
+          <span className="text-slate-500">ATM IV</span><span className="text-brand-300 text-right">{iv.atm_iv != null ? fmtPct(iv.atm_iv) : "—"}</span>
           <span className="text-slate-500">Median IV</span><span className="text-slate-200 text-right">{iv.median_iv != null ? fmtPct(iv.median_iv) : "—"}</span>
           <span className="text-slate-500">IV range</span>
           <span className="text-slate-200 text-right">{iv.min_iv != null && iv.max_iv != null ? `${fmtPct(iv.min_iv)} – ${fmtPct(iv.max_iv)}` : "—"}</span>
@@ -434,7 +434,7 @@ function ChainProfileCard({ profile }: { profile: OptionChainProfile }) {
                 <span className="text-slate-500 w-14 shrink-0">{(p.contract_type === "put" ? "P " : "C ") + strikeLabel(p.strike)}</span>
                 <div className="flex-1 h-1 bg-slate-800 rounded overflow-hidden">
                   <div
-                    className="h-full bg-indigo-500"
+                    className="h-full bg-brand-500"
                     style={{ width: `${iv.max_iv ? Math.min((p.iv / iv.max_iv) * 100, 100) : 0}%` }}
                   />
                 </div>
@@ -501,7 +501,7 @@ function ChainProfileCard({ profile }: { profile: OptionChainProfile }) {
           <div className="grid grid-cols-3 gap-1 text-[10px] font-mono text-center">
             <div><div className="text-slate-500">avg spread</div><div className="text-amber-300">{profile.spreads.avg_spread_pct != null ? fmtPct(profile.spreads.avg_spread_pct) : "—"}</div></div>
             <div><div className="text-slate-500">Δ</div><div className="text-slate-200">{profile.greeks.delta.median != null ? profile.greeks.delta.median.toFixed(3) : "—"}</div></div>
-            <div><div className="text-slate-500">Γ</div><div className="text-indigo-300">{profile.greeks.gamma.median != null ? profile.greeks.gamma.median.toFixed(4) : "—"}</div></div>
+            <div><div className="text-slate-500">Γ</div><div className="text-brand-300">{profile.greeks.gamma.median != null ? profile.greeks.gamma.median.toFixed(4) : "—"}</div></div>
           </div>
         </div>
         {profile.term_structure.length > 1 && (
@@ -527,7 +527,7 @@ function DescriptivePanel({ stats }: { stats: DescriptiveStats }) {
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-4">
       <div className="flex items-center gap-2">
-        <BarChart2 size={14} className="text-indigo-400" />
+        <BarChart2 size={14} className="text-brand-400" />
         <span className="text-xs font-semibold text-slate-200">Statistical Summary</span>
         <span className="text-[10px] text-slate-500 ml-auto">n = {stats.n}</span>
       </div>
@@ -612,7 +612,7 @@ function AutocorrelationPanel({ data }: { data: AutocorrelationResult }) {
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <Activity size={14} className="text-indigo-400" />
+        <Activity size={14} className="text-brand-400" />
         <span className="text-xs font-semibold text-slate-200">Autocorrelation (ACF/PACF)</span>
         {data.ljung_box && (
           <span className={clsx("text-[10px] font-mono ml-auto",
@@ -633,7 +633,7 @@ function AutocorrelationPanel({ data }: { data: AutocorrelationResult }) {
                 <div key={i} className="absolute bottom-0 flex flex-col items-center"
                   style={{ left: `${(i / 29) * 100}%`, width: `${100 / 30}%` }}>
                   <div className={clsx("w-[3px] rounded-t",
-                    Math.abs(a.acf) > data.confidence_band_95 ? "bg-indigo-400" : "bg-slate-600")}
+                    Math.abs(a.acf) > data.confidence_band_95 ? "bg-brand-400" : "bg-slate-600")}
                     style={{ height: `${barH}%` }} />
                 </div>
               );
@@ -684,7 +684,7 @@ function VolatilityPanel({ data }: { data: VolatilityAnalysis }) {
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-4">
       <div className="flex items-center gap-2">
-        <Activity size={14} className="text-indigo-400" />
+        <Activity size={14} className="text-brand-400" />
         <span className="text-xs font-semibold text-slate-200">Volatility Analysis</span>
         <span className="text-[10px] text-slate-500 ml-auto">21d vol: {fmtPct(data.current_realized_vol_21d ?? 0)}</span>
       </div>
@@ -736,7 +736,7 @@ function SignalICPanel({ data }: { data: SignalICResult }) {
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <TrendingUp size={14} className="text-indigo-400" />
+        <TrendingUp size={14} className="text-brand-400" />
         <span className="text-xs font-semibold text-slate-200">Signal Information Coefficient</span>
         <span className="text-[10px] text-slate-500 ml-auto">{data.strategy} · {data.forward_horizon_days}d horizon</span>
       </div>
@@ -767,7 +767,7 @@ function FactorPanel({ data }: { data: FactorExposure }) {
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <BarChart2 size={14} className="text-indigo-400" />
+        <BarChart2 size={14} className="text-brand-400" />
         <span className="text-xs font-semibold text-slate-200">Factor Exposure (Market Model)</span>
       </div>
 
@@ -826,7 +826,7 @@ function DiagnosticWrapper({ ticker }: { ticker: string }) {
           <button key={t.id} onClick={() => setDiagTab(t.id)}
             className={clsx(
               "px-3 py-1.5 text-[10px] font-mono whitespace-nowrap border-b-2 -mb-px transition-colors",
-              diagTab === t.id ? "border-indigo-500 text-indigo-400" : "border-transparent text-slate-500 hover:text-slate-300"
+              diagTab === t.id ? "border-brand-500 text-brand-400" : "border-transparent text-slate-500 hover:text-slate-300"
             )}>
             {t.label}
           </button>
@@ -888,7 +888,7 @@ function GarchPanel({ ticker }: { ticker: string }) {
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
         <div className="flex items-center gap-2">
-          <Activity size={14} className="text-indigo-400" />
+          <Activity size={14} className="text-brand-400" />
           <span className="text-xs font-semibold text-slate-200">Multi-Variant GARCH Engine</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
@@ -909,7 +909,7 @@ function GarchPanel({ ticker }: { ticker: string }) {
           </div>
           <div className="flex items-end">
             <button onClick={runGarch} disabled={loading}
-              className="w-full px-3 py-1.5 rounded text-xs font-mono bg-indigo-700 text-indigo-200 border border-indigo-600 hover:bg-indigo-600 disabled:opacity-50">
+              className="w-full px-3 py-1.5 rounded text-xs font-mono bg-brand-700 text-brand-200 border border-brand-600 hover:bg-brand-600 disabled:opacity-50">
               {loading ? "Fitting..." : "Run GARCH"}
             </button>
           </div>
@@ -918,7 +918,7 @@ function GarchPanel({ ticker }: { ticker: string }) {
           {Object.entries(selectedVariants).map(([k, v]) => (
             <label key={k} className="flex items-center gap-1 cursor-pointer">
               <input type="checkbox" checked={v} onChange={e => setSelectedVariants(prev => ({ ...prev, [k]: e.target.checked }))}
-                className="accent-indigo-500 w-3 h-3" />
+                className="accent-brand-500 w-3 h-3" />
               <span className="text-[10px] font-mono text-slate-400">{k.toUpperCase()}</span>
             </label>
           ))}
@@ -933,7 +933,7 @@ function GarchPanel({ ticker }: { ticker: string }) {
           {/* Model comparison */}
           <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <Activity size={14} className="text-indigo-400" />
+              <Activity size={14} className="text-brand-400" />
               <span className="text-xs font-semibold text-slate-200">Model Comparison</span>
               <span className="text-[10px] text-slate-500 ml-auto">Best: {result.best_model?.toUpperCase()}</span>
             </div>
@@ -950,7 +950,7 @@ function GarchPanel({ ticker }: { ticker: string }) {
                 </tr></thead>
                 <tbody>
                   {result.model_comparison.map(m => (
-                    <tr key={m.variant} className={clsx("border-t border-slate-800", m.variant === result.best_model && "bg-indigo-950/20")}>
+                    <tr key={m.variant} className={clsx("border-t border-slate-800", m.variant === result.best_model && "bg-brand-950/20")}>
                       <td className="py-1 px-1 text-slate-300">{m.variant.toUpperCase()}</td>
                       <td className="py-1 px-1 text-right text-slate-300">{fmtN(m.aic, 1)}</td>
                       <td className="py-1 px-1 text-right text-slate-400">{fmtN(m.bic, 1)}</td>
@@ -969,7 +969,7 @@ function GarchPanel({ ticker }: { ticker: string }) {
           {result.best_model && result.conditional_volatilities[result.best_model] && (
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <Activity size={14} className="text-indigo-400" />
+                <Activity size={14} className="text-brand-400" />
                 <span className="text-xs font-semibold text-slate-200">Conditional Volatility — {result.best_model.toUpperCase()}</span>
               </div>
               <div className="h-24 relative">
@@ -980,7 +980,7 @@ function GarchPanel({ ticker }: { ticker: string }) {
                     const path = cv.map((v, i) =>
                       `${i === 0 ? "M" : "L"}${(i / (cv.length - 1 || 1)) * 395 + 2.5},${100 - (v / maxV) * 85 - 7.5}`
                     ).join(" ");
-                    return <path d={path} fill="none" stroke="#818cf8" strokeWidth="1" />;
+                    return <path d={path} fill="none" stroke="#58a6ff" strokeWidth="1" />;
                   })()}
                 </svg>
               </div>
@@ -991,7 +991,7 @@ function GarchPanel({ ticker }: { ticker: string }) {
           {result.best_model && result.news_impact_curves[result.best_model] && (
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <TrendingUp size={14} className="text-indigo-400" />
+                <TrendingUp size={14} className="text-brand-400" />
                 <span className="text-xs font-semibold text-slate-200">News Impact Curve</span>
               </div>
               <div className="h-24 relative">
@@ -1052,7 +1052,7 @@ function PCAPanel({ ticker }: { ticker: string }) {
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
         <div className="flex items-center gap-2">
-          <BarChart2 size={14} className="text-indigo-400" />
+          <BarChart2 size={14} className="text-brand-400" />
           <span className="text-xs font-semibold text-slate-200">PCA for Finance</span>
         </div>
         <div className="flex gap-3">
@@ -1060,7 +1060,7 @@ function PCAPanel({ ticker }: { ticker: string }) {
             placeholder="SPY,QQQ,TLT,GLD,IWM"
             className="flex-1 bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5 font-mono" />
           <button onClick={runPCA} disabled={loading}
-            className="px-3 py-1.5 rounded text-xs font-mono bg-indigo-700 text-indigo-200 border border-indigo-600 hover:bg-indigo-600 disabled:opacity-50">
+            className="px-3 py-1.5 rounded text-xs font-mono bg-brand-700 text-brand-200 border border-brand-600 hover:bg-brand-600 disabled:opacity-50">
             {loading ? "..." : "Run"}
           </button>
         </div>
@@ -1074,7 +1074,7 @@ function PCAPanel({ ticker }: { ticker: string }) {
           {/* Summary */}
           <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <BarChart2 size={14} className="text-indigo-400" />
+              <BarChart2 size={14} className="text-brand-400" />
               <span className="text-xs font-semibold text-slate-200">PCA Summary</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1088,7 +1088,7 @@ function PCAPanel({ ticker }: { ticker: string }) {
           {/* Scree plot */}
           <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <BarChart2 size={14} className="text-indigo-400" />
+              <BarChart2 size={14} className="text-brand-400" />
               <span className="text-xs font-semibold text-slate-200">Scree Plot</span>
             </div>
             <div className="h-32 relative">
@@ -1099,7 +1099,7 @@ function PCAPanel({ ticker }: { ticker: string }) {
                     <g key={s.component}>
                       <rect x={i * (380 / result.scree.length) + 10} y={110 - barH}
                         width={Math.max(10, 380 / result.scree.length - 5)} height={barH}
-                        fill={i < result.kaiser_significant_components ? "#818cf8" : "#475569"}
+                        fill={i < result.kaiser_significant_components ? "#58a6ff" : "#475569"}
                         rx={1} />
                     </g>
                   );
@@ -1112,7 +1112,7 @@ function PCAPanel({ ticker }: { ticker: string }) {
           {/* Risk decomposition */}
           <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <ShieldAlert size={14} className="text-indigo-400" />
+              <ShieldAlert size={14} className="text-brand-400" />
               <span className="text-xs font-semibold text-slate-200">Risk Decomposition</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
@@ -1159,7 +1159,7 @@ function CovHealthPanel({ ticker }: { ticker: string }) {
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
         <div className="flex items-center gap-2">
-          <Activity size={14} className="text-indigo-400" />
+          <Activity size={14} className="text-brand-400" />
           <span className="text-xs font-semibold text-slate-200">Covariance Health</span>
         </div>
         <div className="flex gap-3">
@@ -1167,7 +1167,7 @@ function CovHealthPanel({ ticker }: { ticker: string }) {
             placeholder="SPY,QQQ,TLT,GLD,IWM"
             className="flex-1 bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5 font-mono" />
           <button onClick={run} disabled={loading}
-            className="px-3 py-1.5 rounded text-xs font-mono bg-indigo-700 text-indigo-200 border border-indigo-600 hover:bg-indigo-600 disabled:opacity-50">
+            className="px-3 py-1.5 rounded text-xs font-mono bg-brand-700 text-brand-200 border border-brand-600 hover:bg-brand-600 disabled:opacity-50">
             {loading ? "..." : "Run"}
           </button>
         </div>
@@ -1181,7 +1181,7 @@ function CovHealthPanel({ ticker }: { ticker: string }) {
           {/* Condition number + shrinkage */}
           <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <ShieldAlert size={14} className="text-indigo-400" />
+              <ShieldAlert size={14} className="text-brand-400" />
               <span className="text-xs font-semibold text-slate-200">Matrix Health</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1198,7 +1198,7 @@ function CovHealthPanel({ ticker }: { ticker: string }) {
           {result.minimum_spanning_tree.edges.length > 0 && (
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <Activity size={14} className="text-indigo-400" />
+                <Activity size={14} className="text-brand-400" />
                 <span className="text-xs font-semibold text-slate-200">Minimum Spanning Tree</span>
                 <span className="text-[10px] text-slate-500 ml-auto">Total distance: {fmtN(result.minimum_spanning_tree.total_distance, 3)}</span>
               </div>
@@ -1231,7 +1231,7 @@ function CovHealthPanel({ ticker }: { ticker: string }) {
           {result.all_pairs.length > 0 && (
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <BarChart2 size={14} className="text-indigo-400" />
+                <BarChart2 size={14} className="text-brand-400" />
                 <span className="text-xs font-semibold text-slate-200">Top Correlations</span>
               </div>
               <div className="overflow-x-auto max-h-32">
@@ -1319,7 +1319,7 @@ function PredictivePanel({ ticker }: { ticker: string }) {
       {/* Model controls */}
       <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
         <div className="flex items-center gap-2">
-          <TrendingUp size={14} className="text-indigo-400" />
+          <TrendingUp size={14} className="text-brand-400" />
           <span className="text-xs font-semibold text-slate-200">Forecast Configuration</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
@@ -1351,7 +1351,7 @@ function PredictivePanel({ ticker }: { ticker: string }) {
           </div>
           <div className="flex items-end">
             <button onClick={runForecast} disabled={loading}
-              className="w-full px-3 py-1.5 rounded text-xs font-mono bg-indigo-700 text-indigo-200 border border-indigo-600 hover:bg-indigo-600 disabled:opacity-50">
+              className="w-full px-3 py-1.5 rounded text-xs font-mono bg-brand-700 text-brand-200 border border-brand-600 hover:bg-brand-600 disabled:opacity-50">
               {loading ? "Computing..." : "Run Forecast"}
             </button>
           </div>
@@ -1404,7 +1404,7 @@ function PredictivePanel({ ticker }: { ticker: string }) {
           {/* Model summary */}
           <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <TrendingUp size={14} className="text-indigo-400" />
+              <TrendingUp size={14} className="text-brand-400" />
               <span className="text-xs font-semibold text-slate-200">Model Summary</span>
               <span className="text-[10px] text-slate-500 ml-auto">{result.ticker} · {result.model.toUpperCase()}</span>
             </div>
@@ -1434,7 +1434,7 @@ function PredictivePanel({ ticker }: { ticker: string }) {
           {Array.isArray(result.historical) && (
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <TrendingUp size={14} className="text-indigo-400" />
+                <TrendingUp size={14} className="text-brand-400" />
                 <span className="text-xs font-semibold text-slate-200">Forecast ({result.horizon}d ahead)</span>
                 <span className="text-[10px] text-slate-500 ml-auto">{fmtPct(result.conf_level)} confidence</span>
               </div>
@@ -1481,7 +1481,7 @@ function PredictivePanel({ ticker }: { ticker: string }) {
                           />
                         )}
                         <path d={histPath} fill="none" stroke="#94a3b8" strokeWidth="1.5" />
-                        <path d={fcPath} fill="none" stroke="#818cf8" strokeWidth="2" />
+                        <path d={fcPath} fill="none" stroke="#58a6ff" strokeWidth="2" />
                         <line x1={toX(histLen - 1)} y1={0} x2={toX(histLen - 1)} y2={200}
                           stroke="#475569" strokeWidth="1" strokeDasharray="4,4" />
                       </>
@@ -1500,7 +1500,7 @@ function PredictivePanel({ ticker }: { ticker: string }) {
           {!Array.isArray(result.historical) && result.forecasts && (
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <TrendingUp size={14} className="text-indigo-400" />
+                <TrendingUp size={14} className="text-brand-400" />
                 <span className="text-xs font-semibold text-slate-200">Multi-Ticker Forecast</span>
                 <span className="text-[10px] text-slate-500 ml-auto">{result.tickers?.join(", ")}</span>
               </div>
@@ -1509,7 +1509,7 @@ function PredictivePanel({ ticker }: { ticker: string }) {
                   {(() => {
                     const hist = result.historical as Record<string, number[]>;
                     const tickers = result.tickers ?? Object.keys(hist);
-                    const colors = ["#818cf8", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#60a5fa"];
+                    const colors = ["#58a6ff", "#34d399", "#fbbf24", "#f87171", "#1f6feb", "#79c0ff"];
                     const all: number[] = [];
                     for (const tk of tickers) {
                       if (hist[tk]) all.push(...hist[tk]);
@@ -1550,7 +1550,7 @@ function PredictivePanel({ ticker }: { ticker: string }) {
                 <div className="flex flex-wrap gap-2 mt-1">
                   {(result.tickers ?? Object.keys(result.historical as Record<string, number[]>)).map((tk, idx) => (
                     <span key={tk} className="text-[9px] font-mono flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: ["#818cf8", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#60a5fa"][idx % 6] }} />
+                      <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: ["#58a6ff", "#34d399", "#fbbf24", "#f87171", "#1f6feb", "#79c0ff"][idx % 6] }} />
                       {tk}
                     </span>
                   ))}
@@ -1563,7 +1563,7 @@ function PredictivePanel({ ticker }: { ticker: string }) {
           {result.residuals.length > 0 && (
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <Activity size={14} className="text-indigo-400" />
+                <Activity size={14} className="text-brand-400" />
                 <span className="text-xs font-semibold text-slate-200">Residual Diagnostics</span>
               </div>
               <div className="h-24 relative">
@@ -1602,7 +1602,7 @@ function OptimizationPanel({ data }: { data: PortfolioOptimizationResult }) {
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-4">
       <div className="flex items-center gap-2">
-        <ShieldAlert size={14} className="text-indigo-400" />
+        <ShieldAlert size={14} className="text-brand-400" />
         <span className="text-xs font-semibold text-slate-200">Portfolio Optimization ({data.method.toUpperCase()})</span>
       </div>
 
@@ -1683,7 +1683,7 @@ function AnomalyPanel({ data }: { data: AnomalyResult }) {
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <Activity size={14} className="text-indigo-400" />
+        <Activity size={14} className="text-brand-400" />
         <span className="text-xs font-semibold text-slate-200">Anomaly Detection</span>
         <span className={clsx("text-[10px] font-mono ml-auto",
           data.n_anomalies > 0 ? "text-amber-400" : "text-slate-500")}>
@@ -1721,10 +1721,10 @@ function AnomalyPanel({ data }: { data: AnomalyResult }) {
 
 function InterpretationPanel({ data }: { data: AIInterpretation }) {
   return (
-    <div className="rounded-xl border border-indigo-800/50 bg-indigo-950/20 p-4 space-y-3">
+    <div className="rounded-xl border border-brand-800/50 bg-brand-950/20 p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <Brain size={14} className="text-indigo-400" />
-        <span className="text-xs font-semibold text-indigo-300">AI Interpretation</span>
+        <Brain size={14} className="text-brand-400" />
+        <span className="text-xs font-semibold text-brand-300">AI Interpretation</span>
         <span className="text-[10px] text-slate-500 ml-auto">{data.model} · {data.provider}</span>
       </div>
       {data.status === "unconfigured" ? (

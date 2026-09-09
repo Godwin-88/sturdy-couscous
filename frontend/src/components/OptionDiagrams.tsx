@@ -171,7 +171,7 @@ export default function OptionDiagrams(props: OptionDiagramsProps) {
           {/* 3D delta surface */}
           <div className="rounded-lg border border-slate-700 bg-slate-900 overflow-hidden">
             <div className="flex items-center gap-2 px-2 py-1.5 border-b border-slate-700 bg-slate-950">
-              <BarChart3 size={11} className="text-indigo-400" />
+              <BarChart3 size={11} className="text-brand-400" />
               <span className="text-[10px] font-mono text-slate-300 uppercase">3D Δ Surface</span>
               <span className="ml-auto text-[10px] font-mono text-slate-500">strike × DTE</span>
             </div>

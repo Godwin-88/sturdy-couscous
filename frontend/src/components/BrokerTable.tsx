@@ -70,7 +70,7 @@ function Row({ p, onAnalyze }: { p: AlpacaPosition; onAnalyze: (p: AlpacaPositio
         <button
           onClick={() => onAnalyze(p)}
           title={`Open Analytics for ${underlyingFromSymbol(p.symbol)} (single position, in isolation)`}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-600/40"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-brand-600/20 border border-brand-500/30 text-brand-300 hover:bg-brand-600/40"
         >
           <LineChart size={10} /> Analyze
         </button>

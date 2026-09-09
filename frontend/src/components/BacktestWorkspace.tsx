@@ -163,7 +163,7 @@ export default function BacktestWorkspace() {
           {subTabs.map(t => (
             <button key={t.id} onClick={() => setSubTab(t.id)}
               className={clsx("flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold font-mono rounded-md transition-colors",
-                subTab === t.id ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"
+                subTab === t.id ? "bg-brand-600 text-white" : "text-slate-400 hover:text-slate-200"
               )}>
               {t.icon}{t.label}
             </button>
@@ -171,7 +171,7 @@ export default function BacktestWorkspace() {
         </div>
         <div className="ml-auto flex gap-1">
           <button onClick={() => { setDataSourceOpen(true); marketApi.listFredSeries().then(r => setFredSeries(r.series)).catch(() => {}); }}
-            className="flex items-center gap-1 px-2 py-1.5 rounded text-[10px] font-mono bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 hover:bg-indigo-700">
+            className="flex items-center gap-1 px-2 py-1.5 rounded text-[10px] font-mono bg-brand-800/60 border border-brand-700/50 text-brand-300 hover:bg-brand-700">
             <DatabaseIcon size={12} />Data Sources
           </button>
           <button onClick={handleSeedData} disabled={seedLoading}
@@ -190,7 +190,7 @@ export default function BacktestWorkspace() {
           <div className="max-w-3xl mx-auto space-y-4">
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-4">
               <div className="flex items-center gap-2">
-                <BarChart2 size={16} className="text-indigo-400" />
+                <BarChart2 size={16} className="text-brand-400" />
                 <h2 className="text-sm font-semibold text-slate-200">Walk-Forward Backtest</h2>
                 <button onClick={() => setShowParams(v => !v)}
                   className="ml-2 text-[10px] text-slate-500 hover:text-slate-300 font-mono">
@@ -199,10 +199,10 @@ export default function BacktestWorkspace() {
                 {running && progress && (
                   <div className="ml-auto flex items-center gap-2">
                     <div className="w-32 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                      <div className="h-full bg-indigo-500 transition-all duration-500 rounded-full"
+                      <div className="h-full bg-brand-500 transition-all duration-500 rounded-full"
                            style={{ width: `${progress.pct}%` }} />
                     </div>
-                    <span className="text-xs font-mono text-indigo-400 animate-pulse">
+                    <span className="text-xs font-mono text-brand-400 animate-pulse">
                       {progress.pct}% — {progress.msg.slice(0, 40)}
                     </span>
                   </div>
@@ -213,7 +213,7 @@ export default function BacktestWorkspace() {
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[10px] text-slate-500 font-mono">Tickers:</span>
                   {selectedTickers.map(t => (
-                    <span key={t} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-700/50">{t}</span>
+                    <span key={t} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-brand-900/40 text-brand-300 border border-brand-700/50">{t}</span>
                   ))}
                   {selectedFred.length > 0 && (
                     <>
@@ -272,7 +272,7 @@ export default function BacktestWorkspace() {
                 <button id="bt-run-btn" onClick={handleRun} disabled={running}
                   className={clsx("flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
                     running ? "bg-slate-700 text-slate-500 cursor-not-allowed"
-                            : "bg-indigo-600 hover:bg-indigo-500 text-white")}>
+                            : "bg-brand-600 hover:bg-brand-500 text-white")}>
                   <Play size={14} className={running ? "animate-pulse" : ""} />
                   {running ? "Running…" : "Run Backtest"}
                 </button>
@@ -298,11 +298,11 @@ export default function BacktestWorkspace() {
                     <button key={t.id} onClick={() => setResultTab(t.id)}
                       className={clsx("px-3 py-2 text-xs font-mono whitespace-nowrap transition-colors border-b-2 -mb-px",
                         resultTab === t.id
-                          ? "border-indigo-500 text-indigo-400"
+                          ? "border-brand-500 text-brand-400"
                           : "border-transparent text-slate-400 hover:text-slate-200")}>
                       {t.label}
                       {badge > 0 && (
-                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-indigo-900 text-indigo-300 text-[9px]">
+                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-brand-900 text-brand-300 text-[9px]">
                           {badge}
                         </span>
                       )}
@@ -434,7 +434,7 @@ function DataSourceModal({
       <div className="bg-slate-900 rounded-xl border border-slate-700 w-full max-w-2xl mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 sticky top-0 bg-slate-900 z-10">
           <div className="flex items-center gap-2">
-            <DatabaseIcon size={14} className="text-indigo-400" />
+            <DatabaseIcon size={14} className="text-brand-400" />
             <span className="text-sm font-semibold text-slate-200">Data Sources</span>
           </div>
           <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-200"><X size={14} /></button>
@@ -448,15 +448,15 @@ function DataSourceModal({
                 placeholder="e.g. SPY, QQQ, BTC-USD, EURUSD=X"
                 className="flex-1 bg-slate-800 border border-slate-600 text-xs text-slate-300 rounded px-2 py-1.5" />
               <button onClick={addTicker}
-                className="px-2 py-1.5 rounded text-[10px] font-mono bg-indigo-700 hover:bg-indigo-600 text-white">
+                className="px-2 py-1.5 rounded text-[10px] font-mono bg-brand-700 hover:bg-brand-600 text-white">
                 + Add
               </button>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {selectedTickers.map(t => (
-                <span key={t} className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-700/50">
+                <span key={t} className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-brand-900/40 text-brand-300 border border-brand-700/50">
                   {t}
-                  <button onClick={() => removeTicker(t)} className="text-indigo-400 hover:text-red-400"><X size={10} /></button>
+                  <button onClick={() => removeTicker(t)} className="text-brand-400 hover:text-red-400"><X size={10} /></button>
                 </span>
               ))}
               {selectedTickers.length === 0 && <span className="text-[10px] text-slate-600">No tickers added yet</span>}
@@ -469,7 +469,7 @@ function DataSourceModal({
               {fredSeries.map(s => (
                 <label key={s.id} className="flex items-center gap-1.5 text-[10px] font-mono text-slate-300 cursor-pointer hover:bg-slate-800 rounded px-1.5 py-1">
                   <input type="checkbox" checked={selectedFred.includes(s.id)} onChange={() => toggleFred(s.id)}
-                    className="accent-indigo-500" />
+                    className="accent-brand-500" />
                   <span className="truncate">{s.id}</span>
                   <span className="text-slate-500 truncate hidden sm:inline">— {s.name}</span>
                 </label>
@@ -480,7 +480,7 @@ function DataSourceModal({
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
               <input type="checkbox" checked={combineData} onChange={e => setCombineData(e.target.checked)}
-                className="accent-indigo-500" />
+                className="accent-brand-500" />
               Combine into single table
             </label>
             <span className="text-[10px] text-slate-500">(uncheck to get separate arrays)</span>
@@ -488,7 +488,7 @@ function DataSourceModal({
 
           <button onClick={previewData} disabled={dataLoading || selectedTickers.length === 0}
             className={clsx("flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium",
-              dataLoading ? "bg-slate-700 text-slate-500" : "bg-indigo-700 hover:bg-indigo-600 text-white")}>
+              dataLoading ? "bg-slate-700 text-slate-500" : "bg-brand-700 hover:bg-brand-600 text-white")}>
             <LineChartIcon size={12} /> {dataLoading ? "Loading..." : "Preview Data"}
           </button>
 
@@ -552,7 +552,7 @@ function SummaryTab({ g, u }: { g: BacktestResult | null; u: BacktestResult | nu
         <thead>
           <tr className="text-slate-400 border-b border-slate-700">
             <th className="text-left py-2">Metric</th>
-            <th className="text-right py-2 text-indigo-400">KG-Grounded</th>
+            <th className="text-right py-2 text-brand-400">KG-Grounded</th>
             {u && <th className="text-right py-2 text-slate-400">Baseline</th>}
             {u && <th className="text-right py-2 text-slate-500">Δ</th>}
           </tr>
@@ -566,7 +566,7 @@ function SummaryTab({ g, u }: { g: BacktestResult | null; u: BacktestResult | nu
             return (
               <tr key={m.key} className="border-t border-slate-800">
                 <td className="py-1.5 text-slate-400">{m.label}</td>
-                <td className="py-1.5 text-right text-indigo-300">{gv !== null ? m.fmt(gv) : "—"}</td>
+                <td className="py-1.5 text-right text-brand-300">{gv !== null ? m.fmt(gv) : "—"}</td>
                 {u && <td className="py-1.5 text-right text-slate-400">{uv !== null ? m.fmt(uv) : "—"}</td>}
                 {u && <td className={clsx("py-1.5 text-right font-bold",
                   pos === null ? "text-slate-600" : pos ? "text-emerald-400" : "text-red-400")}>
@@ -622,7 +622,7 @@ function EquityTab({ g, u }: { g: BacktestResult | null; u: BacktestResult | nul
         <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", fontSize: 11 }}
                  formatter={(v: number, name: string) => [fmt$(v), name]} />
         <Legend wrapperStyle={{ fontSize: 10, color: "#94a3b8" }} />
-        {g && <Line type="monotone" dataKey="grounded"  name="KG-Grounded" stroke="#6366f1" strokeWidth={2} dot={false} connectNulls />}
+        {g && <Line type="monotone" dataKey="grounded"  name="KG-Grounded" stroke="#1f6feb" strokeWidth={2} dot={false} connectNulls />}
         {u && <Line type="monotone" dataKey="ungrounded" name="Baseline"   stroke="#475569" strokeWidth={1.5} dot={false} connectNulls strokeDasharray="4 2" />}
         {g?.benchmark_curve && <Line type="monotone" dataKey="benchmark" name="SPY Buy&Hold" stroke="#f59e0b" strokeWidth={1.5} dot={false} connectNulls strokeDasharray="6 3" />}
       </LineChart>
@@ -654,7 +654,7 @@ function DrawdownTab({ g, u }: { g: BacktestResult | null; u: BacktestResult | n
           <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", fontSize: 11 }}
                    formatter={(v: number, name: string) => [`${v.toFixed(2)}%`, name]} />
           <ReferenceLine y={0} stroke="#475569" />
-          {g && <Area type="monotone" dataKey="grounded"   name="KG-Grounded" stroke="#6366f1" fill="url(#ddGrad)" strokeWidth={2} dot={false} connectNulls />}
+          {g && <Area type="monotone" dataKey="grounded"   name="KG-Grounded" stroke="#1f6feb" fill="url(#ddGrad)" strokeWidth={2} dot={false} connectNulls />}
           {u && <Line type="monotone" dataKey="ungrounded" name="Baseline"     stroke="#475569" strokeWidth={1.5} dot={false} connectNulls strokeDasharray="4 2" />}
         </AreaChart>
       </ResponsiveContainer>
@@ -752,7 +752,7 @@ function StrategyTab({ g, u }: { g: BacktestResult | null; u: BacktestResult | n
           <ReferenceLine x={0} stroke="#475569" />
           <Bar dataKey="total_pnl" name="Total P&L" radius={[0, 3, 3, 0]}>
             {data.map((entry, i) => (
-              <Cell key={i} fill={entry.total_pnl >= 0 ? "#6366f1" : "#ef4444"} />
+              <Cell key={i} fill={entry.total_pnl >= 0 ? "#1f6feb" : "#ef4444"} />
             ))}
           </Bar>
         </BarChart>
@@ -802,7 +802,7 @@ function WalkFwdTab({ g }: { g: BacktestResult | null }) {
           <ReferenceLine y={0} stroke="#475569" />
           <Bar dataKey="total_return" name="Return" radius={[3, 3, 0, 0]}>
             {windows.map((w, i) => (
-              <Cell key={i} fill={w.total_return >= 0 ? "#6366f1" : "#ef4444"} />
+              <Cell key={i} fill={w.total_return >= 0 ? "#1f6feb" : "#ef4444"} />
             ))}
           </Bar>
         </BarChart>
@@ -831,11 +831,11 @@ function SuggestionsTab({ suggestions, onAction }: {
         <div className="text-xs text-slate-500 py-4 text-center">No suggestions yet — run a backtest to generate KG-backed trade ideas.</div>
       )}
       {queue.map(s => (
-        <div key={s.id} className="rounded-lg border border-indigo-800/50 bg-indigo-950/30 p-3 space-y-2">
+        <div key={s.id} className="rounded-lg border border-brand-800/50 bg-brand-950/30 p-3 space-y-2">
           <div className="flex items-start justify-between gap-2">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-indigo-300">{s.ticker}</span>
+                <span className="text-sm font-bold text-brand-300">{s.ticker}</span>
                 <span className={clsx("text-xs font-bold px-1.5 py-0.5 rounded",
                   s.direction === "buy" ? "bg-emerald-900/60 text-emerald-300" : "bg-red-900/60 text-red-300")}>
                   {s.direction.toUpperCase()}
@@ -909,7 +909,7 @@ function OptimizeTab({ runId }: { runId: string | null }) {
     <div className="max-w-2xl mx-auto">
       <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-4">
         <div className="flex items-center gap-2">
-          <Sliders size={14} className="text-indigo-400" />
+          <Sliders size={14} className="text-brand-400" />
           <span className="text-sm font-semibold text-slate-200">Parameter Grid Search</span>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -927,7 +927,7 @@ function OptimizeTab({ runId }: { runId: string | null }) {
         </div>
         <button onClick={run} disabled={loading || !strategy.trim()}
           className={clsx("flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium",
-            loading ? "bg-slate-700 text-slate-500" : "bg-indigo-600 hover:bg-indigo-500 text-white")}>
+            loading ? "bg-slate-700 text-slate-500" : "bg-brand-600 hover:bg-brand-500 text-white")}>
           <Sliders size={12} /> {loading ? "Optimizing..." : "Run Grid Search"}
         </button>
         {error && <div className="text-xs text-red-400 font-mono">{error}</div>}
@@ -964,7 +964,7 @@ function CompareTab({ runId }: { runId: string | null }) {
     <div className="max-w-2xl mx-auto">
       <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-4">
         <div className="flex items-center gap-2">
-          <GitCompare size={14} className="text-indigo-400" />
+          <GitCompare size={14} className="text-brand-400" />
           <span className="text-sm font-semibold text-slate-200">KG vs Baseline Comparison</span>
         </div>
         {result.delta && (
@@ -1014,7 +1014,7 @@ function AblationTab({ runId }: { runId: string | null }) {
     <div className="max-w-2xl mx-auto">
       <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-4">
         <div className="flex items-center gap-2">
-          <Layers size={14} className="text-indigo-400" />
+          <Layers size={14} className="text-brand-400" />
           <span className="text-sm font-semibold text-slate-200">Ablation Matrix ({result.configs_compared} configs)</span>
         </div>
       </div>

@@ -155,7 +155,7 @@ export default function GraphCanvas() {
           <button
             onClick={() => buildGraph(nodeType)}
             title="Refresh"
-            className="p-1 text-slate-400 hover:text-indigo-400 rounded hover:bg-slate-700"
+            className="p-1 text-slate-400 hover:text-brand-400 rounded hover:bg-slate-700"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
@@ -166,7 +166,7 @@ export default function GraphCanvas() {
       <div className="flex gap-4 px-3 py-1 bg-slate-900/50 border-b border-slate-800 text-xs font-mono text-slate-500 shrink-0">
         <span>{nodeCount} nodes</span>
         <span>{edgeCount} edges</span>
-        {loading && <span className="text-indigo-400 animate-pulse">Loading...</span>}
+        {loading && <span className="text-brand-400 animate-pulse">Loading...</span>}
       </div>
 
       {/* Canvas + sidebar */}

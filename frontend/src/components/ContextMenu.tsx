@@ -181,7 +181,7 @@ export default function ContextMenu({
     >
       {/* Series header */}
       <div className="px-3 py-2 border-b border-slate-700">
-        <div className="text-xs font-mono text-indigo-400 font-semibold">{menu.series.name}</div>
+        <div className="text-xs font-mono text-brand-400 font-semibold">{menu.series.name}</div>
         <div className="text-[10px] font-mono text-slate-500">
           {menu.series.ticker} · {menu.series.metric} · {menu.series.source}
         </div>

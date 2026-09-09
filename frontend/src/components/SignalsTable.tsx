@@ -193,7 +193,7 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
               <button key={t.id} onClick={() => switchSubTab(t.id)}
                 className={clsx("px-2.5 py-1 text-[10px] font-semibold font-mono rounded-md transition-colors",
                   subTab === t.id
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-brand-600 text-white"
                     : "text-slate-400 hover:text-slate-200"
                 )}>
                 {t.label}
@@ -265,7 +265,7 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
                   <tr key={s.order_id} className={clsx("border-t border-slate-800 hover:bg-slate-800/60", isOpt && "bg-violet-950/10")}>
                     <td className="py-1.5 px-2">
                       <button onClick={() => toggleLineage(s.strategy)}
-                        className="p-0.5 rounded text-slate-500 hover:text-indigo-400" title="View KG lineage">
+                        className="p-0.5 rounded text-slate-500 hover:text-brand-400" title="View KG lineage">
                         {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
                       </button>
                     </td>
@@ -318,7 +318,7 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
                     <td className="py-1.5 px-2">
                       <div className="flex items-center gap-1">
                         <button onClick={() => setDetailOrder(s)}
-                          className="p-1 rounded text-slate-500 hover:text-indigo-400 hover:bg-slate-700" title="View details">
+                          className="p-1 rounded text-slate-500 hover:text-brand-400 hover:bg-slate-700" title="View details">
                           <Search size={11} />
                         </button>
                         <button onClick={() => navigate(smartAnalyzeLink(s))}
@@ -406,12 +406,12 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
                         {s.kelly_fraction != null && <><span className="mx-1 text-slate-600">·</span><span>Kelly <b className="text-slate-300">{s.kelly_fraction.toFixed(3)}</b></span></>}
                       </div>
                       {s.graph_path && s.graph_path.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] font-mono text-indigo-300">
-                          <BookOpen size={10} className="text-indigo-400" />
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px] font-mono text-brand-300">
+                          <BookOpen size={10} className="text-brand-400" />
                           {s.graph_path.map((p, i) => (
                             <span key={p} className="flex items-center gap-1">
                               {i > 0 && <span className="text-slate-600">→</span>}
-                              <span className="bg-indigo-950/50 border border-indigo-800/60 rounded px-1 py-0.5">{p}</span>
+                              <span className="bg-brand-950/50 border border-brand-800/60 rounded px-1 py-0.5">{p}</span>
                             </span>
                           ))}
                         </div>
@@ -726,8 +726,8 @@ function LineageDrawer({ lineage }: { lineage: SignalLineage }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <BookOpen size={12} className="text-indigo-400" />
-        <span className="text-xs font-semibold text-indigo-300">{lineage.strategy}</span>
+        <BookOpen size={12} className="text-brand-400" />
+        <span className="text-xs font-semibold text-brand-300">{lineage.strategy}</span>
         {lineage.strategy_desc && <span className="text-xs text-slate-500">— {lineage.strategy_desc}</span>}
         <div className="flex gap-1 ml-auto">
           {lineage.regimes.map(r => (
@@ -751,7 +751,7 @@ function LineageDrawer({ lineage }: { lineage: SignalLineage }) {
                   )}>{c.difficulty}</span>
                 </div>
                 {c.definition && <div className="text-[10px] text-slate-500 line-clamp-2">{c.definition}</div>}
-                <div className="text-[9px] text-indigo-500 mt-0.5">{c.category}</div>
+                <div className="text-[9px] text-brand-500 mt-0.5">{c.category}</div>
               </div>
             ))}
           </div>
