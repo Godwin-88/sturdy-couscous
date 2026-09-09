@@ -358,7 +358,9 @@ Full rows appended to `p9_tenets_financial_engineering.md` §4B (after U24):
    (copy + rename; web3.py already a dep). `pytest tests/test_web3_adapters.py`.
 3. `agent/defi_agent.py` (D1–D8) + `tests/test_defi_agent.py` — hermetic (stub
    relay/get_markets/suggest_crypto/Attestation), paper mode end-to-end.
-4. KG `graph/schema/defi_extension.cypher` (additive types) + load in Neo4j.
+4. KG `graph/schema/defi_extension.cypher` (additive types) + load in Neo4j ✅
+   (verified live: 6 constraints — EventWindow/AMMPool/LendingPool/VaultStrategy/
+   PerpetualMarket/OracleFeed — plus 3 seeded OracleFeed nodes).
 5. API routes (`/defi/*`) + `DefiWorkspace.tsx` + App menu item.
 6. `web3/` relay + Foundry deploy (`ethereum/scripts/deploy.sh` on Sepolia) —
    D1–D4 orders against Uniswap V3 / Aave V3 Sepolia testnet, `make web3-test`.

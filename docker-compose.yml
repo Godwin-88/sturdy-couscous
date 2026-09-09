@@ -39,7 +39,8 @@ services:
       - ./master.cypher:/graph/master.cypher:ro
       - ./graph/schema/dreamdex_extension.cypher:/graph/dreamdex_extension.cypher:ro
       - ./graph/schema/creditgraph_extension.cypher:/graph/creditgraph_extension.cypher:ro
-    entrypoint: ["/bin/sh", "-c", "cat /graph/master.cypher /graph/dreamdex_extension.cypher /graph/creditgraph_extension.cypher | cypher-shell --fail-at-end -u \"${NEO4J_USER:-neo4j}\" -p \"${NEO4J_PASSWORD:-graphalpha}\" -a bolt://neo4j:7687 && echo 'Graph loaded successfully'"]
+      - ./graph/schema/defi_extension.cypher:/graph/defi_extension.cypher:ro
+    entrypoint: ["/bin/sh", "-c", "cat /graph/master.cypher /graph/dreamdex_extension.cypher /graph/creditgraph_extension.cypher /graph/defi_extension.cypher | cypher-shell --fail-at-end -u \"${NEO4J_USER:-neo4j}\" -p \"${NEO4J_PASSWORD:-graphalpha}\" -a bolt://neo4j:7687 && echo 'Graph loaded successfully'"]
     restart: "no"
 
   # ── Audit & portfolio state DB ───────────────────────────────────────────────
