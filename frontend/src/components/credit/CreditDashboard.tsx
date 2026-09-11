@@ -499,8 +499,8 @@ export default function CreditDashboard() {
                       maintainAspectRatio: false,
                       plugins: { legend: { display: false } },
                       scales: {
-                        y: { beginAtZero: true, ticks: { color: "#8b949e" }, grid: { color: "#30363d" } },
-                        x: { ticks: { color: "#8b949e" }, grid: { display: false } },
+                        y: { beginAtZero: true, ticks: { color: "rgb(var(--slate-400))" }, grid: { color: "rgb(var(--slate-700))" } },
+                        x: { ticks: { color: "rgb(var(--slate-400))" }, grid: { display: false } },
                       },
                     }}
                   />
@@ -571,8 +571,8 @@ export default function CreditDashboard() {
                             maintainAspectRatio: false,
                             plugins: { legend: { display: false } },
                             scales: {
-                              y: { beginAtZero: true, max: 100, ticks: { color: "#8b949e" }, grid: { color: "#30363d" } },
-                              x: { ticks: { color: "#8b949e" }, grid: { display: false } },
+                              y: { beginAtZero: true, max: 100, ticks: { color: "rgb(var(--slate-400))" }, grid: { color: "rgb(var(--slate-700))" } },
+                              x: { ticks: { color: "rgb(var(--slate-400))" }, grid: { display: false } },
                             },
                           }}
                         />

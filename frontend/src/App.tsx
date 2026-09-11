@@ -5,6 +5,7 @@ import {
   Activity, GitBranch, BarChart2, Table2, Radio, ShieldAlert, Brain,
   FlaskConical, LayoutDashboard, Terminal, Download, Search,
   Lightbulb, Zap, Shield, Edit3, ChevronDown, ChevronUp, Bot, Sliders, Waves,
+  Sun, Moon,
 } from "lucide-react";
 import Sigma from "sigma";
 import Graph from "graphology";
@@ -69,6 +70,18 @@ export default function App() {
   const [opTab, setOpTab] = useState<Tab>("dashboard");
   const appRef = useRef<HTMLDivElement>(null);
   const [copilotOpen, setCopilotOpen] = useState(false);
+
+  // ── Theme (midnight default, persisted via localStorage "ga-theme") ──
+  const [lightMode, setLightMode] = useState(() => {
+    try { return localStorage.getItem("ga-theme") === "light"; } catch { return false; }
+  });
+  const toggleTheme = () => {
+    const next = !lightMode;
+    setLightMode(next);
+    if (next) document.documentElement.dataset.theme = "light";
+    else delete document.documentElement.dataset.theme;
+    try { localStorage.setItem("ga-theme", next ? "light" : "midnight"); } catch { /* ignore */ }
+  };
 
   const isAnalyticsRoute  = location.pathname.startsWith("/analytics");
   const isHypothesisRoute = location.pathname.startsWith("/hypothesis");
@@ -142,7 +155,7 @@ export default function App() {
       <aside className="w-52 shrink-0 flex flex-col bg-slate-900 border-r border-slate-800 h-full">
         <div className="flex items-center gap-2 px-4 py-4 border-b border-slate-800">
           <div className="w-7 h-7 rounded bg-brand-600 flex items-center justify-center">
-            <Radio size={14} className="text-white" />
+            <Radio size={14} className="text-slate-100" />
           </div>
           <span className="text-sm font-bold text-slate-100 font-mono tracking-tight">
             Graph<span className="text-brand-400">Alpha</span>
@@ -167,8 +180,19 @@ export default function App() {
         </nav>
 
         <div className="mt-auto px-4 py-3 border-t border-slate-800 space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-mono text-slate-500">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />paper mode
+          <div className="flex items-center justify-between gap-1.5 text-xs font-mono text-slate-500">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />paper mode
+            </span>
+            <button
+              onClick={toggleTheme}
+              title="Toggle light / midnight theme"
+              aria-label="Toggle theme"
+              className="flex items-center gap-1 px-2 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-slate-100 transition-colors"
+            >
+              {lightMode ? <Moon size={12} /> : <Sun size={12} />}
+              <span>{lightMode ? "dark" : "light"}</span>
+            </button>
           </div>
         </div>
       </aside>
@@ -197,9 +221,9 @@ function OperationsShell({ opTab, onNavigate }: { opTab: string; onNavigate?: (t
       {opTab === "graph"     && <GraphTab />}
       {opTab === "signals"   && <SignalsTab onNavigate={onNavigate} />}
       {opTab === "crypto"    && <CryptoTab />}
-      {opTab === "dreamdex"  && <DreamDEXPanel />}
-      {opTab === "defi"      && <DefiWorkspace />}
-      {opTab === "credit"    && <CreditWorkspace />}
+      {opTab === "dreamdex"  && <div className="h-full overflow-y-auto"><DreamDEXPanel /></div>}
+      {opTab === "defi"      && <div className="h-full overflow-y-auto"><DefiWorkspace /></div>}
+      {opTab === "credit"    && <div className="h-full overflow-y-auto"><CreditWorkspace /></div>}
       {opTab === "options"   && <OptionsTab onNavigate={onNavigate} />}
       {opTab === "risk"      && <RiskWorkspaceTab onNavigate={onNavigate} />}
       {opTab === "backtest"  && <BacktestWorkspaceTab />}
@@ -264,7 +288,7 @@ function DashboardGraph() {
           if (!g.hasNode(String(n.id))) {
             g.addNode(String(n.id), {
               label: String(n.properties.name ?? n.id), size: 10,
-              color: LABEL_COLOR[n.labels[0]] ?? "#94a3b8",
+              color: LABEL_COLOR[n.labels[0]] ?? "#7d89b8",
               x: Math.random() * 10, y: Math.random() * 10,
             });
           }
@@ -272,14 +296,14 @@ function DashboardGraph() {
         edges.forEach(e => {
           const s = String(e.source), t = String(e.target);
           if (g.hasNode(s) && g.hasNode(t) && !g.hasEdge(s, t)) {
-            g.addEdge(s, t, { size: 1, color: "#334155", type: "arrow" });
+            g.addEdge(s, t, { size: 1, color: "#182250", type: "arrow" });
           }
         });
         if (g.order > 0) forceAtlas2.assign(g, { iterations: 100, settings: forceAtlas2.inferSettings(g) });
         if (sigmaRef.current) sigmaRef.current.kill();
         sigmaRef.current = new Sigma(g, containerRef.current!, {
-          renderEdgeLabels: false, defaultNodeColor: "#94a3b8",
-          labelColor: { color: "#cbd5e1" }, labelSize: 11,
+          renderEdgeLabels: false, defaultNodeColor: "#7d89b8",
+          labelColor: { color: "#a7b2d6" }, labelSize: 11,
         });
       }).catch(() => null);
     return () => { sigmaRef.current?.kill(); };
@@ -329,10 +353,10 @@ function GraphTab() {
   const actions = [
     { icon: <Terminal size={14} />, label: "Query",    onClick: () => setShowConsole(!showConsole), active: showConsole, color: "text-emerald-400" },
     { icon: <Edit3 size={14} />,    label: "Edit",     onClick: () => setEditOpen(true),             active: false,        color: "text-brand-400" },
-    { icon: <Zap size={14} />,      label: "Simulate", onClick: () => setSimOpen(true),              active: false,        color: "text-amber-400" },
-    { icon: <Search size={14} />,   label: "Lineage",  onClick: () => setLineageOpen(true),          active: false,        color: "text-purple-400" },
+    { icon: <Zap size={14} />,      label: "Simulate", onClick: () => setSimOpen(true),              active: false,        color: "text-brand-400" },
+    { icon: <Search size={14} />,   label: "Lineage",  onClick: () => setLineageOpen(true),          active: false,        color: "text-brand-400" },
     { icon: <Shield size={14} />,   label: "Conflicts",onClick: () => setContraOpen(true),           active: false,        color: "text-red-400" },
-    { icon: <Lightbulb size={14} />,label: "Fix KG",   onClick: () => setRecsOpen(true),             active: false,        color: "text-yellow-400" },
+    { icon: <Lightbulb size={14} />,label: "Fix KG",   onClick: () => setRecsOpen(true),             active: false,        color: "text-brand-400" },
   ];
 
   return (
@@ -351,7 +375,7 @@ function GraphTab() {
                   <StatBox label="Nodes" value={String(summary.total_nodes)} />
                   <StatBox label="Edges" value={String(summary.total_edges)} />
                   <StatBox label="Coverage" value={`${(summary.formula_coverage_pct * 100).toFixed(0)}%`} />
-                  <StatBox label="Orphans" value={String(summary.orphaned_nodes)} color="text-amber-400" />
+                  <StatBox label="Orphans" value={String(summary.orphaned_nodes)} color="text-brand-400" />
                 </div>
               ) : null}
               {summary && Object.keys(summary.by_label).length > 0 && (
@@ -387,10 +411,10 @@ function GraphTab() {
 
             {/* Gaps */}
             {gaps && (gaps.uncovered_strategies.length > 0 || gaps.sparse_regimes.length > 0) && (
-              <div className="rounded-xl border border-amber-800/50 bg-amber-950/20 p-3 space-y-2">
-                <div className="text-[10px] text-amber-400 uppercase tracking-wider font-semibold">⚠ Gaps</div>
-                {gaps.uncovered_strategies.length > 0 && <div className="text-xs text-amber-300">{gaps.uncovered_strategies.length} strategies without concepts</div>}
-                {gaps.sparse_regimes.length > 0 && <div className="text-xs text-amber-300">{gaps.sparse_regimes.length} regimes with {'<'}2 strategies</div>}
+              <div className="rounded-xl border border-brand-800/50 bg-brand-950/20 p-3 space-y-2">
+                <div className="text-[10px] text-brand-400 uppercase tracking-wider font-semibold">⚠ Gaps</div>
+                {gaps.uncovered_strategies.length > 0 && <div className="text-xs text-brand-300">{gaps.uncovered_strategies.length} strategies without concepts</div>}
+                {gaps.sparse_regimes.length > 0 && <div className="text-xs text-brand-300">{gaps.sparse_regimes.length} regimes with {'<'}2 strategies</div>}
               </div>
             )}
 

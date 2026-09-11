@@ -82,7 +82,7 @@ export default function SettingsPanel() {
         <Sliders size={16} className="text-brand-300" />
         <span className="text-sm font-semibold text-slate-200 uppercase tracking-widest">Settings</span>
       </div>
-      {msg && <div className="mb-2 text-[11px] font-mono text-amber-300 bg-amber-950/20 border border-amber-800 rounded p-2">{msg}</div>}
+      {msg && <div className="mb-2 text-[11px] font-mono text-brand-300 bg-brand-950/20 border border-brand-800 rounded p-2">{msg}</div>}
       {!token ? (
         <div className="max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-2">
           <div className="flex items-center gap-2"><KeyRound size={14} className="text-brand-300" /><span className="text-xs font-semibold text-slate-200">Sign in</span></div>
@@ -101,7 +101,7 @@ export default function SettingsPanel() {
               <button key={id} onClick={() => setTab(id)}
                 className={`px-3 py-1.5 rounded text-xs ${tab === id ? "bg-brand-600/40 text-brand-100 border border-brand-500/50" : "bg-slate-800 text-slate-300 border border-slate-700"}`}>{l}</button>
             ))}
-            <button onClick={logout} className="ml-auto px-3 py-1.5 rounded text-xs bg-rose-800/30 text-rose-300 border border-rose-700">Logout</button>
+            <button onClick={logout} className="ml-auto px-3 py-1.5 rounded text-xs bg-red-800/30 text-red-300 border border-red-700">Logout</button>
           </div>
 
           {tab === "account" && (
@@ -125,7 +125,7 @@ export default function SettingsPanel() {
                 </div>
                 <div className="flex items-center gap-3 text-[11px] text-slate-400">
                   <label className="flex items-center gap-1"><input type="checkbox" checked={brokerForm.paper} onChange={(e) => setBrokerForm({ ...brokerForm, paper: e.target.checked })} /> paper</label>
-                  {!brokerForm.paper && <span className="text-rose-400">LIVE - verify carefully</span>}
+                  {!brokerForm.paper && <span className="text-red-400">LIVE - verify carefully</span>}
                   <button className={btn} disabled={busy} onClick={saveBroker}>Save (encrypted)</button>
                 </div>
               </div>
@@ -137,10 +137,10 @@ export default function SettingsPanel() {
                     <span className="text-slate-300 w-20">{b.broker}</span>
                     <span className="text-slate-400 font-mono">{b.key_id ?? ""}</span>
                     {b.is_active && <span className="text-[10px] bg-emerald-900/40 border border-emerald-700 px-1.5 rounded text-emerald-300">ACTIVE</span>}
-                    <span className={`text-[10px] ${b.paper ? "text-slate-500" : "text-rose-400"}`}>{b.paper ? "paper" : "LIVE"}</span>
+                    <span className={`text-[10px] ${b.paper ? "text-slate-500" : "text-red-400"}`}>{b.paper ? "paper" : "LIVE"}</span>
                     <div className="ml-auto flex gap-2">
                       {!b.is_active && <button className="text-[10px] text-brand-300 hover:underline" onClick={() => setActive(b.id, b.broker)}>Set active</button>}
-                      <button className="text-[10px] text-rose-400 hover:underline" onClick={() => delBroker(b.id)}>Delete</button>
+                      <button className="text-[10px] text-red-400 hover:underline" onClick={() => delBroker(b.id)}>Delete</button>
                     </div>
                   </div>
                 ))}
@@ -164,7 +164,7 @@ export default function SettingsPanel() {
 
           {tab === "risk" && (
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
-              <div className="flex items-center gap-2"><Sliders size={14} className="text-amber-300" /><span className="text-xs font-semibold text-slate-200">Risk-engine thresholds (apply next agent cycle)</span></div>
+              <div className="flex items-center gap-2"><Sliders size={14} className="text-brand-300" /><span className="text-xs font-semibold text-slate-200">Risk-engine thresholds (apply next agent cycle)</span></div>
               {RISK_META.map((r) => (
                 <div key={r.key} className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-2 items-center">
                   <div title={r.hint}>

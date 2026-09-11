@@ -4,7 +4,7 @@ import { agentApi, researchApi, type NewsResult, type MacroResult, type MacroEve
 
 const IMPACT_COLOR: Record<string, string> = {
   HIGH:   "bg-red-900/60 text-red-300 border border-red-700",
-  MEDIUM: "bg-amber-900/50 text-amber-300 border border-amber-700",
+  MEDIUM: "bg-brand-900/50 text-brand-300 border border-brand-700",
   LOW:    "bg-slate-700 text-slate-300 border border-slate-600",
 };
 
@@ -109,13 +109,13 @@ function MacroSection({ data }: { data: MacroResult | null | undefined }) {
     <div className="space-y-4">
       {/* Pre-event signals */}
       {preSignals.length > 0 && (
-        <div className="rounded-lg bg-amber-950/40 border border-amber-800/60 p-3">
-          <div className="text-xs text-amber-400 font-semibold uppercase tracking-wide mb-2">
+        <div className="rounded-lg bg-brand-950/40 border border-brand-800/60 p-3">
+          <div className="text-xs text-brand-400 font-semibold uppercase tracking-wide mb-2">
             ⚠ Active Pre-Event Size Reductions
           </div>
           <div className="flex flex-wrap gap-2">
             {preSignals.map(([concept, mod]) => (
-              <span key={concept} className="text-xs bg-amber-900/60 text-amber-200 border border-amber-700 rounded px-2 py-0.5">
+              <span key={concept} className="text-xs bg-brand-900/60 text-brand-200 border border-brand-700 rounded px-2 py-0.5">
                 {concept}: {(mod * 100).toFixed(0)}%
               </span>
             ))}

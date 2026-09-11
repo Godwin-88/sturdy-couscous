@@ -252,7 +252,7 @@ export default function PortfolioTab() {
                       responsive: true,
                       maintainAspectRatio: false,
                       plugins: {
-                        legend: { position: "right", labels: { color: "#8b949e", padding: 12 } },
+                        legend: { position: "right", labels: { color: "rgb(var(--slate-400))", padding: 12 } },
                       },
                     }}
                   />
@@ -355,8 +355,8 @@ export default function PortfolioTab() {
                       maintainAspectRatio: false,
                       plugins: { legend: { display: false } },
                       scales: {
-                        y: { beginAtZero: true, ticks: { color: "#8b949e" }, grid: { color: "#30363d" } },
-                        x: { ticks: { color: "#8b949e" }, grid: { display: false } },
+                        y: { beginAtZero: true, ticks: { color: "rgb(var(--slate-400))" }, grid: { color: "rgb(var(--slate-700))" } },
+                        x: { ticks: { color: "rgb(var(--slate-400))" }, grid: { display: false } },
                       },
                     }}
                   />
@@ -572,8 +572,8 @@ export default function PortfolioTab() {
                       indexAxis: "y",
                       plugins: { legend: { display: false } },
                       scales: {
-                        x: { beginAtZero: true, ticks: { color: "#8b949e" }, grid: { color: "#30363d" } },
-                        y: { ticks: { color: "#8b949e" }, grid: { display: false } },
+                        x: { beginAtZero: true, ticks: { color: "rgb(var(--slate-400))" }, grid: { color: "rgb(var(--slate-700))" } },
+                        y: { ticks: { color: "rgb(var(--slate-400))" }, grid: { display: false } },
                       },
                     }}
                   />

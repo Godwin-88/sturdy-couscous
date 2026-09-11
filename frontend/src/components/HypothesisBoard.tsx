@@ -18,10 +18,10 @@ interface Props {
 
 const STATUS_COLORS: Record<string, string> = {
   IDEA: "text-brand-400 border-brand-500/30 bg-brand-500/10",
-  TESTING: "text-amber-400 border-amber-500/30 bg-amber-500/10",
+  TESTING: "text-brand-400 border-brand-500/30 bg-brand-500/10",
   VALIDATED: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
   REJECTED: "text-red-400 border-red-500/30 bg-red-500/10",
-  DEPLOYED: "text-purple-400 border-purple-500/30 bg-purple-500/10",
+  DEPLOYED: "text-brand-400 border-brand-500/30 bg-brand-500/10",
   MONITORING: "text-brand-400 border-brand-500/30 bg-brand-500/10",
 };
 
@@ -132,14 +132,14 @@ export default function HypothesisBoard({ initialMode = "view" }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Brain size={16} className="text-purple-400" />
+            <Brain size={16} className="text-brand-400" />
             <span className="text-sm font-bold text-slate-100 font-mono">Hypothesis Board</span>
           </div>
           <div className="flex items-center gap-1">
             <button onClick={load} className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200">
               <RefreshCw size={13} />
             </button>
-            <button onClick={() => setMode("create")} className="flex items-center gap-1 px-2 py-1.5 text-xs font-mono rounded bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 border border-purple-500/30">
+            <button onClick={() => setMode("create")} className="flex items-center gap-1 px-2 py-1.5 text-xs font-mono rounded bg-brand-600/20 text-brand-400 hover:bg-brand-600/30 border border-brand-500/30">
               <Plus size={12} /> New
             </button>
           </div>
@@ -147,7 +147,7 @@ export default function HypothesisBoard({ initialMode = "view" }: Props) {
 
         {/* Multiple testing context */}
         {mtContext && mtContext.active_hypotheses > 1 && (
-          <div className="rounded-lg border border-amber-800/50 bg-amber-950/20 p-2 text-[10px] font-mono text-amber-300">
+          <div className="rounded-lg border border-brand-800/50 bg-brand-950/20 p-2 text-[10px] font-mono text-brand-300">
             ⚠ {mtContext.active_hypotheses} active hypotheses · {mtContext.total_tests_logged} tests logged
             <br />Suggested correction: {mtContext.suggested_correction}
           </div>
@@ -183,7 +183,7 @@ export default function HypothesisBoard({ initialMode = "view" }: Props) {
                 className={clsx(
                   "w-full text-left p-2.5 rounded-lg border transition-colors",
                   selected?.hypothesis_id === h.hypothesis_id
-                    ? "border-purple-500/50 bg-purple-500/10"
+                    ? "border-brand-500/50 bg-brand-500/10"
                     : "border-slate-700 bg-slate-900 hover:bg-slate-800"
                 )}
               >
@@ -262,7 +262,7 @@ function CreateForm({
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       <div className="flex items-center gap-2">
-        <Brain size={16} className="text-purple-400" />
+        <Brain size={16} className="text-brand-400" />
         <span className="text-sm font-bold text-slate-100 font-mono">New Hypothesis</span>
       </div>
 
@@ -270,14 +270,14 @@ function CreateForm({
         <div>
           <label className="text-[10px] text-slate-500 uppercase font-semibold">Title *</label>
           <input value={formTitle} onChange={e => setFormTitle(e.target.value)}
-            className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500"
+            className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-500"
             placeholder='e.g. "XLE signal predicts return in HighVolatility regime"' />
         </div>
 
         <div>
           <label className="text-[10px] text-slate-500 uppercase font-semibold">Description</label>
           <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} rows={3}
-            className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500"
+            className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-500"
             placeholder="Describe the hypothesis..." />
         </div>
 
@@ -285,13 +285,13 @@ function CreateForm({
           <div>
             <label className="text-[10px] text-slate-500 uppercase font-semibold">Primary Series *</label>
             <input value={formSeries} onChange={e => setFormSeries(e.target.value)}
-              className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500"
+              className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-500"
               placeholder="e.g. price:XLE" />
           </div>
           <div>
             <label className="text-[10px] text-slate-500 uppercase font-semibold">Benchmark Series</label>
             <input value={formBenchmark} onChange={e => setFormBenchmark(e.target.value)}
-              className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500"
+              className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-500"
               placeholder="e.g. price:SPY" />
           </div>
         </div>
@@ -300,25 +300,25 @@ function CreateForm({
           <div>
             <label className="text-[10px] text-slate-500 uppercase font-semibold">Regime Filter</label>
             <input value={formRegime} onChange={e => setFormRegime(e.target.value)}
-              className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500"
+              className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-500"
               placeholder="e.g. HighVolatility" />
           </div>
           <div>
             <label className="text-[10px] text-slate-500 uppercase font-semibold">Test Window Start</label>
             <input type="date" value={formStart} onChange={e => setFormStart(e.target.value)}
-              className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-purple-500" />
+              className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-brand-500" />
           </div>
           <div>
             <label className="text-[10px] text-slate-500 uppercase font-semibold">Test Window End</label>
             <input type="date" value={formEnd} onChange={e => setFormEnd(e.target.value)}
-              className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-purple-500" />
+              className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-brand-500" />
           </div>
         </div>
       </div>
 
       <div className="flex items-center gap-2 pt-2">
         <button onClick={onSubmit}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs font-mono font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-500 transition-colors">
+          className="flex items-center gap-1.5 px-4 py-2 text-xs font-mono font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-500 transition-colors">
           <Brain size={13} /> Create Hypothesis
         </button>
         <button onClick={onCancel}
@@ -404,11 +404,11 @@ function HypothesisDetail({
         {h.status === "VALIDATED" && (
           <>
             <button onClick={() => onDeployToBacktest(h.hypothesis_id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono rounded-lg bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 border border-amber-500/30">
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono rounded-lg bg-brand-600/20 text-brand-400 hover:bg-brand-600/30 border border-brand-500/30">
               <BarChart2 size={12} /> Deploy to Backtest
             </button>
             <button onClick={() => onDeployToPaper(h.hypothesis_id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono rounded-lg bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 border border-purple-500/30">
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono rounded-lg bg-brand-600/20 text-brand-400 hover:bg-brand-600/30 border border-brand-500/30">
               <Send size={12} /> Deploy to Paper
             </button>
           </>
@@ -436,7 +436,7 @@ function HypothesisDetail({
                 <span className="text-slate-400 w-24">{t.test_type}</span>
                 <span className="text-slate-300">p = {fmtN(t.raw_p_value, 4)}</span>
                 <span className={clsx(
-                  t.significant_bonf ? "text-emerald-400" : t.significant_raw ? "text-amber-400" : "text-red-400"
+                  t.significant_bonf ? "text-emerald-400" : t.significant_raw ? "text-brand-400" : "text-red-400"
                 )}>
                   {t.significant_bonf ? "✓ Bonf" : t.significant_bh ? "✓ BH" : t.significant_raw ? "~ Raw" : "✗ Not sig"}
                 </span>
@@ -459,9 +459,9 @@ function HypothesisDetail({
                 <span className={clsx(
                   "text-[9px] px-1 py-0.5 rounded",
                   e.tier === "descriptive" && "text-brand-400 bg-brand-500/10",
-                  e.tier === "diagnostic" && "text-amber-400 bg-amber-500/10",
+                  e.tier === "diagnostic" && "text-brand-400 bg-brand-500/10",
                   e.tier === "predictive" && "text-emerald-400 bg-emerald-500/10",
-                  e.tier === "prescriptive" && "text-purple-400 bg-purple-500/10",
+                  e.tier === "prescriptive" && "text-brand-400 bg-brand-500/10",
                   e.tier === "cognitive" && "text-brand-400 bg-brand-500/10",
                 )}>{e.tier}</span>
                 <span>{e.label || e.evidence_type}</span>

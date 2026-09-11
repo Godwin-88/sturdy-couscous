@@ -10,7 +10,7 @@ interface Props {
 
 const PRIORITY_COLORS: Record<string, string> = {
   high:   "text-red-400 border-red-800 bg-red-950/20",
-  medium: "text-amber-400 border-amber-800 bg-amber-950/20",
+  medium: "text-brand-400 border-brand-800 bg-brand-950/20",
   low:    "text-slate-400 border-slate-700 bg-slate-800/50",
 };
 
@@ -79,7 +79,7 @@ export default function RecommendationsPanel({ open, onClose }: Props) {
                       <span className={clsx(
                         "text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded",
                         rec.priority === "high" ? "bg-red-800/50 text-red-300" :
-                        rec.priority === "medium" ? "bg-amber-800/50 text-amber-300" :
+                        rec.priority === "medium" ? "bg-brand-800/50 text-brand-300" :
                         "bg-slate-700 text-slate-400"
                       )}>
                         {rec.priority}

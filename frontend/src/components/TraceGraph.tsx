@@ -25,21 +25,34 @@ export interface TraceGraphProps {
   className?: string;
 }
 
+// Midnight-tonal node palette (charts use midnight steps only — P11 theme).
+const M500 = "#4a63c8";   // brand-500  (midnight)
+const M400 = "#6a84de";   // brand-400
+const M300 = "#8fa6ec";   // brand-300
+const M600 = "#334a9e";   // brand-600
+const SL600 = "#2e3a68";  // slate-600
+const SL500 = "#525f8e";  // slate-500
+const SL300 = "#a7b2d6";  // slate-300
+const EM500 = "#10b981";  // emerald-500 (appreciation)
+const EM300 = "#6ee7b7";  // emerald-300
+const RD500 = "#ef4444";  // red-500 (depreciation)
+const RD300 = "#fca5a5";  // red-300
+
 const KIND_STYLE: Record<TraceNodeKind, { fill: string; stroke: string; text: string }> = {
-  book:     { fill: "#f59e0b22", stroke: "#f59e0b", text: "#fbbf24" },
-  chapter:  { fill: "#1f6feb22", stroke: "#1f6feb", text: "#79c0ff" },
-  section:  { fill: "#47556922", stroke: "#64748b", text: "#cbd5e1" },
-  concept:  { fill: "#a855f722", stroke: "#a855f7", text: "#d8b4fe" },
-  formula:  { fill: "#10b98122", stroke: "#10b981", text: "#6ee7b7" },
-  strategy: { fill: "#58a6ff22", stroke: "#58a6ff", text: "#79c0ff" },
-  tool:     { fill: "#0969da22", stroke: "#0969da", text: "#79c0ff" },
-  output:   { fill: "#f9731622", stroke: "#f97316", text: "#fdba74" },
-  ok:       { fill: "#22c55e22", stroke: "#22c55e", text: "#86efac" },
-  err:      { fill: "#ef444422", stroke: "#ef4444", text: "#fca5a5" },
-  draft:    { fill: "#eab30822", stroke: "#eab308", text: "#fde047" },
+  book:     { fill: M500 + "22", stroke: M500, text: M400 },
+  chapter:  { fill: M500 + "22", stroke: M500, text: M300 },
+  section:  { fill: SL600 + "22", stroke: SL500, text: SL300 },
+  concept:  { fill: M500 + "22", stroke: M500, text: M300 },
+  formula:  { fill: EM500 + "22", stroke: EM500, text: EM300 },
+  strategy: { fill: M400 + "22", stroke: M400, text: M300 },
+  tool:     { fill: M600 + "22", stroke: M600, text: M300 },
+  output:   { fill: M500 + "22", stroke: M500, text: M300 },
+  ok:       { fill: EM500 + "22", stroke: EM500, text: EM300 },
+  err:      { fill: RD500 + "22", stroke: RD500, text: RD300 },
+  draft:    { fill: M500 + "22", stroke: M500, text: M400 },
 };
 
-const RANK_COLORS = ["#f59e0b", "#1f6feb", "#a855f7", "#10b981", "#58a6ff", "#0969da"];
+const RANK_COLORS = [M500, M500, M500, EM500, M400, M600];
 
 function rankOf(kind: TraceNodeKind): number {
   const order: TraceNodeKind[] = ["book", "chapter", "section", "concept", "strategy", "formula", "tool", "output", "draft", "ok", "err"];
@@ -96,7 +109,7 @@ function EdgeCurve({ x1, y1, x2, y2, label }: { x1: number; y1: number; x2: numb
   return (
     <>
       <path d={d} fill="none" stroke={RANK_COLORS[Math.round(Math.abs(y1)) % RANK_COLORS.length]} strokeWidth={1} opacity={0.65} />
-      {label && <text x={mx} y={(y1 + y2) / 2 - 4} textAnchor="middle" fontSize={8} fill="#94a3b8" fontFamily="monospace">{label}</text>}
+      {label && <text x={mx} y={(y1 + y2) / 2 - 4} textAnchor="middle" fontSize={8} fill="#7d89b8" fontFamily="monospace">{label}</text>}
     </>
   );
 }

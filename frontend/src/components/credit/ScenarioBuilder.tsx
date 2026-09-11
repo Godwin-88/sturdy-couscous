@@ -151,7 +151,7 @@ export default function ScenarioBuilder({
             className="primary"
             onClick={analyze}
             disabled={analyzing || (source !== "custom" && !customPnl && false)}
-            style={{ background: "linear-gradient(135deg, #1f6feb, #58a6ff)", borderColor: "#58a6ff" }}
+            style={{ background: "linear-gradient(135deg, rgb(var(--brand-500)), rgb(var(--brand-400)))", borderColor: "rgb(var(--brand-400))" }}
           >
             {analyzing ? "Analyzing…" : "Run Full Analysis"}
           </button>

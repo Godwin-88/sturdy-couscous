@@ -30,7 +30,7 @@ export default function BrokerTablePanel({ onNavigate }: { onNavigate?: (tab: st
         </button>
         <button onClick={goRisk}
           title="Open the Risk workspace (exposure, VaR, concentration, option book) for this broker account"
-          className="flex items-center gap-1 px-2 py-1 rounded bg-rose-600/30 border border-rose-500/40 text-[10px] font-bold text-rose-300 hover:bg-rose-600/50">
+          className="flex items-center gap-1 px-2 py-1 rounded bg-red-600/30 border border-red-500/40 text-[10px] font-bold text-red-300 hover:bg-red-600/50">
           <ShieldAlert size={10} /> Risk <ArrowRight size={10} />
         </button>
       </div>

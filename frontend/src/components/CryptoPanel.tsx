@@ -122,7 +122,7 @@ export default function CryptoPanel() {
       {/* Header: pair search — full Alpaca crypto universe */}
       <div className="rounded-xl border border-slate-700 bg-slate-900 p-3">
         <div className="flex items-center gap-2">
-          <Zap size={14} className="text-amber-400" />
+          <Zap size={14} className="text-brand-400" />
           <span className="text-xs font-semibold uppercase tracking-widest text-slate-300">Crypto — Alpaca universe</span>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -132,20 +132,20 @@ export default function CryptoPanel() {
               className="w-full bg-transparent text-xs font-mono text-slate-200 outline-none placeholder:text-slate-500" />
           </div>
           <button onClick={() => setPair(q.toUpperCase().includes("/") ? q.toUpperCase() : `${q.toUpperCase()}/USD`)} disabled={!q}
-            className="px-3 py-1 rounded bg-amber-600/30 border border-amber-500/40 text-[11px] font-bold text-amber-200 hover:bg-amber-600/50 disabled:opacity-40">Go</button>
+            className="px-3 py-1 rounded bg-brand-600/30 border border-brand-500/40 text-[11px] font-bold text-brand-200 hover:bg-brand-600/50 disabled:opacity-40">Go</button>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {assets.map((a) => (
             <button key={a.pair} onClick={() => pickPair(a.pair)}
               className={clsx("px-2 py-0.5 rounded border text-[10px] font-mono",
-                pair === a.pair ? "bg-amber-600/30 border-amber-500/50 text-amber-200" : "border-slate-700 text-slate-400 hover:bg-slate-800")}>
+                pair === a.pair ? "bg-brand-600/30 border-brand-500/50 text-brand-200" : "border-slate-700 text-slate-400 hover:bg-slate-800")}>
               {a.pair} {a.name ? `· ${a.name.slice(0, 18)}` : ""}
             </button>
           ))}
           {assets.length === 0 && QUICK_PAIRS.map((p) => (
             <button key={p} onClick={() => pickPair(p)}
               className={clsx("px-2 py-0.5 rounded border text-[10px] font-mono",
-                pair === p ? "bg-amber-600/30 border-amber-500/50 text-amber-200" : "border-slate-700 text-slate-400 hover:bg-slate-800")}>
+                pair === p ? "bg-brand-600/30 border-brand-500/50 text-brand-200" : "border-slate-700 text-slate-400 hover:bg-slate-800")}>
               {p}
             </button>
           ))}
@@ -153,7 +153,7 @@ export default function CryptoPanel() {
         <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-mono text-slate-400">
           <span className="text-slate-500">lens</span>
           <button onClick={() => setLens(lens === "defensive" ? "average" : "defensive")}
-            className={clsx("px-2 py-0.5 rounded border font-bold", lens === "defensive" ? "bg-rose-600/30 border-rose-500/40 text-rose-300" : "bg-amber-600/20 border-amber-500/30 text-amber-300")}>
+            className={clsx("px-2 py-0.5 rounded border font-bold", lens === "defensive" ? "bg-red-600/30 border-red-500/40 text-red-300" : "bg-brand-600/20 border-brand-500/30 text-brand-300")}>
             {lens === "defensive" ? "Defensive λ3.5" : "Average λ2.25"}
           </button>
           <span className="text-slate-500">regime</span>
@@ -189,7 +189,7 @@ export default function CryptoPanel() {
           <span className="text-xs font-semibold uppercase tracking-widest text-slate-300">{pair} · 90d tape</span>
           {atmDelta != null && (
             <span className="ml-auto text-xs font-mono text-slate-200">
-              spot <b className="text-amber-300">${atmDelta.toLocaleString()}</b>
+              spot <b className="text-brand-300">${atmDelta.toLocaleString()}</b>
             </span>
           )}
         </div>
@@ -199,11 +199,11 @@ export default function CryptoPanel() {
             <div className="h-40 px-2 py-1">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
-                  <CartesianGrid stroke="#1e293b" />
+                  <CartesianGrid stroke="#0c143a" />
                   <XAxis dataKey="t" hide />
-                  <YAxis domain={["auto", "auto"]} tick={{ fontSize: 9, fill: "#64748b" }} width={62} />
-                  <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", fontSize: 11 }} />
-                  <Line type="monotone" dataKey="close" stroke="#58a6ff" dot={false} strokeWidth={1.5} />
+                  <YAxis domain={["auto", "auto"]} tick={{ fontSize: 9, fill: "#525f8e" }} width={62} />
+                  <Tooltip contentStyle={{ background: "#060a28", border: "1px solid #182250", fontSize: 11 }} />
+                  <Line type="monotone" dataKey="close" stroke="#6a84de" dot={false} strokeWidth={1.5} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -214,7 +214,7 @@ export default function CryptoPanel() {
             <span>21-7 <b className="text-slate-200">{sug.mom_21_7 != null ? (sug.mom_21_7 * 100).toFixed(2) + "%" : "—"}</b></span>
             <span>RV21 <b className="text-slate-200">{sug.rv_21 != null ? (sug.rv_21 * 100).toFixed(0) + "%" : "—"}</b></span>
             <span>RV pctile <b className="text-slate-200">{sug.rv_pctile != null ? (sug.rv_pctile * 100).toFixed(0) + "%" : "—"}</b></span>
-            <span>regime <b className="text-violet-300">{sug.regime ?? "—"}</b></span>
+            <span>regime <b className="text-brand-300">{sug.regime ?? "—"}</b></span>
           </div>
         )}
       </div>
@@ -222,29 +222,29 @@ export default function CryptoPanel() {
       {/* Agent suggestions — FE/KG-grounded, loss-averse ranked */}
       <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 bg-slate-950">
-          <Brain size={14} className="text-violet-400" />
+          <Brain size={14} className="text-brand-400" />
           <span className="text-xs font-semibold uppercase tracking-widest text-slate-300">Agent Suggestions</span>
           <span className="ml-1 text-[10px] font-mono text-slate-500">KG crypto strategies · loss-averse lens</span>
-          {sug && sug.regime && <span className="ml-auto text-[10px] font-mono text-violet-300">{sug.regime}</span>}
+          {sug && sug.regime && <span className="ml-auto text-[10px] font-mono text-brand-300">{sug.regime}</span>}
         </div>
         <div className="p-3 space-y-2">
           {sugErr ? <div className="text-xs font-mono text-red-400 bg-red-950/30 border border-red-800 rounded p-2">{sugErr}</div>
             : loadingSug && !sug ? <div className="flex items-center gap-2 text-xs text-slate-400 font-mono"><Loader2 size={12} className="animate-spin" /> Computing {pair} strategies from tape + KG…</div>
             : !sug || sug.suggestions.length === 0 ? (
-              sug?.filter_note ? <div className="text-xs font-mono text-amber-300 bg-amber-950/20 border border-amber-800 rounded p-2">{sug.filter_note}</div>
+              sug?.filter_note ? <div className="text-xs font-mono text-brand-300 bg-brand-950/20 border border-brand-800 rounded p-2">{sug.filter_note}</div>
               : <div className="text-xs text-slate-500 font-mono">No strategies scored for {pair} right now — try another pair, lens, regime or strategy.</div>
             )
             : sug.suggestions.map((s) => (
               <div key={s.strategy} className="rounded-lg border border-slate-700 bg-slate-950/40 p-2 flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold text-slate-100">{s.strategy}</span>
                 {s.activated !== false && s.activated !== undefined ? (
-                  <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-violet-600/20 text-violet-300 border border-violet-700">regime {s.regime ?? "—"}</span>
+                  <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-brand-600/20 text-brand-300 border border-brand-700">regime {s.regime ?? "—"}</span>
                 ) : (
                   <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-slate-700/30 text-slate-400 border border-slate-600">not regime-active (forced)</span>
                 )}
                 <span className={clsx("text-[10px] font-mono px-1.5 py-0.5 rounded", s.side === "buy" ? "bg-emerald-600/20 text-emerald-300 border border-emerald-700" : "bg-red-600/20 text-red-300 border border-red-700")}>{s.side.toUpperCase()}</span>
                 <span className="text-[10px] font-mono text-slate-400">qty {s.qty_rec.toFixed(3)}</span>
-                <span className="text-[10px] font-mono text-amber-300">score {s.score.toFixed(1)}</span>
+                <span className="text-[10px] font-mono text-brand-300">score {s.score.toFixed(1)}</span>
                 <span className="text-[10px] font-mono text-emerald-300">maxP ${s.max_profit_low.toLocaleString()}</span>
                 <span className="text-[10px] font-mono text-red-300">maxL ${s.max_loss.toLocaleString()} ({s.max_loss_pct_nav * 100}% NAV)</span>
                 <span className="text-[10px] font-mono text-slate-500">RR {s.risk_reward_pct.toFixed(1)}%</span>
@@ -262,7 +262,7 @@ export default function CryptoPanel() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60" onClick={() => setModalOpen(false)}>
           <div className="w-[460px] max-w-[92vw] rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2">
-              <Shield size={14} className="text-rose-400" />
+              <Shield size={14} className="text-red-400" />
               <span className="text-sm font-bold text-slate-100">Crypto Order — {pair}</span>
               <button onClick={() => setModalOpen(false)} className="ml-auto text-slate-500 hover:text-slate-300">✕</button>
             </div>
@@ -293,7 +293,7 @@ export default function CryptoPanel() {
               )}
             </div>
             {previewInfo && (
-              <div className="rounded-lg border border-amber-700/50 bg-amber-950/10 p-2 text-[10px] font-mono text-amber-200">
+              <div className="rounded-lg border border-brand-700/50 bg-brand-950/10 p-2 text-[10px] font-mono text-brand-200">
                 Preview: notional ${previewInfo.notional.toLocaleString()} · fee ${previewInfo.fee.toLocaleString()} · token active (10m) — nothing placed yet.
               </div>
             )}

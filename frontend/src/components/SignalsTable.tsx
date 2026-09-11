@@ -262,7 +262,7 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
                 const optDetails = isOpt ? parseOptionDetails(s.ticker) : null;
                 const dte = optDetails ? dteFromExpiry(optDetails.expiry) : null;
                 return [
-                  <tr key={s.order_id} className={clsx("border-t border-slate-800 hover:bg-slate-800/60", isOpt && "bg-violet-950/10")}>
+                  <tr key={s.order_id} className={clsx("border-t border-slate-800 hover:bg-slate-800/60", isOpt && "bg-brand-950/10")}>
                     <td className="py-1.5 px-2">
                       <button onClick={() => toggleLineage(s.strategy)}
                         className="p-0.5 rounded text-slate-500 hover:text-brand-400" title="View KG lineage">
@@ -273,7 +273,7 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
                     <td className="py-1.5 px-3 text-slate-300 max-w-[140px] truncate" title={s.strategy}>{s.strategy}</td>
                     <td className="py-1.5 px-3 text-slate-100 font-bold">
                       <div className="flex items-center gap-1.5">
-                        {isOpt && <Activity size={10} className="text-violet-400 shrink-0" />}
+                        {isOpt && <Activity size={10} className="text-brand-400 shrink-0" />}
                         <span className="truncate">{isOpt && optDetails ? optDetails.underlying : s.ticker}</span>
                       </div>
                     </td>
@@ -292,13 +292,13 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
                     </td>
                     <td className="py-1.5 px-3 text-right text-slate-300">{s.quantity.toFixed(4)}</td>
                     <td className="py-1.5 px-3 text-right text-slate-300">{fillDisplay(s)}</td>
-                    <td className="py-1.5 px-3 text-right text-violet-300">
+                    <td className="py-1.5 px-3 text-right text-brand-300">
                       {isOpt ? (s.option?.delta != null ? s.option.delta.toFixed(2) : "—") : spotDelta(s)}
                     </td>
-                    <td className="py-1.5 px-3 text-right text-amber-300">{premDisplay(s)}</td>
+                    <td className="py-1.5 px-3 text-right text-brand-300">{premDisplay(s)}</td>
                     <td className="py-1.5 px-3 text-right">
                       {isOpt ? (
-                        <span className={clsx("text-[10px] font-bold", (s.option?.dte ?? dte)! <= 7 ? "text-red-400" : (s.option?.dte ?? dte)! <= 30 ? "text-amber-400" : "text-slate-300")}>
+                        <span className={clsx("text-[10px] font-bold", (s.option?.dte ?? dte)! <= 7 ? "text-red-400" : (s.option?.dte ?? dte)! <= 30 ? "text-brand-400" : "text-slate-300")}>
                           {(s.option?.dte ?? dte)}d
                         </span>
                       ) : (
@@ -326,11 +326,11 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
                           <BarChart size={11} />
                         </button>
                         <button onClick={() => goRiskForSignal(s, onNavigate)}
-                          className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-slate-700" title="Risk (chain-aware)">
+                          className="p-1 rounded text-slate-500 hover:text-brand-400 hover:bg-slate-700" title="Risk (chain-aware)">
                           <Shield size={11} />
                         </button>
                         <button onClick={() => navigate(`/hypothesis/new?series=${encodeURIComponent(s.strategy)}&ticker=${s.ticker}`)}
-                          className="p-1 rounded text-slate-500 hover:text-purple-400 hover:bg-slate-700" title="Create hypothesis">
+                          className="p-1 rounded text-slate-500 hover:text-brand-400 hover:bg-slate-700" title="Create hypothesis">
                           <Brain size={11} />
                         </button>
                       </div>
@@ -370,16 +370,16 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
                   return (
                     <div key={s.signal_id}
                       className={clsx("rounded-lg border p-3",
-                        isOpt ? "border-violet-800/60 bg-violet-950/20" : "border-slate-700 bg-slate-800/40")}>
+                        isOpt ? "border-brand-800/60 bg-brand-950/20" : "border-slate-700 bg-slate-800/40")}>
                       <div className="flex items-center gap-2 text-xs">
-                        {isOpt ? <Activity size={12} className="text-violet-400 shrink-0" />
+                        {isOpt ? <Activity size={12} className="text-brand-400 shrink-0" />
                                : <Zap size={12} className={s.score != null && s.score >= 0 ? "text-emerald-400 shrink-0" : "text-red-400 shrink-0"} />}
                         <span className="font-semibold text-slate-100">{s.strategy || "—"}</span>
                         <span className="text-slate-500 font-mono text-[10px]">· {s.regime || ""}</span>
                         {placed ? (
                           <span className="ml-auto text-[10px] font-mono text-emerald-400 bg-emerald-900/40 px-1.5 py-0.5 rounded">EXECUTED</span>
                         ) : (
-                          <span className="ml-auto text-[10px] font-mono text-amber-400 bg-amber-900/30 px-1.5 py-0.5 rounded">SUGGESTED</span>
+                          <span className="ml-auto text-[10px] font-mono text-brand-400 bg-brand-900/30 px-1.5 py-0.5 rounded">SUGGESTED</span>
                         )}
                       </div>
                       <div className="mt-1.5 flex items-center gap-2 text-xs font-mono">
@@ -388,7 +388,7 @@ export default function SignalsTable({ onNavigate }: { onNavigate?: (tab: string
                         <span className="font-bold text-slate-100">{s.venue_symbol || s.ticker}</span>
                         {isOpt && optDetails && (
                           <>
-                            <span className="text-[10px] text-violet-300">{optDetails.type === "C" ? "CALL" : "PUT"}</span>
+                            <span className="text-[10px] text-brand-300">{optDetails.type === "C" ? "CALL" : "PUT"}</span>
                             <span className="text-[10px] text-slate-400">K={optDetails.strike.toFixed(2)}</span>
                             {dte != null && <span className="text-[10px] text-slate-400">DTE {dte}</span>}
                           </>
@@ -603,9 +603,9 @@ function PlaceOrderModal({ onClose, onSuccess, initial }: { onClose: () => void;
       <div className="bg-slate-900 rounded-xl border border-slate-700 w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
           <div className="flex items-center gap-2">
-            {isOpt ? <Activity size={14} className="text-violet-400" /> : <Wallet size={14} className="text-emerald-400" />}
+            {isOpt ? <Activity size={14} className="text-brand-400" /> : <Wallet size={14} className="text-emerald-400" />}
             <span className="text-sm font-semibold text-slate-200">{isOpt ? "Place Option Order" : "Place Order"}</span>
-            {isOpt && <span className="text-[10px] font-mono text-violet-400 bg-violet-900/40 px-1.5 py-0.5 rounded">OPTION</span>}
+            {isOpt && <span className="text-[10px] font-mono text-brand-400 bg-brand-900/40 px-1.5 py-0.5 rounded">OPTION</span>}
           </div>
           <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-200"><X size={14} /></button>
         </div>
@@ -712,7 +712,7 @@ function PlaceOrderModal({ onClose, onSuccess, initial }: { onClose: () => void;
 
           <button onClick={submit} disabled={submitting || !ticker.trim() || !quantity}
             className={clsx("w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
-              submitting ? "bg-slate-700 text-slate-500" : isOpt ? "bg-violet-700 hover:bg-violet-600 text-white" : "bg-emerald-700 hover:bg-emerald-600 text-white")}>
+              submitting ? "bg-slate-700 text-slate-500" : isOpt ? "bg-brand-700 hover:bg-brand-600 text-white" : "bg-emerald-700 hover:bg-emerald-600 text-white")}>
             <Radio size={12} className={submitting ? "animate-pulse" : ""} />
             {submitting ? "Submitting..." : isOpt ? "Submit Option Order" : "Submit Order"}
           </button>
@@ -731,7 +731,7 @@ function LineageDrawer({ lineage }: { lineage: SignalLineage }) {
         {lineage.strategy_desc && <span className="text-xs text-slate-500">— {lineage.strategy_desc}</span>}
         <div className="flex gap-1 ml-auto">
           {lineage.regimes.map(r => (
-            <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/60 text-purple-300 border border-purple-700 font-mono">{r}</span>
+            <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-brand-900/60 text-brand-300 border border-brand-700 font-mono">{r}</span>
           ))}
         </div>
       </div>
@@ -746,7 +746,7 @@ function LineageDrawer({ lineage }: { lineage: SignalLineage }) {
                   <span className="text-[11px] font-semibold text-slate-200">{c.name}</span>
                   <span className={clsx("text-[9px] px-1 py-0.5 rounded font-mono",
                     c.difficulty === "hard" ? "bg-red-900/50 text-red-300" :
-                    c.difficulty === "medium" ? "bg-yellow-900/50 text-yellow-300" :
+                    c.difficulty === "medium" ? "bg-brand-900/50 text-brand-300" :
                     "bg-slate-700 text-slate-400"
                   )}>{c.difficulty}</span>
                 </div>

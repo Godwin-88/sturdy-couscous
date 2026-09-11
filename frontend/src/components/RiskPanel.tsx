@@ -13,7 +13,7 @@ export default function RiskPanel() {
   if (loading || !data) return <Skeleton />;
 
   const ddPct      = data.drawdown_current / (data.drawdown_limit || 1);
-  const ddColor    = ddPct > 0.8 ? "#ef4444" : ddPct > 0.5 ? "#f59e0b" : "#10b981";
+  const ddColor    = ddPct > 0.8 ? "#ef4444" : ddPct > 0.5 ? "#4a63c8" : "#10b981";
   const kellyCapped = Math.min(data.kelly_fraction ?? 0, 1);
 
   return (
@@ -72,11 +72,11 @@ export default function RiskPanel() {
             <span className="text-slate-400 flex items-center gap-1">
               <Percent size={11} /> Kelly Fraction (7d)
             </span>
-            <span className="font-mono text-purple-300">{fmtPct(data.kelly_fraction)}</span>
+            <span className="font-mono text-brand-300">{fmtPct(data.kelly_fraction)}</span>
           </div>
           <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
             <div
-              className="h-full rounded-full bg-purple-500 transition-all duration-500"
+              className="h-full rounded-full bg-brand-500 transition-all duration-500"
               style={{ width: `${Math.min(kellyCapped * 100, 100)}%` }}
             />
           </div>
@@ -96,11 +96,11 @@ export default function RiskPanel() {
               data={data.concentration}
               margin={{ top: 0, right: 40, bottom: 0, left: 60 }}
             >
-              <XAxis type="number" tick={{ fontSize: 9, fill: "#64748b" }}
+              <XAxis type="number" tick={{ fontSize: 9, fill: "#525f8e" }}
                      tickFormatter={v => `${(v * 100).toFixed(0)}%`} />
-              <YAxis type="category" dataKey="ticker" tick={{ fontSize: 10, fill: "#cbd5e1" }} width={55} />
+              <YAxis type="category" dataKey="ticker" tick={{ fontSize: 10, fill: "#a7b2d6" }} width={55} />
               <Tooltip
-                contentStyle={{ background: "#1e293b", border: "1px solid #334155", fontSize: 11 }}
+                contentStyle={{ background: "#0c143a", border: "1px solid #182250", fontSize: 11 }}
                 formatter={(v: number, _: string, entry: { payload?: { direction?: string; pnl?: number } }) => [
                   `${fmtPct(v)} · P&L: ${fmt$(entry.payload?.pnl ?? 0)}`,
                   entry.payload?.direction === "buy" ? "LONG" : "SHORT",
@@ -110,7 +110,7 @@ export default function RiskPanel() {
                 {data.concentration.map((entry, i) => (
                   <Cell
                     key={i}
-                    fill={entry.direction === "buy" ? "#1f6feb" : "#f43f5e"}
+                    fill={entry.direction === "buy" ? "#4a63c8" : "#ef4444"}
                   />
                 ))}
               </Bar>

@@ -133,7 +133,7 @@ export default function RegimePanel({ onNavigate }: { onNavigate?: (tab: string)
           <Activity size={14} className={meta.color} />
           <span className="text-xs text-slate-400 uppercase tracking-widest">Market Regime</span>
           {bench?.is_override && (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-900 border border-amber-600 text-amber-200">
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-brand-900 border border-brand-600 text-brand-200">
               OVERRIDE
             </span>
           )}
@@ -156,7 +156,7 @@ export default function RegimePanel({ onNavigate }: { onNavigate?: (tab: string)
             className={clsx(
               "flex-1 bg-slate-900 border rounded px-2 py-1 text-sm font-mono focus:outline-none",
               bench?.is_override
-                ? "border-amber-600 text-amber-200"
+                ? "border-brand-600 text-brand-200"
                 : "border-slate-600 text-slate-200"
             )}
             data-testid="regime-selector"
@@ -189,7 +189,7 @@ export default function RegimePanel({ onNavigate }: { onNavigate?: (tab: string)
           <div
             className={clsx("h-full rounded-full transition-all duration-500",
               effectiveConfidence > 0.75 ? "bg-emerald-500" :
-              effectiveConfidence > 0.55 ? "bg-yellow-500" : "bg-red-500")}
+              effectiveConfidence > 0.55 ? "bg-brand-500" : "bg-red-500")}
             style={{ width: confWidth }}
           />
         </div>
@@ -318,8 +318,8 @@ function TopSuggestionCard({
   return (
     <div className="pt-1 border-t border-slate-700 space-y-1.5">
       <div className="flex items-center gap-1">
-        <Zap size={11} className="text-amber-400" />
-        <span className="text-[10px] text-amber-400 uppercase tracking-wider">
+        <Zap size={11} className="text-brand-400" />
+        <span className="text-[10px] text-brand-400 uppercase tracking-wider">
           Top SPY {bench?.is_override ? `(${bench.regime})` : "(live regime)"} pick
         </span>
         <div className="ml-auto">

@@ -121,7 +121,7 @@ export default function SignalLineageModal({ open, onClose }: Props) {
                     {lineage.formulas.map((f, i) => (
                       <div key={i} className="border border-slate-700 rounded p-2">
                         <div className="text-xs font-semibold text-emerald-300">{f.name || f.id}</div>
-                        <div className="text-[10px] font-mono text-amber-300 mt-0.5 bg-slate-900 rounded px-1.5 py-0.5">{f.expression}</div>
+                        <div className="text-[10px] font-mono text-brand-300 mt-0.5 bg-slate-900 rounded px-1.5 py-0.5">{f.expression}</div>
                         {f.output && <div className="text-[10px] text-slate-400 mt-0.5">Output: {f.output}</div>}
                       </div>
                     ))}
@@ -135,7 +135,7 @@ export default function SignalLineageModal({ open, onClose }: Props) {
                   <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Categories</div>
                   <div className="flex flex-wrap gap-1.5">
                     {lineage.categories.map(c => (
-                      <span key={c} className="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-950 text-purple-300 border border-purple-800">{c}</span>
+                      <span key={c} className="px-2 py-0.5 rounded text-[10px] font-mono bg-brand-950 text-brand-300 border border-brand-800">{c}</span>
                     ))}
                   </div>
                 </div>

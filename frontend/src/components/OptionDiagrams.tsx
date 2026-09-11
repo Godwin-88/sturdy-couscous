@@ -112,7 +112,7 @@ export default function OptionDiagrams(props: OptionDiagramsProps) {
           {/* 2D Payoff at expiry */}
           <div className="rounded-lg border border-slate-700 bg-slate-900 overflow-hidden">
             <div className="flex items-center gap-2 px-2 py-1.5 border-b border-slate-700 bg-slate-950">
-              <Gauge size={11} className="text-violet-400" />
+              <Gauge size={11} className="text-brand-400" />
               <span className="text-[10px] font-mono text-slate-300 uppercase">Payoff at Expiry</span>
               <span className="ml-auto text-[10px] font-mono text-slate-500">{pnlLegs.length} leg{pnlLegs.length > 1 ? "s" : ""}</span>
             </div>
@@ -122,18 +122,18 @@ export default function OptionDiagrams(props: OptionDiagramsProps) {
               ) : (
                 <ResponsiveContainer width="100%" height={120}>
                   <AreaChart data={payoffData} margin={{ top: 4, right: 4, bottom: 2, left: 2 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                    <XAxis dataKey="s" tick={{ fontSize: 8, fill: "#64748b" }} tickLine={false}
+                    <CartesianGrid strokeDasharray="3 3" stroke="#0c143a" />
+                    <XAxis dataKey="s" tick={{ fontSize: 8, fill: "#525f8e" }} tickLine={false}
                            tickFormatter={v => fmtN(v, 0)} />
-                    <YAxis tick={{ fontSize: 8, fill: "#64748b" }} tickLine={false}
+                    <YAxis tick={{ fontSize: 8, fill: "#525f8e" }} tickLine={false}
                            tickFormatter={v => `$ ${v}`} />
-                    <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8 }}
+                    <Tooltip contentStyle={{ background: "#0c143a", border: "1px solid #182250", borderRadius: 8 }}
                              labelFormatter={v => `@ $ ${fmtN(v, 0)}`}
                              formatter={(value: unknown) => { const n = Number(value); return `${n >= 0 ? "+" : "−"} $ ${fmt$(Math.abs(n))}`; }} />
                     <Area type="monotone" dataKey="pnl"
-                          stroke={negative ? "#f43f5e" : "#10b981"}
+                          stroke={negative ? "#ef4444" : "#10b981"}
                           strokeWidth={1.5}
-                          fill={negative ? "#f43f5e22" : "#10b98122"} />
+                          fill={negative ? "#ef444422" : "#10b98122"} />
                   </AreaChart>
                 </ResponsiveContainer>
               )}

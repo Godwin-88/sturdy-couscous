@@ -73,7 +73,7 @@ export default function AlpacaPanel({ onNavigate }: { onNavigate?: (tab: string)
         )}
         {state.kind === "unconfigured" && (
           <div className="text-xs text-slate-400 space-y-1">
-            <p>Add <code className="text-amber-300">ALPACA_API_KEY_ID</code> + <code className="text-amber-300">ALPACA_API_SECRET_KEY</code> to your <code>.env</code> to paper-trade from the UI.</p>
+            <p>Add <code className="text-brand-300">ALPACA_API_KEY_ID</code> + <code className="text-brand-300">ALPACA_API_SECRET_KEY</code> to your <code>.env</code> to paper-trade from the UI.</p>
             <p className="text-slate-500">Until then, orders simulate fills (venue defaults to Alpaca paper).</p>
           </div>
         )}

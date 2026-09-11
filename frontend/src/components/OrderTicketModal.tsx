@@ -116,7 +116,7 @@ export default function OrderTicketModal({
           <ShieldCheck size={15} className="text-emerald-400" />
           <span className="text-sm font-semibold text-slate-100">{isOpt ? "Confirm Option Trade" : "Confirm Order"}</span>
           {initial.strategy && (
-            <span className="text-[10px] font-mono text-violet-300 bg-violet-950/40 border border-violet-800 rounded px-1.5 py-0.5 truncate max-w-[140px]">{initial.strategy}</span>
+            <span className="text-[10px] font-mono text-brand-300 bg-brand-950/40 border border-brand-800 rounded px-1.5 py-0.5 truncate max-w-[140px]">{initial.strategy}</span>
           )}
           <button onClick={onClose} className="ml-auto p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200">
             <XCircle size={16} />
@@ -133,7 +133,7 @@ export default function OrderTicketModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[10px] font-mono text-amber-400 bg-amber-950/20 border border-amber-800/40 rounded px-2 py-1.5">
+          <div className="flex items-center gap-1.5 text-[10px] font-mono text-brand-400 bg-brand-950/20 border border-brand-800/40 rounded px-2 py-1.5">
             <AlertTriangle size={11} />
             Human-in-the-loop: {proposalToken ? "proposal locked \u2014 confirm to execute on paper" : "Preview issues a one-time token (10-min) before any execution"}
           </div>
@@ -207,9 +207,9 @@ export default function OrderTicketModal({
           <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono rounded bg-slate-950 border border-slate-700 px-2 py-1.5">
             <div className="text-slate-300">Qty <b className="text-slate-100">{fmtN(qty, 4)}</b></div>
             <div className="text-slate-300">Notional <b className="text-slate-100">{liveNotional > 0 ? fmt$(liveNotional) : "\u2014"}</b></div>
-            {initial.strategy && <div className="text-violet-300">{initial.strategy}</div>}
+            {initial.strategy && <div className="text-brand-300">{initial.strategy}</div>}
             {maxLossPct != null && (
-              <div className={clsx(maxLossPct > (initial.nav ? 5 : 10) ? "text-rose-400" : "text-slate-300")}>
+              <div className={clsx(maxLossPct > (initial.nav ? 5 : 10) ? "text-red-400" : "text-slate-300")}>
                 max loss {(maxLossPct * 100).toFixed(1)}% NAV
               </div>
             )}

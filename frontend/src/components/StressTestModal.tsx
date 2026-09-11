@@ -64,10 +64,10 @@ export default function StressTestModal({ open, onClose }: Props) {
             {shocks.map((s, i) => (
               <div key={i} className="flex items-center gap-2">
                 <input value={s.ticker} onChange={e => updateShock(i, "ticker", e.target.value)}
-                  className="w-24 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-amber-500"
+                  className="w-24 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-brand-500"
                   placeholder="TICKER" />
                 <input type="number" step="0.01" value={s.shock_pct} onChange={e => updateShock(i, "shock_pct", e.target.value)}
-                  className="w-24 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-amber-500" />
+                  className="w-24 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-brand-500" />
                 <span className="text-[10px] text-slate-500 w-8">{s.shock_pct >= 0 ? "+" : ""}{(s.shock_pct * 100).toFixed(0)}%</span>
                 <button onClick={() => removeRow(i)} className="p-1 text-slate-500 hover:text-red-400 rounded">✕</button>
               </div>
@@ -90,7 +90,7 @@ export default function StressTestModal({ open, onClose }: Props) {
                 </div>
                 <div className="bg-slate-900 rounded p-2">
                   <div className="text-[10px] text-slate-500">Drawdown Impact</div>
-                  <div className="text-sm font-bold text-amber-400">{fmtPct(result.drawdown_impact_pct)}</div>
+                  <div className="text-sm font-bold text-brand-400">{fmtPct(result.drawdown_impact_pct)}</div>
                 </div>
               </div>
               {result.positions_breaching_cap.length > 0 && (
@@ -108,7 +108,7 @@ export default function StressTestModal({ open, onClose }: Props) {
           )}
 
           <button onClick={handleRun} disabled={loading || shocks.length === 0}
-            className="flex items-center gap-2 px-4 py-2 rounded text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-50">
+            className="flex items-center gap-2 px-4 py-2 rounded text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white disabled:opacity-50">
             <Play size={14} />{loading ? "Running..." : "Run Stress Test"}
           </button>
         </div>

@@ -48,7 +48,7 @@ export default function GraphCanvas() {
           g.addNode(String(n.id), {
             label,
             size:  NODE_SIZE[n.labels[0]] ?? 7,
-            color: LABEL_COLOR[n.labels[0]] ?? "#94a3b8",
+            color: LABEL_COLOR[n.labels[0]] ?? "#7d89b8",
             x: Math.random() * 10,
             y: Math.random() * 10,
             // Store for tooltip
@@ -65,7 +65,7 @@ export default function GraphCanvas() {
           g.addEdge(src, tgt, {
             label:     e.rel_type,
             size:      1,
-            color:     "#334155",
+            color:     "#182250",
             type:      "arrow",
           });
         }
@@ -88,8 +88,8 @@ export default function GraphCanvas() {
       const sigma = new Sigma(g, containerRef.current, {
         renderEdgeLabels:      false,
         defaultEdgeType:       "arrow",
-        defaultNodeColor:      "#94a3b8",
-        labelColor:            { color: "#cbd5e1" },
+        defaultNodeColor:      "#7d89b8",
+        labelColor:            { color: "#a7b2d6" },
         labelSize:             11,
         labelWeight:           "normal",
         minCameraRatio:        0.05,
@@ -134,7 +134,7 @@ export default function GraphCanvas() {
             className={clsx(
               "px-2 py-0.5 rounded text-xs font-mono transition-colors",
               nodeType === t
-                ? "text-white border"
+                ? "text-slate-100 border"
                 : "text-slate-400 hover:text-slate-200 border border-transparent"
             )}
             style={nodeType === t ? { borderColor: LABEL_COLOR[t], color: LABEL_COLOR[t] } : {}}

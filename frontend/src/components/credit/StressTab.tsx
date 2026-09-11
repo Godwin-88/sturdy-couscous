@@ -89,14 +89,14 @@ function PnlDistributionChart({ pnl, varValue: _varValue, cvarValue: _cvarValue 
           scales: {
             y: {
               beginAtZero: true,
-              title: { display: true, text: "Count", color: "#8b949e" },
-              ticks: { color: "#8b949e" },
-              grid: { color: "#30363d" },
+              title: { display: true, text: "Count", color: "rgb(var(--slate-400))" },
+              ticks: { color: "rgb(var(--slate-400))" },
+              grid: { color: "rgb(var(--slate-700))" },
             },
             x: {
-              ticks: { color: "#8b949e", maxRotation: 45 },
+              ticks: { color: "rgb(var(--slate-400))", maxRotation: 45 },
               grid: { display: false },
-              title: { display: true, text: "P&L (USD)", color: "#8b949e" },
+              title: { display: true, text: "P&L (USD)", color: "rgb(var(--slate-400))" },
             },
           },
         }}
@@ -439,8 +439,8 @@ export default function QuantTab() {
                       maintainAspectRatio: false,
                       plugins: { legend: { display: false } },
                       scales: {
-                        y: { beginAtZero: true, ticks: { color: "#8b949e" }, grid: { color: "#30363d" } },
-                        x: { ticks: { color: "#8b949e" }, grid: { display: false } },
+                        y: { beginAtZero: true, ticks: { color: "rgb(var(--slate-400))" }, grid: { color: "rgb(var(--slate-700))" } },
+                        x: { ticks: { color: "rgb(var(--slate-400))" }, grid: { display: false } },
                       },
                     }}
                   />
@@ -501,10 +501,10 @@ export default function QuantTab() {
                     options={{
                       responsive: true,
                       maintainAspectRatio: false,
-                      plugins: { legend: { labels: { color: "#8b949e" } } },
+                      plugins: { legend: { labels: { color: "rgb(var(--slate-400))" } } },
                       scales: {
-                        y: { ticks: { color: "#8b949e" }, grid: { color: "#30363d" } },
-                        x: { ticks: { color: "#8b949e" }, grid: { display: false } },
+                        y: { ticks: { color: "rgb(var(--slate-400))" }, grid: { color: "rgb(var(--slate-700))" } },
+                        x: { ticks: { color: "rgb(var(--slate-400))" }, grid: { display: false } },
                       },
                     }}
                   />
@@ -634,8 +634,8 @@ export default function QuantTab() {
                       maintainAspectRatio: false,
                       plugins: { legend: { display: false } },
                       scales: {
-                        y: { beginAtZero: true, ticks: { color: "#8b949e" }, grid: { color: "#30363d" } },
-                        x: { ticks: { color: "#8b949e" }, grid: { display: false } },
+                        y: { beginAtZero: true, ticks: { color: "rgb(var(--slate-400))" }, grid: { color: "rgb(var(--slate-700))" } },
+                        x: { ticks: { color: "rgb(var(--slate-400))" }, grid: { display: false } },
                       },
                     }}
                   />
@@ -706,8 +706,8 @@ export default function QuantTab() {
                       maintainAspectRatio: false,
                       plugins: { legend: { display: false } },
                       scales: {
-                        y: { beginAtZero: true, ticks: { color: "#8b949e" }, grid: { color: "#30363d" } },
-                        x: { ticks: { color: "#8b949e" }, grid: { display: false } },
+                        y: { beginAtZero: true, ticks: { color: "rgb(var(--slate-400))" }, grid: { color: "rgb(var(--slate-700))" } },
+                        x: { ticks: { color: "rgb(var(--slate-400))" }, grid: { display: false } },
                       },
                     }}
                   />

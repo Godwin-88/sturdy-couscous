@@ -58,7 +58,7 @@ export default function SimulateModal({ open, onClose }: Props) {
               {SCENARIOS.map(s => (
                 <button key={s.id} onClick={() => setScenario(s.id)}
                   className={clsx("px-2.5 py-1 rounded text-xs font-mono",
-                    scenario === s.id ? "bg-amber-600 text-white" : "bg-slate-800 text-slate-400 hover:text-slate-200"
+                    scenario === s.id ? "bg-brand-600 text-white" : "bg-slate-800 text-slate-400 hover:text-slate-200"
                   )}>
                   {s.label}
                 </button>
@@ -71,13 +71,13 @@ export default function SimulateModal({ open, onClose }: Props) {
             <div className="space-y-1">
               <label className="text-[10px] text-slate-500 uppercase">Source Node</label>
               <input value={source} onChange={e => setSource(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-amber-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-brand-500"
                 placeholder="e.g. Momentum" />
             </div>
             <div className="space-y-1">
               <label className="text-[10px] text-slate-500 uppercase">Target Node</label>
               <input value={target} onChange={e => setTarget(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-amber-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-brand-500"
                 placeholder="e.g. TrendFollow" />
             </div>
           </div>
@@ -86,7 +86,7 @@ export default function SimulateModal({ open, onClose }: Props) {
           <div className="space-y-1">
             <label className="text-[10px] text-slate-500 uppercase">Relationship Type</label>
             <input value={relType} onChange={e => setRelType(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-amber-500" />
+              className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-brand-500" />
           </div>
 
           {/* Weight (for change_weight) */}
@@ -94,7 +94,7 @@ export default function SimulateModal({ open, onClose }: Props) {
             <div className="space-y-1">
               <label className="text-[10px] text-slate-500 uppercase">New Weight</label>
               <input type="number" step="0.1" min="0" max="1" value={weight} onChange={e => setWeight(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-amber-500" />
+                className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-brand-500" />
             </div>
           )}
 
@@ -107,7 +107,7 @@ export default function SimulateModal({ open, onClose }: Props) {
               <div className="text-slate-400 text-[10px] uppercase tracking-wider">Results</div>
               <div className="flex justify-between"><span className="text-slate-500">Affected strategies:</span><span className="text-slate-200">{(result.affected_strategies as string[] || []).length}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">New activations:</span><span className="text-slate-200">{String(result.predicted_new_activations ?? "?")}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Contradiction risk:</span><span className="text-amber-400">{(result.contradiction_risk as Record<string, unknown> || {}).severity as string ?? "?"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Contradiction risk:</span><span className="text-brand-400">{(result.contradiction_risk as Record<string, unknown> || {}).severity as string ?? "?"}</span></div>
               {(result.predicted_signal_changes as Array<Record<string, unknown>> || []).length > 0 && (
                 <div className="pt-2 border-t border-slate-700">
                   <div className="text-slate-400 text-[10px] mb-1">Signal changes:</div>
@@ -124,7 +124,7 @@ export default function SimulateModal({ open, onClose }: Props) {
 
           {/* Run button */}
           <button onClick={handleRun} disabled={loading || !source || !target}
-            className="flex items-center gap-2 px-4 py-2 rounded text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-50">
+            className="flex items-center gap-2 px-4 py-2 rounded text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white disabled:opacity-50">
             <Play size={14} />{loading ? "Simulating..." : "Run Simulation"}
           </button>
         </div>

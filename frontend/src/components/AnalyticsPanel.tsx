@@ -240,7 +240,7 @@ export default function AnalyticsPanel() {
           <Search size={14} className="text-brand-400" />
           <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Time Series Selector</span>
           {chainUnderlying && (
-            <span className="ml-auto flex items-center gap-1 text-[10px] font-mono text-violet-300 bg-violet-950/40 border border-violet-500/30 rounded px-2 py-0.5">
+            <span className="ml-auto flex items-center gap-1 text-[10px] font-mono text-brand-300 bg-brand-950/40 border border-brand-500/30 rounded px-2 py-0.5">
               <Link2 size={10} />
               chain: {chainUnderlying}
               {chainExpiration ? ` · ${chainExpiration}` : ""}
@@ -289,7 +289,7 @@ export default function AnalyticsPanel() {
           <div className="flex items-center gap-3 text-[10px] font-mono text-slate-500">
             <span>{dataResp.count} data points</span>
             {dataResp.missing_gaps && dataResp.missing_gaps.length > 0 && (
-              <span className="text-amber-400">{dataResp.missing_gaps.length} gaps detected</span>
+              <span className="text-brand-400">{dataResp.missing_gaps.length} gaps detected</span>
             )}
             {(() => {
               const meta = dataResp.metadata as Record<string, unknown> | undefined;
@@ -439,7 +439,7 @@ function ChainProfileCard({ profile }: { profile: OptionChainProfile }) {
                   />
                 </div>
                 <span className="text-slate-400 w-12 text-right">{fmtPct(p.iv)}</span>
-                {p.spread_pct != null && <span className="text-amber-400 w-12 text-right">Δ{p.spread_pct.toFixed(2)}</span>}
+                {p.spread_pct != null && <span className="text-brand-400 w-12 text-right">Δ{p.spread_pct.toFixed(2)}</span>}
               </div>
             ))}
           </div>
@@ -452,9 +452,9 @@ function ChainProfileCard({ profile }: { profile: OptionChainProfile }) {
           <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">25Δ Risk Reversal</div>
           <div className="grid grid-cols-3 gap-1 text-[11px] font-mono text-center">
             <div><div className="text-[9px] text-slate-500">call IV</div><div className="text-emerald-300">{profile.skew.iv_25d_call != null ? fmtPct(profile.skew.iv_25d_call) : "—"}</div></div>
-            <div><div className="text-[9px] text-slate-500">put IV</div><div className="text-rose-300">{profile.skew.iv_25d_put != null ? fmtPct(profile.skew.iv_25d_put) : "—"}</div></div>
+            <div><div className="text-[9px] text-slate-500">put IV</div><div className="text-red-300">{profile.skew.iv_25d_put != null ? fmtPct(profile.skew.iv_25d_put) : "—"}</div></div>
             <div><div className="text-[9px] text-slate-500">RR 25Δ</div>
-              <div className={skewVal != null && skewVal > 0 ? "text-emerald-300" : "text-rose-300"}>
+              <div className={skewVal != null && skewVal > 0 ? "text-emerald-300" : "text-red-300"}>
                 {skewVal != null ? `${skewVal > 0 ? "+" : ""}${(skewVal * 100).toFixed(1)}pt` : "—"}
               </div>
             </div>
@@ -485,7 +485,7 @@ function ChainProfileCard({ profile }: { profile: OptionChainProfile }) {
                 <div key={s.strike} className="flex items-center gap-2 text-[10px] font-mono">
                   <span className="text-slate-500 w-16 shrink-0">{(s.contract_type === "put" ? "P " : "C ") + strikeLabel(s.strike)}</span>
                   <div className="flex-1 h-1 bg-slate-800 rounded overflow-hidden">
-                    <div className="h-full bg-violet-500" style={{ width: `${profile.oi.total ? Math.min((s.oi / profile.oi.total) * 100, 100) : 0}%` }} />
+                    <div className="h-full bg-brand-500" style={{ width: `${profile.oi.total ? Math.min((s.oi / profile.oi.total) * 100, 100) : 0}%` }} />
                   </div>
                   <span className="text-slate-300 w-16 text-right">{Math.round(s.oi).toLocaleString()}</span>
                 </div>
@@ -499,7 +499,7 @@ function ChainProfileCard({ profile }: { profile: OptionChainProfile }) {
         <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-1">
           <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Spreads · Greeks (median)</div>
           <div className="grid grid-cols-3 gap-1 text-[10px] font-mono text-center">
-            <div><div className="text-slate-500">avg spread</div><div className="text-amber-300">{profile.spreads.avg_spread_pct != null ? fmtPct(profile.spreads.avg_spread_pct) : "—"}</div></div>
+            <div><div className="text-slate-500">avg spread</div><div className="text-brand-300">{profile.spreads.avg_spread_pct != null ? fmtPct(profile.spreads.avg_spread_pct) : "—"}</div></div>
             <div><div className="text-slate-500">Δ</div><div className="text-slate-200">{profile.greeks.delta.median != null ? profile.greeks.delta.median.toFixed(3) : "—"}</div></div>
             <div><div className="text-slate-500">Γ</div><div className="text-brand-300">{profile.greeks.gamma.median != null ? profile.greeks.gamma.median.toFixed(4) : "—"}</div></div>
           </div>
@@ -616,7 +616,7 @@ function AutocorrelationPanel({ data }: { data: AutocorrelationResult }) {
         <span className="text-xs font-semibold text-slate-200">Autocorrelation (ACF/PACF)</span>
         {data.ljung_box && (
           <span className={clsx("text-[10px] font-mono ml-auto",
-            data.ljung_box.p_value < 0.05 ? "text-amber-400" : "text-slate-500")}>
+            data.ljung_box.p_value < 0.05 ? "text-brand-400" : "text-slate-500")}>
             Ljung-Box p={data.ljung_box.p_value.toFixed(4)}
           </span>
         )}
@@ -668,7 +668,7 @@ function AutocorrelationPanel({ data }: { data: AutocorrelationResult }) {
 
       {data.ljung_box && (
         <div className={clsx("text-[10px] font-mono leading-relaxed px-2 py-1 rounded",
-          data.ljung_box.p_value < 0.05 ? "bg-amber-950/40 text-amber-300" : "text-slate-500")}>
+          data.ljung_box.p_value < 0.05 ? "bg-brand-950/40 text-brand-300" : "text-slate-500")}>
           {data.ljung_box.interpretation}
         </div>
       )}
@@ -980,7 +980,7 @@ function GarchPanel({ ticker }: { ticker: string }) {
                     const path = cv.map((v, i) =>
                       `${i === 0 ? "M" : "L"}${(i / (cv.length - 1 || 1)) * 395 + 2.5},${100 - (v / maxV) * 85 - 7.5}`
                     ).join(" ");
-                    return <path d={path} fill="none" stroke="#58a6ff" strokeWidth="1" />;
+                    return <path d={path} fill="none" stroke="#6a84de" strokeWidth="1" />;
                   })()}
                 </svg>
               </div>
@@ -1004,7 +1004,7 @@ function GarchPanel({ ticker }: { ticker: string }) {
                     ).join(" ");
                     return (
                       <>
-                        <line x1={200} y1={10} x2={200} y2={100} stroke="#475569" strokeWidth="0.5" strokeDasharray="2,2" />
+                        <line x1={200} y1={10} x2={200} y2={100} stroke="#2e3a68" strokeWidth="0.5" strokeDasharray="2,2" />
                         <path d={path} fill="none" stroke="#34d399" strokeWidth="1.5" />
                       </>
                     );
@@ -1099,7 +1099,7 @@ function PCAPanel({ ticker }: { ticker: string }) {
                     <g key={s.component}>
                       <rect x={i * (380 / result.scree.length) + 10} y={110 - barH}
                         width={Math.max(10, 380 / result.scree.length - 5)} height={barH}
-                        fill={i < result.kaiser_significant_components ? "#58a6ff" : "#475569"}
+                        fill={i < result.kaiser_significant_components ? "#6a84de" : "#2e3a68"}
                         rx={1} />
                     </g>
                   );
@@ -1215,7 +1215,7 @@ function CovHealthPanel({ ticker }: { ticker: string }) {
                       <tr key={i} className="border-t border-slate-800">
                         <td className="py-1 px-1 text-slate-300">{e.from}</td>
                         <td className="py-1 px-1 text-slate-300">{e.to}</td>
-                        <td className={clsx("py-1 px-1 text-right", Math.abs(e.correlation) > 0.7 ? "text-amber-400" : "text-slate-400")}>
+                        <td className={clsx("py-1 px-1 text-right", Math.abs(e.correlation) > 0.7 ? "text-brand-400" : "text-slate-400")}>
                           {fmtN(e.correlation, 3)}
                         </td>
                         <td className="py-1 px-1 text-right text-slate-400">{fmtN(e.distance, 3)}</td>
@@ -1247,7 +1247,7 @@ function CovHealthPanel({ ticker }: { ticker: string }) {
                     {[...result.all_pairs].sort((a, b) => Math.abs(b.correlation) - Math.abs(a.correlation)).slice(0, 10).map((p, i) => (
                       <tr key={i} className="border-t border-slate-800">
                         <td className="py-1 px-1 text-slate-300">{p.asset_i} / {p.asset_j}</td>
-                        <td className={clsx("py-1 px-1 text-right", Math.abs(p.correlation) > 0.7 ? "text-amber-400" : "text-slate-400")}>
+                        <td className={clsx("py-1 px-1 text-right", Math.abs(p.correlation) > 0.7 ? "text-brand-400" : "text-slate-400")}>
                           {fmtN(p.correlation, 3)}
                         </td>
                         <td className="py-1 px-1 text-right text-slate-400">{fmtN(p.distance, 3)}</td>
@@ -1424,7 +1424,7 @@ function PredictivePanel({ ticker }: { ticker: string }) {
             </div>
             {result.ljung_box_p !== undefined && (
               <div className={clsx("text-[10px] font-mono px-2 py-1 rounded",
-                result.ljung_box_p < 0.05 ? "bg-amber-950/40 text-amber-300" : "text-slate-500")}>
+                result.ljung_box_p < 0.05 ? "bg-brand-950/40 text-brand-300" : "text-slate-500")}>
                 Ljung-Box p={fmtN(result.ljung_box_p, 4)} — {result.ljung_box_p < 0.05 ? "Residuals show autocorrelation (model may be misspecified)" : "Residuals appear white noise"}
               </div>
             )}
@@ -1480,10 +1480,10 @@ function PredictivePanel({ ticker }: { ticker: string }) {
                             fill="rgba(99, 102, 241, 0.15)"
                           />
                         )}
-                        <path d={histPath} fill="none" stroke="#94a3b8" strokeWidth="1.5" />
-                        <path d={fcPath} fill="none" stroke="#58a6ff" strokeWidth="2" />
+                        <path d={histPath} fill="none" stroke="#7d89b8" strokeWidth="1.5" />
+                        <path d={fcPath} fill="none" stroke="#6a84de" strokeWidth="2" />
                         <line x1={toX(histLen - 1)} y1={0} x2={toX(histLen - 1)} y2={200}
-                          stroke="#475569" strokeWidth="1" strokeDasharray="4,4" />
+                          stroke="#2e3a68" strokeWidth="1" strokeDasharray="4,4" />
                       </>
                     );
                   })()}
@@ -1509,7 +1509,7 @@ function PredictivePanel({ ticker }: { ticker: string }) {
                   {(() => {
                     const hist = result.historical as Record<string, number[]>;
                     const tickers = result.tickers ?? Object.keys(hist);
-                    const colors = ["#58a6ff", "#34d399", "#fbbf24", "#f87171", "#1f6feb", "#79c0ff"];
+                    const colors = ["#6a84de", "#34d399", "#6a84de", "#f87171", "#4a63c8", "#8fa6ec"];
                     const all: number[] = [];
                     for (const tk of tickers) {
                       if (hist[tk]) all.push(...hist[tk]);
@@ -1550,7 +1550,7 @@ function PredictivePanel({ ticker }: { ticker: string }) {
                 <div className="flex flex-wrap gap-2 mt-1">
                   {(result.tickers ?? Object.keys(result.historical as Record<string, number[]>)).map((tk, idx) => (
                     <span key={tk} className="text-[9px] font-mono flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: ["#58a6ff", "#34d399", "#fbbf24", "#f87171", "#1f6feb", "#79c0ff"][idx % 6] }} />
+                      <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: ["#6a84de", "#34d399", "#6a84de", "#f87171", "#4a63c8", "#8fa6ec"][idx % 6] }} />
                       {tk}
                     </span>
                   ))}
@@ -1576,7 +1576,7 @@ function PredictivePanel({ ticker }: { ticker: string }) {
                     ).join(" ");
                     return (
                       <>
-                        <line x1={0} y1={50} x2={400} y2={50} stroke="#475569" strokeWidth="0.5" />
+                        <line x1={0} y1={50} x2={400} y2={50} stroke="#2e3a68" strokeWidth="0.5" />
                         <path d={path} fill="none" stroke="#34d399" strokeWidth="1" />
                       </>
                     );
@@ -1659,7 +1659,7 @@ function OptimizationPanel({ data }: { data: PortfolioOptimizationResult }) {
                     <td className="py-1 pr-2 text-slate-300">{t1}</td>
                     {Object.entries(row).map(([t2, v]) => (
                       <td key={t2} className={clsx("py-1 px-1 text-right",
-                        Math.abs(v) > 0.7 ? "text-amber-400 font-bold" :
+                        Math.abs(v) > 0.7 ? "text-brand-400 font-bold" :
                         Math.abs(v) > 0.4 ? "text-slate-300" : "text-slate-500")}>
                         {fmtN(v, 2)}
                       </td>
@@ -1686,7 +1686,7 @@ function AnomalyPanel({ data }: { data: AnomalyResult }) {
         <Activity size={14} className="text-brand-400" />
         <span className="text-xs font-semibold text-slate-200">Anomaly Detection</span>
         <span className={clsx("text-[10px] font-mono ml-auto",
-          data.n_anomalies > 0 ? "text-amber-400" : "text-slate-500")}>
+          data.n_anomalies > 0 ? "text-brand-400" : "text-slate-500")}>
           {data.n_anomalies} anomalies ({fmtPct(data.anomaly_rate)})
         </span>
       </div>
@@ -1705,7 +1705,7 @@ function AnomalyPanel({ data }: { data: AnomalyResult }) {
               {data.anomalies.slice(0, 20).map((a, i) => (
                 <tr key={i} className="border-t border-slate-800">
                   <td className="py-1 px-1 text-slate-400">{a.timestamp.slice(0, 10)}</td>
-                  <td className="py-1 px-1 text-right text-amber-300">{fmtN(a.value, 4)}</td>
+                  <td className="py-1 px-1 text-right text-brand-300">{fmtN(a.value, 4)}</td>
                   <td className="py-1 px-1 text-right text-slate-400">
                     {a.anomaly_score ? fmtN(a.anomaly_score, 2) : "—"}
                   </td>
@@ -1785,10 +1785,10 @@ function StatCard({ label, value, highlight }: { label: string; value: string; h
   const hint = STAT_HINTS[label];
   return (
     <div className={clsx("bg-slate-800 rounded-lg p-2 border",
-      highlight ? "border-amber-700/50" : "border-slate-700")}>
+      highlight ? "border-brand-700/50" : "border-slate-700")}>
       <div className="text-[9px] text-slate-500 uppercase tracking-wider" title={hint}>{label}</div>
       <div className={clsx("text-xs font-bold font-mono mt-0.5",
-        highlight ? "text-amber-400" : "text-slate-200")}>
+        highlight ? "text-brand-400" : "text-slate-200")}>
         {value}
       </div>
     </div>
@@ -1801,15 +1801,15 @@ function TestResult({ label, stat, pValue, interpretation }: {
   const significant = pValue < 0.05;
   return (
     <div className={clsx("rounded p-2 border text-[10px] font-mono",
-      significant ? "bg-amber-950/30 border-amber-800/50" : "bg-slate-800/50 border-slate-700")}>
+      significant ? "bg-brand-950/30 border-brand-800/50" : "bg-slate-800/50 border-slate-700")}>
       <div className="flex items-center gap-2 mb-0.5">
         <span className="text-slate-400 font-semibold">{label}</span>
         <span className="text-slate-500">stat={fmtN(stat, 2)}</span>
-        <span className={significant ? "text-amber-400" : "text-emerald-400"}>
+        <span className={significant ? "text-brand-400" : "text-emerald-400"}>
           p={fmtN(pValue, 4)}
         </span>
         <span className={clsx("ml-auto text-[9px] px-1 py-0.5 rounded",
-          significant ? "bg-amber-900/60 text-amber-300" : "bg-emerald-900/60 text-emerald-300")}>
+          significant ? "bg-brand-900/60 text-brand-300" : "bg-emerald-900/60 text-emerald-300")}>
           {significant ? "SIGNIFICANT" : "NOT SIGNIFICANT"}
         </span>
       </div>

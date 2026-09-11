@@ -324,7 +324,7 @@ export default function ScreenChat({ screen }: { screen: string }) {
                 <BookOpen size={11} /> Sources ({sourceCount})
                 <ChevronDown size={10} />
               </button>
-              {err && <span className="text-[10px] text-amber-400 font-mono">{err}</span>}
+              {err && <span className="text-[10px] text-brand-400 font-mono">{err}</span>}
             </div>
           )}
 
@@ -352,7 +352,7 @@ export default function ScreenChat({ screen }: { screen: string }) {
                   const hasToken = Boolean(ev.proposal_token ?? out?.proposal_token);
                   return (
                     <div key={i} className={clsx("rounded border border-slate-700 bg-slate-800/60 p-1.5",
-                      hasToken ? "border-amber-700/60" : "")}>
+                      hasToken ? "border-brand-700/60" : "")}>
                       <TraceGraph
                         title="WebMCP invocation"
                         nodes={[
@@ -367,10 +367,10 @@ export default function ScreenChat({ screen }: { screen: string }) {
                         <pre className="whitespace-pre-wrap break-all mt-1 max-h-24 overflow-y-auto">{eventText(ev)}</pre>
                       </details>
                       {approveMsg && <div className="text-[9px] text-emerald-300 mt-1">{approveMsg}</div>}
-                      {approveErr && <div className="text-[9px] text-amber-300 mt-1">{approveErr}</div>}
+                      {approveErr && <div className="text-[9px] text-brand-300 mt-1">{approveErr}</div>}
                       {hasToken && (
                         <button onClick={() => approveAgentOrder(ev)} disabled={approving}
-                          className="mt-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-600/30 border border-amber-500/40 text-[9px] font-bold text-amber-300 hover:bg-amber-600/50 disabled:opacity-50">
+                          className="mt-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded bg-brand-600/30 border border-brand-500/40 text-[9px] font-bold text-brand-300 hover:bg-brand-600/50 disabled:opacity-50">
                           {approving ? <Loader2 size={9} className="animate-spin" /> : <ShieldCheck size={9} />} Approve & execute (paper)
                         </button>
                       )}
@@ -436,7 +436,7 @@ args: ${JSON.stringify(st.args)}`,
                         <span key={nj} className={clsx(
                           "text-[10px] font-mono px-1.5 py-0.5 rounded border",
                           (n.sentiment ?? 0) > 0 ? "bg-emerald-950/40 border-emerald-800 text-emerald-300"
-                            : (n.sentiment ?? 0) < 0 ? "bg-rose-950/40 border-rose-800 text-rose-300"
+                            : (n.sentiment ?? 0) < 0 ? "bg-red-950/40 border-red-800 text-red-300"
                             : "bg-slate-800 border-slate-700 text-slate-400")}>
                           {n.headline.length > 70 ? `${n.headline.slice(0, 70)}…` : n.headline}
                           {n.sentiment != null && <> ({n.sentiment > 0 ? "+" : ""}{n.sentiment})</>}
@@ -449,10 +449,10 @@ args: ${JSON.stringify(st.args)}`,
                 {m.role === "assistant" && m.order_drafts && m.order_drafts.length > 0 && m.order_drafts.map((d, di) => {
                   const p = proposals[di] ?? {};
                   return (
-                    <div key={di} className="text-left mt-2 rounded-lg border border-violet-800/70 bg-slate-900 overflow-hidden">
-                      <div className="flex items-center gap-1.5 px-2 py-1.5 bg-violet-950/40 border-b border-violet-800/60">
-                        <ShieldAlert size={11} className="text-violet-400" />
-                        <span className="text-[10px] font-mono text-violet-300 uppercase tracking-widest">Proposed trade — human approval required</span>
+                    <div key={di} className="text-left mt-2 rounded-lg border border-brand-800/70 bg-slate-900 overflow-hidden">
+                      <div className="flex items-center gap-1.5 px-2 py-1.5 bg-brand-950/40 border-b border-brand-800/60">
+                        <ShieldAlert size={11} className="text-brand-400" />
+                        <span className="text-[10px] font-mono text-brand-300 uppercase tracking-widest">Proposed trade — human approval required</span>
                       </div>
                       <div className="p-2 space-y-1 text-[10px] font-mono text-slate-300">
                         <div className="flex items-center gap-1.5">
@@ -468,7 +468,7 @@ args: ${JSON.stringify(st.args)}`,
                         )}
                         {d.legs?.map((l, li) => (
                           <div key={li} className="text-slate-400">
-                            <span className={l.side === "sell" ? "text-rose-300" : "text-emerald-300"}>{l.side ?? "buy"}</span>{" "}
+                            <span className={l.side === "sell" ? "text-red-300" : "text-emerald-300"}>{l.side ?? "buy"}</span>{" "}
                             <span className="text-slate-200">{l.symbol ?? ""}</span>{" "}
                             {l.strike != null && <> · {l.strike}</>} · {l.contracts ?? 1} contracts
                           </div>
@@ -476,13 +476,13 @@ args: ${JSON.stringify(st.args)}`,
                         <div className="flex flex-wrap gap-x-3 gap-y-0.5 pt-0.5 text-slate-400">
                           {d.est_premium != null && <span>premium <b className="text-slate-100">{d.est_premium}</b></span>}
                           {d.max_profit != null && <span>maxP <b className="text-emerald-300">{d.max_profit}</b></span>}
-                          {d.max_loss != null && <span>maxL <b className="text-rose-300">{d.max_loss}</b></span>}
-                          {d.max_losspct_nav != null && <span>maxL%NAV <b className="text-rose-300">{d.max_losspct_nav.toFixed(2)}%</b></span>}
+                          {d.max_loss != null && <span>maxL <b className="text-red-300">{d.max_loss}</b></span>}
+                          {d.max_losspct_nav != null && <span>maxL%NAV <b className="text-red-300">{d.max_losspct_nav.toFixed(2)}%</b></span>}
                           {d.score != null && <span>score <b className="text-slate-100">{d.score}</b></span>}
                         </div>
                         {p.risk && <div className="text-[9px] text-slate-500">{p.risk}</div>}
                         {p.done && <div className="text-[10px] text-emerald-300">{p.done}</div>}
-                        {p.err && <div className="text-[10px] text-amber-300">{p.err}</div>}
+                        {p.err && <div className="text-[10px] text-brand-300">{p.err}</div>}
                       </div>
                       <div className="flex gap-1.5 px-2 pb-2">
                         <button
@@ -494,7 +494,7 @@ args: ${JSON.stringify(st.args)}`,
                           <button
                             onClick={() => runProposal(di, d)}
                             disabled={p.busy}
-                            className="flex items-center gap-1 px-2 py-1 rounded bg-violet-600/30 border border-violet-500/40 text-[10px] text-violet-200 hover:bg-violet-600/50 disabled:opacity-50">
+                            className="flex items-center gap-1 px-2 py-1 rounded bg-brand-600/30 border border-brand-500/40 text-[10px] text-brand-200 hover:bg-brand-600/50 disabled:opacity-50">
                             {p.busy ? <Loader2 size={10} className="animate-spin" /> : <ClipboardList size={10} />} Propose
                           </button>
                         )}
@@ -502,7 +502,7 @@ args: ${JSON.stringify(st.args)}`,
                           <button
                             onClick={() => executeProposal(di, d, p.token!)}
                             disabled={p.busy}
-                            className="flex items-center gap-1 px-2 py-1 rounded bg-rose-600/30 border border-rose-500/40 text-[10px] text-rose-200 hover:bg-rose-600/50 disabled:opacity-50">
+                            className="flex items-center gap-1 px-2 py-1 rounded bg-red-600/30 border border-red-500/40 text-[10px] text-red-200 hover:bg-red-600/50 disabled:opacity-50">
                             <ShieldAlert size={10} /> Execute on paper
                           </button>
                         )}

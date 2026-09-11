@@ -43,7 +43,7 @@ export default function ParityStatusModal({ open, onClose }: Props) {
               <div className={clsx("flex items-center gap-2 p-3 rounded-lg border text-xs font-mono",
                 data.status === "healthy"
                   ? "bg-emerald-950/30 border-emerald-800 text-emerald-400"
-                  : "bg-amber-950/30 border-amber-800 text-amber-400"
+                  : "bg-brand-950/30 border-brand-800 text-brand-400"
               )}>
                 {data.status === "healthy" ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
                 Status: {data.status.toUpperCase()}

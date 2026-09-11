@@ -4,9 +4,9 @@ const ASSET_CLASS_ORDER = ["equity", "vol", "rates", "commodity", "crypto", "fx"
 const ASSET_CLASS_COLOR: Record<string, string> = {
   equity:    "text-brand-500",
   vol:       "text-red-500",
-  rates:     "text-yellow-500",
-  commodity: "text-orange-500",
-  crypto:    "text-purple-500",
+  rates:     "text-brand-500",
+  commodity: "text-brand-500",
+  crypto:    "text-brand-500",
   fx:        "text-brand-500",
   other:     "text-slate-500",
 };
@@ -144,7 +144,7 @@ function QuoteTile({ q }: { q: MarketQuote }) {
         σ {(q.realized_vol * 100).toFixed(1)}%
       </span>
       {q.iv_rank != null && (
-        <span className="text-[10px] font-mono text-purple-400" title="IV Rank">
+        <span className="text-[10px] font-mono text-brand-400" title="IV Rank">
           IVR {(q.iv_rank * 100).toFixed(0)}
         </span>
       )}
@@ -234,13 +234,13 @@ function NavChart({ data }: { data: { t: string; nav: number }[] }) {
             <stop offset="95%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-        <XAxis dataKey="t" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} />
-        <YAxis tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false}
+        <CartesianGrid strokeDasharray="3 3" stroke="#0c143a" />
+        <XAxis dataKey="t" tick={{ fontSize: 10, fill: "#525f8e" }} tickLine={false} />
+        <YAxis tick={{ fontSize: 10, fill: "#525f8e" }} tickLine={false}
                tickFormatter={v => `$${(v/1000).toFixed(1)}k`} />
         <Tooltip
-          contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8 }}
-          labelStyle={{ color: "#94a3b8", fontSize: 11 }}
+          contentStyle={{ background: "#0c143a", border: "1px solid #182250", borderRadius: 8 }}
+          labelStyle={{ color: "#7d89b8", fontSize: 11 }}
           formatter={(v: number) => [fmt$(v), "NAV"]}
         />
         <Area type="monotone" dataKey="nav" stroke={color} strokeWidth={2}

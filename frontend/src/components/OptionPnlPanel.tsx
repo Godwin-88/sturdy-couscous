@@ -43,7 +43,7 @@ export default function OptionPnlPanel({ underlying = "SPY" }: { underlying?: st
     <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden transition-all duration-200 hover:border-slate-500 hover:shadow-lg hover:shadow-amber-500/10 hover:-translate-y-0.5 cursor-pointer">
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700 bg-slate-950">
         <div className="flex items-center gap-2">
-          <Wallet size={14} className="text-amber-400" />
+          <Wallet size={14} className="text-brand-400" />
           <span className="text-xs text-slate-300 font-semibold uppercase tracking-widest">Options P&amp;L</span>
         </div>
         <span className="flex items-center gap-1 text-[10px] text-slate-500 font-mono">

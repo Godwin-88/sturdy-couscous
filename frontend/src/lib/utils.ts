@@ -12,20 +12,20 @@ export function relTime(iso: string | null): string {
 
 export const REGIME_META: Record<string, { color: string; bg: string; desc: string }> = {
   BullMarket:     { color: "text-emerald-400", bg: "bg-emerald-950 border-emerald-700", desc: "Strong uptrend, low vol" },
-  RecoveryRegime: { color: "text-teal-400",    bg: "bg-teal-950 border-teal-700",       desc: "Recovering from drawdown" },
+  RecoveryRegime: { color: "text-brand-400",    bg: "bg-brand-950 border-brand-700",       desc: "Recovering from drawdown" },
   LowVolatility:  { color: "text-brand-400",   bg: "bg-brand-950 border-brand-700",      desc: "Calm, range-bound" },
-  HighVolatility: { color: "text-yellow-400",  bg: "bg-yellow-950 border-yellow-700",   desc: "Elevated realised vol" },
-  BearMarket:     { color: "text-orange-400",  bg: "bg-orange-950 border-orange-700",   desc: "Below 200-day MA" },
+  HighVolatility: { color: "text-brand-400",  bg: "bg-brand-950 border-brand-700",   desc: "Elevated realised vol" },
+  BearMarket:     { color: "text-brand-400",  bg: "bg-brand-950 border-brand-700",   desc: "Below 200-day MA" },
   CrisisRegime:   { color: "text-red-400",     bg: "bg-red-950 border-red-700",         desc: "High VIX + falling market" },
   SystemicStress: { color: "text-red-300",     bg: "bg-red-950 border-red-500",         desc: "VIX > 35 — systemic risk" },
 };
 
 export const LABEL_COLOR: Record<string, string> = {
-  Concept:      "#58a6ff",
+  Concept:      "#6a84de",
   Strategy:     "#10b981",
-  Regime:       "#f59e0b",
-  Formula:      "#0969da",
+  Regime:       "#4a63c8",
+  Formula:      "#334a9e",
   Ticker:       "#ef4444",
-  Category:     "#8b5cf6",
-  QuizQuestion: "#ec4899",
+  Category:     "#4a63c8",
+  QuizQuestion: "#ef4444",
 };

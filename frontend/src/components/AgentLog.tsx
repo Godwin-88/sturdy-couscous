@@ -41,7 +41,7 @@ type FilterType = "ALL" | "SIGNAL" | "TRADE" | "ERROR" | "REGIME";
 
 const STATUS_DOT: Record<WsStatus, string> = {
   open:       "bg-emerald-400",
-  connecting: "bg-yellow-400 animate-pulse",
+  connecting: "bg-brand-400 animate-pulse",
   closed:     "bg-slate-500",
   error:      "bg-red-500",
 };
@@ -61,15 +61,15 @@ const FILTER_COLORS: Record<FilterType, string> = {
   SIGNAL: "bg-brand-900/60 text-brand-300 border-brand-700",
   TRADE:  "bg-emerald-900/60 text-emerald-300 border-emerald-700",
   ERROR:  "bg-red-900/60 text-red-300 border-red-700",
-  REGIME: "bg-purple-900/60 text-purple-300 border-purple-700",
+  REGIME: "bg-brand-900/60 text-brand-300 border-brand-700",
 };
 
 const FILTER_ACTIVE: Record<FilterType, string> = {
-  ALL:    "bg-slate-600 text-white border-slate-400",
+  ALL:    "bg-slate-600 text-slate-100 border-slate-400",
   SIGNAL: "bg-brand-700 text-white border-brand-500",
   TRADE:  "bg-emerald-700 text-white border-emerald-500",
   ERROR:  "bg-red-700 text-white border-red-500",
-  REGIME: "bg-purple-700 text-white border-purple-500",
+  REGIME: "bg-brand-700 text-white border-brand-500",
 };
 
 export default function AgentLog() {
@@ -160,7 +160,7 @@ function EventRow({ msg, type }: { msg: AgentEvent; type: FilterType }) {
     ERROR:  "bg-red-950/50 border-l-2 border-red-600",
     SIGNAL: "border-l-2 border-brand-600/50",
     TRADE:  "border-l-2 border-emerald-600/50",
-    REGIME: "border-l-2 border-purple-600/50",
+    REGIME: "border-l-2 border-brand-600/50",
     ALL:    "",
   }[type];
 
@@ -168,7 +168,7 @@ function EventRow({ msg, type }: { msg: AgentEvent; type: FilterType }) {
     ERROR:  "text-red-300 font-bold",
     SIGNAL: "text-brand-200",
     TRADE:  "text-emerald-200",
-    REGIME: "text-purple-200",
+    REGIME: "text-brand-200",
     ALL:    "text-slate-300",
   }[type];
 
@@ -176,7 +176,7 @@ function EventRow({ msg, type }: { msg: AgentEvent; type: FilterType }) {
     ERROR:  <AlertCircle size={11} className="text-red-400 mt-0.5 shrink-0" />,
     SIGNAL: <Zap size={11} className="text-brand-400 mt-0.5 shrink-0" />,
     TRADE:  <TrendingUp size={11} className="text-emerald-400 mt-0.5 shrink-0" />,
-    REGIME: <RefreshCw size={11} className="text-purple-400 mt-0.5 shrink-0" />,
+    REGIME: <RefreshCw size={11} className="text-brand-400 mt-0.5 shrink-0" />,
     ALL:    <span className="w-3 shrink-0" />,
   }[type];
 

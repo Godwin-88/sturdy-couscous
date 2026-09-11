@@ -69,7 +69,7 @@ export default function OrderDetailDrawer({ orderId, strategy, ticker, direction
             <BarChart size={10} /> Analyze
           </button>
           <button onClick={onHypothesis}
-            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 border border-purple-500/30">
+            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold bg-brand-600/20 text-brand-400 hover:bg-brand-600/30 border border-brand-500/30">
             <Brain size={10} /> Hypothesis
           </button>
           <button onClick={onClose} className="p-1 text-slate-500 hover:text-slate-300 rounded">
@@ -203,7 +203,7 @@ export default function OrderDetailDrawer({ orderId, strategy, ticker, direction
             )}
 
             {lifecycle.contradiction_blocked && (
-              <div className="bg-amber-950/30 border border-amber-800 rounded p-2 text-xs text-amber-400 font-mono">
+              <div className="bg-brand-950/30 border border-brand-800 rounded p-2 text-xs text-brand-400 font-mono">
                 ⛔ Blocked by contradiction — signal was suppressed by contradiction detection
               </div>
             )}
@@ -228,7 +228,7 @@ export default function OrderDetailDrawer({ orderId, strategy, ticker, direction
                     <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Regimes</div>
                     <div className="flex flex-wrap gap-1">
                       {lineage.regimes.map(r => (
-                        <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/60 text-purple-300 border border-purple-700 font-mono">{r}</span>
+                        <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-brand-900/60 text-brand-300 border border-brand-700 font-mono">{r}</span>
                       ))}
                     </div>
                   </div>
@@ -246,7 +246,7 @@ export default function OrderDetailDrawer({ orderId, strategy, ticker, direction
                             <span className="text-brand-500">{c.category}</span>
                             <span className={clsx("px-1 rounded",
                               c.difficulty === "hard" ? "bg-red-900/50 text-red-300" :
-                              c.difficulty === "medium" ? "bg-yellow-900/50 text-yellow-300" :
+                              c.difficulty === "medium" ? "bg-brand-900/50 text-brand-300" :
                               "bg-slate-700 text-slate-400"
                             )}>{c.difficulty}</span>
                           </div>
@@ -262,7 +262,7 @@ export default function OrderDetailDrawer({ orderId, strategy, ticker, direction
                     {lineage.formulas.map((f, i) => (
                       <div key={i} className="bg-slate-800 rounded p-2 border border-slate-700 mb-1">
                         <div className="text-xs font-semibold text-emerald-300">{f.name}</div>
-                        <code className="text-[10px] text-amber-300 font-mono">{f.expression}</code>
+                        <code className="text-[10px] text-brand-300 font-mono">{f.expression}</code>
                         {f.output && <div className="text-[10px] text-slate-500">→ {f.output}</div>}
                       </div>
                     ))}

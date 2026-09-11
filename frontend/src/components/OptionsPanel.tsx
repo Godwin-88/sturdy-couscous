@@ -442,7 +442,7 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
               <LineChart size={11} /> Analyze
             </button>
             <button onClick={goToRisk} title="Open Risk — chain context carries over"
-              className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-semibold font-mono bg-rose-600/20 border border-rose-500/30 text-rose-300 hover:bg-rose-600/40">
+              className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-semibold font-mono bg-red-600/20 border border-red-500/30 text-red-300 hover:bg-red-600/40">
               <Shield size={11} /> Risk
             </button>
           </div>
@@ -588,7 +588,7 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
       {/* Dynamic Delta Hedge — Taleb posture */}
       <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 bg-slate-950">
-          <Shield size={14} className="text-rose-400" />
+          <Shield size={14} className="text-red-400" />
           <span className="text-xs text-slate-300 font-semibold uppercase tracking-widest">Dynamic Delta Hedge</span>
           <button onClick={loadHedge} disabled={loadingHedge}
             className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-700/40 border border-slate-600 text-[10px] text-slate-300 hover:bg-slate-700 disabled:opacity-50">
@@ -612,14 +612,14 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-slate-400">hedge {hedgeState.hedge_shares >= 0 ? "BUY" : "SELL"} <b className="text-slate-100">{Math.abs(hedgeState.hedge_shares).toFixed(0)}</b> {underlying}</span>
-                {hedgeState.needs_rebalance && <span className="text-amber-400">needs rebalance</span>}
-                {hedgeState.tail_sleeve?.recommended && <span className="text-rose-400">tail sleeve recommended</span>}
+                {hedgeState.needs_rebalance && <span className="text-brand-400">needs rebalance</span>}
+                {hedgeState.tail_sleeve?.recommended && <span className="text-red-400">tail sleeve recommended</span>}
                 <button onClick={() => runHedge(false)}
                   className="px-2.5 py-1 rounded bg-slate-700/40 border border-slate-600 text-[10px] text-slate-200 hover:bg-slate-700">
                   Dry-run hedge
                 </button>
                 <button onClick={() => runHedge(true)}
-                  className="px-2.5 py-1 rounded bg-rose-600/30 border border-rose-500/40 text-[10px] text-rose-300 hover:bg-rose-600/50">
+                  className="px-2.5 py-1 rounded bg-red-600/30 border border-red-500/40 text-[10px] text-red-300 hover:bg-red-600/50">
                   Execute on paper
                 </button>
               </div>
@@ -647,20 +647,20 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
         {/* Agent Suggestions — KG-grounded, computed from selected chain metrics */}
         <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700 bg-slate-950">
-            <Brain size={14} className="text-violet-400" />
+            <Brain size={14} className="text-brand-400" />
             <span className="text-xs text-slate-300 font-semibold uppercase tracking-widest">Agent Suggestions</span>
             {selected && (
-              <span className="flex items-center gap-1 text-[10px] font-mono text-amber-400">
+              <span className="flex items-center gap-1 text-[10px] font-mono text-brand-400">
                 <Clock size={10} /> auto-poll 15s
               </span>
             )}
             {sugMeta && (
               <span className="ml-2 text-[10px] font-mono text-slate-400">
-                regime <b className={clsx(regimeOverride ? "text-amber-300" : "text-slate-200")}>
+                regime <b className={clsx(regimeOverride ? "text-brand-300" : "text-slate-200")}>
                   {regimeOverride || sugMeta.regime}
                 </b> ({sugMeta.regime_confidence.toFixed(2)}) · {sugMeta.dte} DTE · spot {sugMeta.spot_estimate != null ? fmt$(sugMeta.spot_estimate) : "-"} · {sugMeta.lens} lens
                 {sugMeta.alt_count > 0 && (
-                  <span className="ml-1 text-violet-300" title={`Also evaluating KG strategies against: ${sugMeta.alt_expirations.join(", ")}`}>
+                  <span className="ml-1 text-brand-300" title={`Also evaluating KG strategies against: ${sugMeta.alt_expirations.join(", ")}`}>
                     · +{sugMeta.alt_count} alt-expiry play{sugMeta.alt_count === 1 ? "" : "s"}
                   </span>
                 )}
@@ -677,7 +677,7 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
                 className={clsx(
                   "rounded border px-1.5 py-0.5 text-[10px] font-mono outline-none",
                   regimeOverride
-                    ? "bg-amber-950/40 border-amber-500/50 text-amber-200 hover:border-amber-400"
+                    ? "bg-brand-950/40 border-brand-500/50 text-brand-200 hover:border-brand-400"
                     : "bg-slate-950 border-slate-700 text-slate-300 hover:border-slate-500",
                   "disabled:opacity-50"
                 )}
@@ -689,12 +689,12 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
             </label>
             <button onClick={toggleLens} title="Loss-aversion lens (defensive = max-loss cap 5% NAV, lambda 3.5; average = cap 10%, lambda 2.25)"
               className={clsx("flex items-center gap-1.5 px-2.5 py-1 rounded border text-[10px] font-bold",
-                lens === "defensive" ? "bg-rose-600/30 border-rose-500/40 text-rose-300 hover:bg-rose-600/50"
-                                      : "bg-amber-600/20 border-amber-500/30 text-amber-300 hover:bg-amber-600/40")}>
+                lens === "defensive" ? "bg-red-600/30 border-red-500/40 text-red-300 hover:bg-red-600/50"
+                                      : "bg-brand-600/20 border-brand-500/30 text-brand-300 hover:bg-brand-600/40")}>
               <Shield size={10} /> {lens === "defensive" ? "Defensive (λ3.5)" : "Average (λ2.25)"}
             </button>
             <button onClick={loadSuggestions} disabled={loadingSug}
-              className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded bg-violet-600/30 border border-violet-500/40 text-[10px] text-violet-300 hover:bg-violet-600/50 disabled:opacity-50">
+              className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded bg-brand-600/30 border border-brand-500/40 text-[10px] text-brand-300 hover:bg-brand-600/50 disabled:opacity-50">
               {loadingSug ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />} Refresh
             </button>
           </div>
@@ -715,7 +715,7 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
                   <div className="flex flex-wrap gap-1">
                     <span className="text-[10px] text-slate-500 uppercase">KG active:</span>
                     {sugMeta.active_strategies.map(s => (
-                      <span key={s} className="text-[10px] font-mono text-violet-300 bg-violet-950/40 border border-violet-800 rounded px-1.5 py-0.5">{s}</span>
+                      <span key={s} className="text-[10px] font-mono text-brand-300 bg-brand-950/40 border border-brand-800 rounded px-1.5 py-0.5">{s}</span>
                     ))}
                   </div>
                 )}
@@ -775,12 +775,12 @@ export default function OptionsPanel({ onNavigate }: { onNavigate?: (tab: string
                   <div className="text-[10px] font-mono text-slate-500">No computable card for {strategyFilter} on this chain right now (chain may not support its strikes/DTE) — try another strategy or expiry.</div>
                 )}
                 {rejected.length > 0 && (
-                  <div className="rounded border border-amber-900/60 bg-amber-950/10 p-2">
-                    <div className="text-[10px] font-mono text-amber-300 uppercase tracking-widest mb-1">
+                  <div className="rounded border border-brand-900/60 bg-brand-950/10 p-2">
+                    <div className="text-[10px] font-mono text-brand-300 uppercase tracking-widest mb-1">
                       Blocked by loss-aversion gates ({rejected.length})
                     </div>
                     {rejected.map((r, i) => (
-                      <div key={i} className="text-[10px] font-mono text-amber-400/90">
+                      <div key={i} className="text-[10px] font-mono text-brand-400/90">
                         ⛔ {r.strategy} — {r.reason}
                       </div>
                     ))}
@@ -963,7 +963,7 @@ function OrderModal({
             </button>
             <button onClick={() => setOrderClass("vertical")}
               className={clsx("px-2 py-1.5 rounded border text-[11px] font-bold font-mono",
-                orderClass === "vertical" ? "bg-violet-600/30 border-violet-500/50 text-violet-200" : "bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800")}>
+                orderClass === "vertical" ? "bg-brand-600/30 border-brand-500/50 text-brand-200" : "bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800")}>
               VERTICAL (spread)
             </button>
           </div>
@@ -979,11 +979,11 @@ function OrderModal({
           {/* Spread legs (when vertical) — editable: side/contracts per leg,
               add/remove legs, and metrics re-compute live from leg mids. */}
           {isSpread && (
-            <div className="rounded border border-violet-800/40 bg-violet-950/10 px-3 py-2 space-y-1.5">
+            <div className="rounded border border-brand-800/40 bg-brand-950/10 px-3 py-2 space-y-1.5">
               <div className="flex items-center gap-2">
-                <div className="text-[10px] text-violet-300 uppercase tracking-widest font-mono">Spread legs</div>
+                <div className="text-[10px] text-brand-300 uppercase tracking-widest font-mono">Spread legs</div>
                 <button onClick={addLeg}
-                  className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded border border-violet-500/40 bg-violet-950/40 text-violet-300 hover:bg-violet-900/50">
+                  className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded border border-brand-500/40 bg-brand-950/40 text-brand-300 hover:bg-brand-900/50">
                   + leg
                 </button>
               </div>
@@ -991,7 +991,7 @@ function OrderModal({
                 <div key={i} className="flex items-center gap-2 text-[11px] font-mono text-slate-300">
                   <select value={l.side}
                     onChange={e => setLegSide(i, e.target.value)}
-                    className="bg-slate-950 border border-violet-700/60 rounded px-1 py-0.5 text-[10px] font-mono text-slate-200">
+                    className="bg-slate-950 border border-brand-700/60 rounded px-1 py-0.5 text-[10px] font-mono text-slate-200">
                     <option value="buy_to_open">BTO</option>
                     <option value="sell_to_open">STO</option>
                     <option value="buy_to_close">BTC</option>
@@ -1002,7 +1002,7 @@ function OrderModal({
                   <span className="text-slate-500">mid {l.mid != null ? fmt$(l.mid) : "-"}</span>
                   <input type="number" min={1} value={l.contracts ?? 1}
                     onChange={e => setLegQty(i, Number(e.target.value))}
-                    className="w-14 bg-slate-950 border border-violet-700/60 rounded px-1 py-0.5 text-[10px] font-mono text-slate-200" />
+                    className="w-14 bg-slate-950 border border-brand-700/60 rounded px-1 py-0.5 text-[10px] font-mono text-slate-200" />
                   <button onClick={() => removeLeg(i)} disabled={spreadLegs.length <= 1}
                     className="text-slate-500 hover:text-red-400 disabled:opacity-30 ml-0.5">
                     <XCircle size={11} />
@@ -1010,10 +1010,10 @@ function OrderModal({
                 </div>
               ))}
               {/* Live recomputed metrics from the editable legs */}
-              <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono pt-1.5 border-t border-violet-900/40">
+              <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono pt-1.5 border-t border-brand-900/40">
                 <div className="text-slate-300">
                   {legMetrics.net >= 0 ? "Net CREDIT" : "Net DEBIT"}{" "}
-                  <b className={legMetrics.net >= 0 ? "text-emerald-400" : "text-amber-400"}>{fmt$(Math.abs(legMetrics.net))}</b>
+                  <b className={legMetrics.net >= 0 ? "text-emerald-400" : "text-brand-400"}>{fmt$(Math.abs(legMetrics.net))}</b>
                 </div>
                 <div className="text-slate-300">
                   maxP <b className="text-emerald-400">{legMetrics.max_profit != null ? fmt$(legMetrics.max_profit) : "-"}</b>
@@ -1030,7 +1030,7 @@ function OrderModal({
                 </div>
               </div>
               {matching && (
-                <div className="text-[10px] text-slate-500 font-mono pt-1 border-t border-violet-900/40">
+                <div className="text-[10px] text-slate-500 font-mono pt-1 border-t border-brand-900/40">
                   {matching.strategy} (agent) · maxP {fmt$(matching.max_profit_low)} · maxL {fmt$(matching.max_loss)} — edits re-compute above
                 </div>
               )}
@@ -1055,10 +1055,10 @@ function OrderModal({
 
           {/* Matching suggestion risk (if any) */}
           {matching && (
-            <div className="rounded border border-violet-800/50 bg-violet-950/10 px-3 py-2 text-[11px] font-mono text-slate-300 space-y-0.5">
-              <div className="text-violet-300 uppercase tracking-widest text-[10px]">Strategy: {matching.strategy}</div>
+            <div className="rounded border border-brand-800/50 bg-brand-950/10 px-3 py-2 text-[11px] font-mono text-slate-300 space-y-0.5">
+              <div className="text-brand-300 uppercase tracking-widest text-[10px]">Strategy: {matching.strategy}</div>
               <div>maxP <b className="text-emerald-400">{fmt$(matching.max_profit_low)}</b> · maxL <b className="text-red-400">{fmt$(matching.max_loss)}</b> · RR <b className="text-slate-100">{matching.risk_reward_pct != null ? matching.risk_reward_pct.toFixed(2) : "-"}</b></div>
-              <div>premium <b className="text-slate-100">{fmt$(matching.est_premium)}</b> · budget <b className="text-slate-100">{matching.budget_pct.toFixed(1)}%</b>{matching.liquidity_ok ? <span className="text-emerald-400"> · liq ✓</span> : <span className="text-amber-400"> · liq low</span>}</div>
+              <div>premium <b className="text-slate-100">{fmt$(matching.est_premium)}</b> · budget <b className="text-slate-100">{matching.budget_pct.toFixed(1)}%</b>{matching.liquidity_ok ? <span className="text-emerald-400"> · liq ✓</span> : <span className="text-brand-400"> · liq low</span>}</div>
             </div>
           )}
 
@@ -1166,8 +1166,8 @@ function StrategyCard({ s, sugMeta, onOpenTicket }: { s: OptionSuggestion; sugMe
               (s as OptionSuggestion & { chain_source?: string }).chain_source === "primary"
                 ? "bg-slate-800 text-slate-400 border border-slate-700"
                 : (s as OptionSuggestion & { chain_source?: string }).chain_source === "alt_type"
-                ? "bg-amber-950/40 text-amber-300 border border-amber-800/60"
-                : "bg-violet-950/40 text-violet-300 border border-violet-800/60"
+                ? "bg-brand-950/40 text-brand-300 border border-brand-800/60"
+                : "bg-brand-950/40 text-brand-300 border border-brand-800/60"
             )}
             title={
               (s as OptionSuggestion & { chain_source?: string }).chain_source === "primary"
@@ -1185,7 +1185,7 @@ function StrategyCard({ s, sugMeta, onOpenTicket }: { s: OptionSuggestion; sugMe
         )}
         <span className="text-[10px] font-mono text-slate-500 uppercase">{s.signal_method}</span>
         {s.hedge?.hedge_req && (
-          <span className="text-[10px] font-mono text-rose-300 bg-rose-950/40 border border-rose-800 rounded px-1.5 py-0.5" title={s.hedge.hedge_reason}>
+          <span className="text-[10px] font-mono text-red-300 bg-red-950/40 border border-red-800 rounded px-1.5 py-0.5" title={s.hedge.hedge_reason}>
             ⛨ hedge
           </span>
         )}
@@ -1196,7 +1196,7 @@ function StrategyCard({ s, sugMeta, onOpenTicket }: { s: OptionSuggestion; sugMe
         <span className="text-[10px] font-mono text-emerald-400">score {s.score.toFixed(2)}</span>
         {s.loss_aversion_score != null && (
           <span className={clsx("text-[10px] font-mono font-bold",
-            s.loss_aversion_score >= s.score ? "text-emerald-300" : "text-rose-300")}>
+            s.loss_aversion_score >= s.score ? "text-emerald-300" : "text-red-300")}>
             LA {s.loss_aversion_score.toFixed(2)}
           </span>
         )}
@@ -1208,20 +1208,20 @@ function StrategyCard({ s, sugMeta, onOpenTicket }: { s: OptionSuggestion; sugMe
         <span className="text-emerald-400">maxP {fmt$(s.max_profit_low)}</span>
         <span className="text-red-400">maxL {fmt$(s.max_loss)}</span>
         {s.max_loss_pct_nav != null && (
-          <span className={clsx("font-bold", s.max_loss_pct_nav > (sugMeta?.max_loss_cap_pct ?? 5) ? "text-rose-400" : "text-slate-400")}>
+          <span className={clsx("font-bold", s.max_loss_pct_nav > (sugMeta?.max_loss_cap_pct ?? 5) ? "text-red-400" : "text-slate-400")}>
             {s.max_loss_pct_nav.toFixed(1)}% NAV
           </span>
         )}
         {s.risk_reward_pct != null && <span>RR {s.risk_reward_pct.toFixed(2)}</span>}
         {s.legs[0]?.delta != null && <span>Δ {s.legs[0].delta.toFixed(2)}</span>}
         <span>budget {s.budget_pct.toFixed(1)}%</span>
-        {s.liquidity_ok ? <span className="text-emerald-400">liq ✓</span> : <span className="text-amber-400">liq low</span>}
+        {s.liquidity_ok ? <span className="text-emerald-400">liq ✓</span> : <span className="text-brand-400">liq low</span>}
       </div>
 
       <div className="text-[11px] text-slate-400 space-y-0.5">
         {s.legs.map((l) => (
           <div key={l.symbol} className="flex flex-wrap items-center gap-1.5 font-mono">
-            <span className="text-violet-400">{l.side.replace(/_/g, " ").toUpperCase()}</span>
+            <span className="text-brand-400">{l.side.replace(/_/g, " ").toUpperCase()}</span>
             <span>{l.symbol}</span>
             <span className="text-slate-600">strike {fmtN(l.strike)} {l.contract_type.toUpperCase()} x{l.contracts} @ {fmt$(l.mid)}</span>
           </div>
@@ -1231,13 +1231,13 @@ function StrategyCard({ s, sugMeta, onOpenTicket }: { s: OptionSuggestion; sugMe
       {s.notes.length > 0 && <div className="text-[10px] text-slate-500">{s.notes.join(" · ")}</div>}
 
       {riskNotes.length > 0 && (
-        <div className="flex items-center gap-1 text-[10px] font-mono text-amber-400 bg-amber-950/20 border border-amber-800/40 rounded px-2 py-1">
+        <div className="flex items-center gap-1 text-[10px] font-mono text-brand-400 bg-brand-950/20 border border-brand-800/40 rounded px-2 py-1">
           <AlertTriangle size={10} /> {riskNotes.join(" · ")}
         </div>
       )}
 
       {s.hedge?.hedge_req && (
-        <div className="text-[10px] font-mono text-rose-300/90 bg-rose-950/20 border border-rose-900/50 rounded px-2 py-1">
+        <div className="text-[10px] font-mono text-red-300/90 bg-red-950/20 border border-red-900/50 rounded px-2 py-1">
           ⛨ {s.hedge.hedge_reason} — see Dynamic Hedge panel below
         </div>
       )}

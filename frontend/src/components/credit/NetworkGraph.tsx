@@ -42,8 +42,8 @@ function parsePaths(paths: string[]): Edge[] {
 }
 
 const COLORS = [
-  "#3fb950", "#58a6ff", "#d29922", "#f85149", "#8b949e",
-  "#a371f7", "#79c0ff", "#ffa657",
+  "#3fb950", "#6a84de", "#4a63c8", "#f85149", "#7d89b8",
+  "#4a63c8", "#8fa6ec", "#6a84de",
 ];
 
 export default function NetworkGraph({ entities, relationships, paths }: NetworkGraphProps) {
@@ -93,7 +93,7 @@ export default function NetworkGraph({ entities, relationships, paths }: Network
     canvas.height = size.height * dpr;
     ctx.scale(dpr, dpr);
 
-    ctx.fillStyle = "#0d1117";
+    ctx.fillStyle = "#030214";
     ctx.fillRect(0, 0, size.width, size.height);
 
     const allNodes = uniqueNodes.length > 0 ? uniqueNodes : nodes;
@@ -110,7 +110,7 @@ export default function NetworkGraph({ entities, relationships, paths }: Network
       });
     });
 
-    ctx.strokeStyle = "#30363d";
+    ctx.strokeStyle = "#182250";
     ctx.lineWidth = 1;
     edges.forEach((edge) => {
       const source = positions.get(edge.source);
@@ -123,7 +123,7 @@ export default function NetworkGraph({ entities, relationships, paths }: Network
 
         const midX = (source.x + target.x) / 2;
         const midY = (source.y + target.y) / 2;
-        ctx.fillStyle = "#6e7681";
+        ctx.fillStyle = "#525f8e";
         ctx.font = "10px Raleway";
         ctx.textAlign = "center";
         ctx.fillText(edge.label, midX, midY - 4);
@@ -137,7 +137,7 @@ export default function NetworkGraph({ entities, relationships, paths }: Network
 
       ctx.beginPath();
       ctx.arc(pos.x, pos.y, 18, 0, 2 * Math.PI);
-      ctx.fillStyle = "#161b22";
+      ctx.fillStyle = "#0c143a";
       ctx.fill();
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
@@ -149,7 +149,7 @@ export default function NetworkGraph({ entities, relationships, paths }: Network
       ctx.textBaseline = "middle";
       ctx.fillText(node.label.slice(0, 8), pos.x, pos.y);
 
-      ctx.fillStyle = "#e6edf3";
+      ctx.fillStyle = "#e8ebf7";
       ctx.font = "11px Raleway";
       ctx.fillText(node.label, pos.x, pos.y + 30);
     });

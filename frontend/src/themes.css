@@ -1,0 +1,95 @@
+/* themes.css — single source of truth for the application palette.
+ *
+ * Two themes share one token namespace:
+ *   :root                 → Midnight Blue (default) — base #030214
+ *   [data-theme="light"]  → Light mode (same semantic tokens re-declared)
+ *
+ * Tokens are RGB TRIPLETS so Tailwind can emit `rgb(var(--x) / alpha)`
+ * (required for bg-brand-600/20 style alpha modifiers). Theme is switched by
+ * setting `data-theme="light"` on <html> (see App.tsx toggle + main.tsx boot).
+ *
+ * Semantic contract (conventional finance):
+ *   slate-*   → the midnight-blue neutral ramp (chrome: page, panels, cards, text)
+ *   brand-*   → the midnight-blue accent ramp (CTAs, active tabs, focus, links)
+ *   emerald-* → appreciation / positive   (Tailwind default, unchanged)
+ *   red-*     → depreciation / negative   (Tailwind default, unchanged)
+ * No violet / purple / rose / amber / yellow / orange / gray / sky / green
+ * chrome tokens exist ANYWHERE in the app (swept to the two midnight ramps
+ * or the finance semantics above).
+ */
+:root {
+  /* ── Midnight neutral ramp (slate-*) — chrome backgrounds + text ── */
+  --slate-50:  247 248 255;
+  --slate-100: 232 235 247;
+  --slate-200: 207 214 236;
+  --slate-300: 167 178 214;
+  --slate-400: 125 137 184;
+  --slate-500: 82 95 142;
+  --slate-600: 46 58 104;
+  --slate-700: 24 34 80;
+  --slate-800: 12 20 58;
+  --slate-900: 6 10 40;
+  --slate-950: 3 2 20;              /* #030214 — the standard midnight blue */
+
+  /* ── Midnight accent ramp (brand-*) — CTAs / active / focus / links ── */
+  --brand-50:  240 243 255;
+  --brand-100: 220 229 255;
+  --brand-200: 185 201 247;
+  --brand-300: 143 166 236;
+  --brand-400: 106 132 222;
+  --brand-500: 74 99 200;
+  --brand-600: 51 74 158;
+  --brand-700: 37 56 124;
+  --brand-800: 24 39 79;
+  --brand-900: 13 22 51;
+  --brand-950: 7 10 28;
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  /* ── Light neutral ramp (slate-*) — chrome backgrounds + text ── */
+  --slate-50:  20 30 64;
+  --slate-100: 28 38 71;
+  --slate-200: 39 51 82;
+  --slate-300: 58 74 112;
+  --slate-400: 85 99 140;
+  --slate-500: 109 123 163;
+  --slate-600: 183 192 217;          /* borders */
+  --slate-700: 248 249 253;          /* inputs / raised */
+  --slate-800: 255 255 255;          /* cards — white */
+  --slate-900: 238 241 248;          /* panels */
+  --slate-950: 244 245 251;          /* page */
+
+  /* ── Light accent ramp (brand-*) — deeper midnight for contrast ── */
+  --brand-50:  235 240 252;
+  --brand-100: 190 204 245;
+  --brand-200: 140 164 234;
+  --brand-300: 96 124 216;
+  --brand-400: 74 100 196;
+  --brand-500: 64 88 180;
+  --brand-600: 52 72 150;
+  --brand-700: 42 58 120;
+  --brand-800: 31 44 92;
+  --brand-900: 22 32 66;
+  --brand-950: 15 21 42;
+
+  color-scheme: light;
+}
+
+/* Raw tokens used by components that need a direct CSS value (charts, graphs). */
+:root, [data-theme="light"] {
+  --midnight-100: #dce5ff;
+  --midnight-200: #b9c9f7;
+  --midnight-300: #8fa6ec;
+  --midnight-400: #6a84de;
+  --midnight-500: #4a63c8;
+  --midnight-600: #334a9e;
+  --midnight-700: #25387c;
+  --midnight-800: #18274f;
+  --midnight-900: #0d1633;
+
+  /* Finance semantics (unchanged Tailwind defaults, exposed for direct uses) */
+  --pos:  #10b981;   /* emerald-500 */
+  --neg:  #f87171;   /* red-400 */
+}

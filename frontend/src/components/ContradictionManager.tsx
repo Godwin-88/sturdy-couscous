@@ -77,7 +77,7 @@ export default function ContradictionManager({ open, onClose }: Props) {
                   "flex items-center justify-between p-3 rounded-lg border text-xs font-mono",
                   c.suppressed
                     ? "bg-slate-800/50 border-slate-700 text-slate-500"
-                    : "bg-amber-950/20 border-amber-800/50 text-amber-300"
+                    : "bg-brand-950/20 border-brand-800/50 text-brand-300"
                 )}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">

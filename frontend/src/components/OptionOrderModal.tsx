@@ -110,7 +110,7 @@ export default function OptionOrderModal({ initial, onClose, onSuccess }: { init
         <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700 bg-slate-950">
           <ArrowRightLeft size={15} className="text-emerald-400" />
           <span className="text-sm font-semibold text-slate-100">{isO ? "Confirm Option Trade" : "Confirm Order"}</span>
-          {initial.strategy && <span className="text-[10px] font-mono text-violet-300 bg-violet-950/40 border border-violet-800 rounded px-1.5 py-0.5 truncate max-w-[120px]">{initial.strategy}</span>}
+          {initial.strategy && <span className="text-[10px] font-mono text-brand-300 bg-brand-950/40 border border-brand-800 rounded px-1.5 py-0.5 truncate max-w-[120px]">{initial.strategy}</span>}
           <button onClick={onClose} className="ml-auto p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"><XCircle size={16} /></button>
         </div>
 
@@ -124,7 +124,7 @@ export default function OptionOrderModal({ initial, onClose, onSuccess }: { init
               </button>
               <button onClick={() => { setOrderClass("vertical"); if (spreadLegs.length === 0) setSpreadLegs([{ symbol: ticker.trim(), strike: opt?.strike ?? 0, contract_type: opt?.type === "P" ? "put" : "call", mid: mid0, delta: null, contracts: 1, side: side === "buy" ? "buy_to_open" : "sell_to_open" }]); }}
                 className={clsx("px-2 py-1.5 rounded border text-[11px] font-bold font-mono",
-                  orderClass === "vertical" ? "bg-violet-600/30 border-violet-500/50 text-violet-200" : "bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800")}>
+                  orderClass === "vertical" ? "bg-brand-600/30 border-brand-500/50 text-brand-200" : "bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800")}>
                 VERTICAL (spread)
               </button>
             </div>
@@ -135,7 +135,7 @@ export default function OptionOrderModal({ initial, onClose, onSuccess }: { init
             <div className="text-slate-500">{opt ? `${opt.type === "C" ? "CALL" : "PUT"} x100 \u00b7 ${opt.expiry} \u00b7 Strike ${fmtN(opt.strike, 2)} \u00b7 ${opt.underlying}` : `${side === "buy" ? "LONG" : "SHORT"} \u00b7 venue alpaca`}</div>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[10px] font-mono text-amber-400 bg-amber-950/20 border border-amber-800/40 rounded px-2 py-1.5">
+          <div className="flex items-center gap-1.5 text-[10px] font-mono text-brand-400 bg-brand-950/20 border border-brand-800/40 rounded px-2 py-1.5">
             <AlertTriangle size={11} />
             Human-in-the-loop: {proposalToken ? "proposal locked \u2014 confirm to execute on paper" : "Preview issues a one-time token (10-min) before any execution"}
           </div>
@@ -148,16 +148,16 @@ export default function OptionOrderModal({ initial, onClose, onSuccess }: { init
           </label>
 
           {isO && isSpread && (
-            <div className="rounded border border-violet-800/40 bg-violet-950/10 px-3 py-2 space-y-1.5">
+            <div className="rounded border border-brand-800/40 bg-brand-950/10 px-3 py-2 space-y-1.5">
               <div className="flex items-center gap-2">
-                <div className="text-[10px] text-violet-300 uppercase tracking-widest font-mono">Spread legs</div>
+                <div className="text-[10px] text-brand-300 uppercase tracking-widest font-mono">Spread legs</div>
                 <button onClick={addLeg}
-                  className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded border border-violet-500/40 bg-violet-950/40 text-violet-300 hover:bg-violet-900/50">+ leg</button>
+                  className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded border border-brand-500/40 bg-brand-950/40 text-brand-300 hover:bg-brand-900/50">+ leg</button>
               </div>
               {spreadLegs.map((l, i) => (
                 <div key={i} className="flex items-center gap-2 text-[11px] font-mono text-slate-300">
                   <select value={l.side} onChange={(e) => setLegSide(i, e.target.value)}
-                    className="bg-slate-950 border border-violet-700/60 rounded px-1 py-0.5 text-[10px] font-mono text-slate-200">
+                    className="bg-slate-950 border border-brand-700/60 rounded px-1 py-0.5 text-[10px] font-mono text-slate-200">
                     <option value="buy_to_open">BTO</option><option value="sell_to_open">STO</option>
                     <option value="buy_to_close">BTC</option><option value="sell_to_close">STC</option>
                   </select>
@@ -165,13 +165,13 @@ export default function OptionOrderModal({ initial, onClose, onSuccess }: { init
                   <span>K {fmtN(l.strike, 2)}</span>
                   <span className="text-slate-500">mid {l.mid != null ? fmt$(l.mid) : "-"}</span>
                   <input type="number" min={1} value={l.contracts ?? 1} onChange={(e) => setLegQty(i, Number(e.target.value))}
-                    className="w-14 bg-slate-950 border border-violet-700/60 rounded px-1 py-0.5 text-[10px] font-mono text-slate-200" />
+                    className="w-14 bg-slate-950 border border-brand-700/60 rounded px-1 py-0.5 text-[10px] font-mono text-slate-200" />
                   <button onClick={() => removeLeg(i)} disabled={spreadLegs.length <= 1}
                     className="text-slate-500 hover:text-red-400 disabled:opacity-30 ml-0.5"><XCircle size={11} /></button>
                 </div>
               ))}
-              <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono pt-1.5 border-t border-violet-900/40">
-                <div className="text-slate-300">{legMetrics.net >= 0 ? "Net CREDIT" : "Net DEBIT"} <b className={legMetrics.net >= 0 ? "text-emerald-400" : "text-amber-400"}>{fmt$(Math.abs(legMetrics.net))}</b></div>
+              <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono pt-1.5 border-t border-brand-900/40">
+                <div className="text-slate-300">{legMetrics.net >= 0 ? "Net CREDIT" : "Net DEBIT"} <b className={legMetrics.net >= 0 ? "text-emerald-400" : "text-brand-400"}>{fmt$(Math.abs(legMetrics.net))}</b></div>
                 <div className="text-slate-300">maxP <b className="text-emerald-400">{legMetrics.max_profit != null ? fmt$(legMetrics.max_profit) : "-"}</b></div>
                 <div className="text-slate-300">maxL <b className="text-red-400">{legMetrics.max_loss != null ? fmt$(legMetrics.max_loss) : "-"}</b></div>
                 <div className="text-slate-300">RR <b className="text-slate-100">{legMetrics.max_profit != null && legMetrics.max_loss != null && legMetrics.max_loss > 0 ? (legMetrics.max_profit / legMetrics.max_loss).toFixed(2) : "-"}</b></div>

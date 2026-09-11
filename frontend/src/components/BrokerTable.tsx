@@ -63,7 +63,7 @@ function Row({ p, onAnalyze }: { p: AlpacaPosition; onAnalyze: (p: AlpacaPositio
       <td className={clsx("py-1.5 px-2 text-right font-bold font-mono", up ? "text-emerald-400" : "text-red-400")}>
         {up ? "+" : ""}{fmt$(upl)}
       </td>
-      <td className="py-1.5 px-2 text-right text-amber-300 font-mono">
+      <td className="py-1.5 px-2 text-right text-brand-300 font-mono">
         {isOpt ? (dte != null ? `${dte}D` : "—") : "—"}
       </td>
       <td className="py-1.5 px-2 text-center">

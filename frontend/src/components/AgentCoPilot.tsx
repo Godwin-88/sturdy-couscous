@@ -94,7 +94,7 @@ export default function AgentCoPilot({
         <Bot size={14} className="text-emerald-400" />
         <span className="text-xs font-semibold uppercase tracking-widest text-slate-200">Agent CoPilot</span>
         <span className="ml-auto flex items-center gap-1 text-[10px] font-mono text-slate-400">
-          <ShieldCheck size={10} className="text-amber-400" /> WebMCP
+          <ShieldCheck size={10} className="text-brand-400" /> WebMCP
         </span>
         <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
           <X size={14} />
@@ -126,7 +126,7 @@ export default function AgentCoPilot({
           const hasToken = Boolean(ev.proposal_token ?? out?.proposal_token);
           return (
             <div key={i} className={clsx("rounded border border-slate-700 bg-slate-800/60 p-2",
-              hasToken ? "border-amber-700/60" : "")}>
+              hasToken ? "border-brand-700/60" : "")}>
               <div className="whitespace-pre-wrap text-[10px] font-mono text-slate-300 leading-relaxed">
                 {eventText(ev)}
               </div>
@@ -134,7 +134,7 @@ export default function AgentCoPilot({
                 <button
                   onClick={() => approve(ev)}
                   disabled={approving}
-                  className="mt-2 flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-600/30 border border-amber-500/40 text-[10px] font-bold text-amber-300 hover:bg-amber-600/50 disabled:opacity-50"
+                  className="mt-2 flex items-center gap-1.5 px-2.5 py-1 rounded bg-brand-600/30 border border-brand-500/40 text-[10px] font-bold text-brand-300 hover:bg-brand-600/50 disabled:opacity-50"
                 >
                   {approving ? <Loader2 size={10} className="animate-spin" /> : <ShieldCheck size={10} />}
                   Approve &amp; execute (paper)

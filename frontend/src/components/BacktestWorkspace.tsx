@@ -219,7 +219,7 @@ export default function BacktestWorkspace() {
                     <>
                       <span className="text-[10px] text-slate-500 font-mono ml-2">FRED:</span>
                       {selectedFred.map(f => (
-                        <span key={f} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/50">{f}</span>
+                        <span key={f} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-brand-900/40 text-brand-300 border border-brand-700/50">{f}</span>
                       ))}
                     </>
                   )}
@@ -235,7 +235,7 @@ export default function BacktestWorkspace() {
                 </div>
               )}
               {seedError && (
-                <div className="flex items-center gap-1.5 text-xs text-amber-400 bg-amber-950/30 border border-amber-800 rounded p-2">
+                <div className="flex items-center gap-1.5 text-xs text-brand-400 bg-brand-950/30 border border-brand-800 rounded p-2">
                   <AlertCircle size={12} /> {seedError}
                 </div>
               )}
@@ -616,15 +616,15 @@ function EquityTab({ g, u }: { g: BacktestResult | null; u: BacktestResult | nul
   return (
     <ResponsiveContainer width="100%" height={280}>
       <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-        <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#64748b" }} tickLine={false} interval="preserveStartEnd" />
-        <YAxis tick={{ fontSize: 9, fill: "#64748b" }} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(1)}k`} />
-        <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", fontSize: 11 }}
+        <CartesianGrid strokeDasharray="3 3" stroke="#0c143a" />
+        <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#525f8e" }} tickLine={false} interval="preserveStartEnd" />
+        <YAxis tick={{ fontSize: 9, fill: "#525f8e" }} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(1)}k`} />
+        <Tooltip contentStyle={{ background: "#0c143a", border: "1px solid #182250", fontSize: 11 }}
                  formatter={(v: number, name: string) => [fmt$(v), name]} />
-        <Legend wrapperStyle={{ fontSize: 10, color: "#94a3b8" }} />
-        {g && <Line type="monotone" dataKey="grounded"  name="KG-Grounded" stroke="#1f6feb" strokeWidth={2} dot={false} connectNulls />}
-        {u && <Line type="monotone" dataKey="ungrounded" name="Baseline"   stroke="#475569" strokeWidth={1.5} dot={false} connectNulls strokeDasharray="4 2" />}
-        {g?.benchmark_curve && <Line type="monotone" dataKey="benchmark" name="SPY Buy&Hold" stroke="#f59e0b" strokeWidth={1.5} dot={false} connectNulls strokeDasharray="6 3" />}
+        <Legend wrapperStyle={{ fontSize: 10, color: "#7d89b8" }} />
+        {g && <Line type="monotone" dataKey="grounded"  name="KG-Grounded" stroke="#4a63c8" strokeWidth={2} dot={false} connectNulls />}
+        {u && <Line type="monotone" dataKey="ungrounded" name="Baseline"   stroke="#2e3a68" strokeWidth={1.5} dot={false} connectNulls strokeDasharray="4 2" />}
+        {g?.benchmark_curve && <Line type="monotone" dataKey="benchmark" name="SPY Buy&Hold" stroke="#4a63c8" strokeWidth={1.5} dot={false} connectNulls strokeDasharray="6 3" />}
       </LineChart>
     </ResponsiveContainer>
   );
@@ -648,14 +648,14 @@ function DrawdownTab({ g, u }: { g: BacktestResult | null; u: BacktestResult | n
               <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#64748b" }} tickLine={false} interval="preserveStartEnd" />
-          <YAxis tick={{ fontSize: 9, fill: "#64748b" }} tickLine={false} tickFormatter={v => `${v.toFixed(0)}%`} />
-          <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", fontSize: 11 }}
+          <CartesianGrid strokeDasharray="3 3" stroke="#0c143a" />
+          <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#525f8e" }} tickLine={false} interval="preserveStartEnd" />
+          <YAxis tick={{ fontSize: 9, fill: "#525f8e" }} tickLine={false} tickFormatter={v => `${v.toFixed(0)}%`} />
+          <Tooltip contentStyle={{ background: "#0c143a", border: "1px solid #182250", fontSize: 11 }}
                    formatter={(v: number, name: string) => [`${v.toFixed(2)}%`, name]} />
-          <ReferenceLine y={0} stroke="#475569" />
-          {g && <Area type="monotone" dataKey="grounded"   name="KG-Grounded" stroke="#1f6feb" fill="url(#ddGrad)" strokeWidth={2} dot={false} connectNulls />}
-          {u && <Line type="monotone" dataKey="ungrounded" name="Baseline"     stroke="#475569" strokeWidth={1.5} dot={false} connectNulls strokeDasharray="4 2" />}
+          <ReferenceLine y={0} stroke="#2e3a68" />
+          {g && <Area type="monotone" dataKey="grounded"   name="KG-Grounded" stroke="#4a63c8" fill="url(#ddGrad)" strokeWidth={2} dot={false} connectNulls />}
+          {u && <Line type="monotone" dataKey="ungrounded" name="Baseline"     stroke="#2e3a68" strokeWidth={1.5} dot={false} connectNulls strokeDasharray="4 2" />}
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -745,14 +745,14 @@ function StrategyTab({ g, u }: { g: BacktestResult | null; u: BacktestResult | n
     <div className="space-y-4">
       <ResponsiveContainer width="100%" height={Math.max(100, data.length * 36)}>
         <BarChart layout="vertical" data={data} margin={{ top: 0, right: 60, bottom: 0, left: 120 }}>
-          <XAxis type="number" tick={{ fontSize: 9, fill: "#64748b" }} tickFormatter={v => fmt$(v)} />
-          <YAxis type="category" dataKey="strategy" tick={{ fontSize: 10, fill: "#cbd5e1" }} width={115} />
-          <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", fontSize: 11 }}
+          <XAxis type="number" tick={{ fontSize: 9, fill: "#525f8e" }} tickFormatter={v => fmt$(v)} />
+          <YAxis type="category" dataKey="strategy" tick={{ fontSize: 10, fill: "#a7b2d6" }} width={115} />
+          <Tooltip contentStyle={{ background: "#0c143a", border: "1px solid #182250", fontSize: 11 }}
                    formatter={(v: number, name: string) => [name === "total_pnl" ? fmt$(v) : fmtPct(v), name]} />
-          <ReferenceLine x={0} stroke="#475569" />
+          <ReferenceLine x={0} stroke="#2e3a68" />
           <Bar dataKey="total_pnl" name="Total P&L" radius={[0, 3, 3, 0]}>
             {data.map((entry, i) => (
-              <Cell key={i} fill={entry.total_pnl >= 0 ? "#1f6feb" : "#ef4444"} />
+              <Cell key={i} fill={entry.total_pnl >= 0 ? "#4a63c8" : "#ef4444"} />
             ))}
           </Bar>
         </BarChart>
@@ -794,15 +794,15 @@ function WalkFwdTab({ g }: { g: BacktestResult | null }) {
       <div className="text-[10px] text-slate-500">Out-of-sample performance per walk-forward window.</div>
       <ResponsiveContainer width="100%" height={160}>
         <BarChart data={windows} margin={{ top: 4, right: 8, bottom: 0, left: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis dataKey="id" tick={{ fontSize: 9, fill: "#64748b" }} tickFormatter={v => `W${v + 1}`} />
-          <YAxis tick={{ fontSize: 9, fill: "#64748b" }} tickFormatter={v => fmtPct(v)} />
-          <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", fontSize: 11 }}
+          <CartesianGrid strokeDasharray="3 3" stroke="#0c143a" />
+          <XAxis dataKey="id" tick={{ fontSize: 9, fill: "#525f8e" }} tickFormatter={v => `W${v + 1}`} />
+          <YAxis tick={{ fontSize: 9, fill: "#525f8e" }} tickFormatter={v => fmtPct(v)} />
+          <Tooltip contentStyle={{ background: "#0c143a", border: "1px solid #182250", fontSize: 11 }}
                    formatter={(v: number, name: string) => [name === "total_return" ? fmtPct(v) : fmtN(v, 2), name]} />
-          <ReferenceLine y={0} stroke="#475569" />
+          <ReferenceLine y={0} stroke="#2e3a68" />
           <Bar dataKey="total_return" name="Return" radius={[3, 3, 0, 0]}>
             {windows.map((w, i) => (
-              <Cell key={i} fill={w.total_return >= 0 ? "#1f6feb" : "#ef4444"} />
+              <Cell key={i} fill={w.total_return >= 0 ? "#4a63c8" : "#ef4444"} />
             ))}
           </Bar>
         </BarChart>

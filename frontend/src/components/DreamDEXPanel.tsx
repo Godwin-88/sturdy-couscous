@@ -173,8 +173,8 @@ export default function DreamDEXPanel() {
   return (
     <div className="p-4 space-y-4">
       {/* Status bar + live wallet strip */}
-      <div className="flex items-center gap-3 text-xs text-gray-400 border border-gray-700 rounded px-3 py-2 flex-wrap">
-        <span className={clsx("w-2 h-2 rounded-full", !status?.enabled ? "bg-gray-500" : status?.relay_reachable ? "bg-green-400" : "bg-yellow-500")} />
+      <div className="flex items-center gap-3 text-xs text-slate-400 border border-slate-700 rounded px-3 py-2 flex-wrap">
+        <span className={clsx("w-2 h-2 rounded-full", !status?.enabled ? "bg-slate-500" : status?.relay_reachable ? "bg-emerald-400" : "bg-brand-500")} />
         <span>
           {!status?.enabled
             ? "DreamDEX disabled — set DREAMDEX_ENABLED=1"
@@ -190,11 +190,11 @@ export default function DreamDEXPanel() {
         )}
         {/* Live wallet balances (read-only) */}
         {status?.balances && (
-          <span className="font-mono text-green-400" title="Live Somnia balances">
+          <span className="font-mono text-emerald-400" title="Live Somnia balances">
             Ⓢ {fmtNum(status.balances.somi)} SOMI · {fmtNum(status.balances.tusdc)} tUSDC
           </span>
         )}
-        {!status?.dry_run && <span className="text-yellow-400 text-[10px]">● LIVE ARM</span>}
+        {!status?.dry_run && <span className="text-brand-400 text-[10px]">● LIVE ARM</span>}
         {status?.gates?.freeze && (
           <span className="text-red-400 text-[10px] font-bold border border-red-500/60 rounded px-1.5 bg-red-500/10" title="U6 kill-switch active — orders/claims rejected with 423">
             🔒 FROZEN — ALL ORDER & CLAIM ACTIONS BLOCKED
@@ -206,20 +206,20 @@ export default function DreamDEXPanel() {
       {error && <div className="text-xs text-red-400">Poll error: {error}</div>}
 
       {/* Tab nav */}
-      <div className="flex gap-2 border-b border-gray-700 pb-2">
+      <div className="flex gap-2 border-b border-slate-700 pb-2">
         {(["markets", "candidates", "positions", "fills"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`text-xs px-3 py-1 rounded capitalize transition-colors
-              ${tab === t ? "bg-brand-500 text-white" : "text-gray-400 hover:text-white"}`}
+              ${tab === t ? "bg-brand-500 text-white" : "text-slate-400 hover:text-white"}`}
           >
             {t}
             {t === "markets" && markets.length > 0 && (
               <span className="ml-1 bg-brand-400 text-white text-[10px] rounded-full px-1">{markets.length}</span>
             )}
             {t === "fills" && fills.length > 0 && (
-              <span className="ml-1 bg-yellow-500 text-black text-[10px] rounded-full px-1">{fills.length}</span>
+              <span className="ml-1 bg-brand-500 text-black text-[10px] rounded-full px-1">{fills.length}</span>
             )}
           </button>
         ))}
@@ -232,22 +232,22 @@ export default function DreamDEXPanel() {
       {tab === "markets" && (
         <div className="space-y-2">
           {markets.length === 0 && (
-            <p className="text-xs text-gray-500">No markets loaded — relay offline or venue has no open windows.</p>
+            <p className="text-xs text-slate-500">No markets loaded — relay offline or venue has no open windows.</p>
           )}
           {([...markets].sort((a: Market, b: Market) =>
             (a.closes_at ?? a.closesAt ?? "").localeCompare(b.closes_at ?? b.closesAt ?? "")))
             .map((m: Market, i: number) => {
               const tradable = m.status === 1 && (m.up?.ask ?? 0) > 0;
               return (
-                <div key={m.marketId ?? m.market_id ?? i} className={clsx("border rounded p-3 space-y-1", tradable ? "border-brand-500/40" : "border-gray-700 opacity-60")}>
+                <div key={m.marketId ?? m.market_id ?? i} className={clsx("border rounded p-3 space-y-1", tradable ? "border-brand-500/40" : "border-slate-700 opacity-60")}>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-white font-mono">{m.symbol ?? m.title ?? m.market_id ?? "ec"}</span>
-                    <span className={clsx("text-[10px] px-1.5 rounded", tradable ? "bg-green-400/10 text-green-400" : "bg-gray-600 text-gray-400")}>
+                    <span className="text-sm text-slate-100 font-mono">{m.symbol ?? m.title ?? m.market_id ?? "ec"}</span>
+                    <span className={clsx("text-[10px] px-1.5 rounded", tradable ? "bg-emerald-400/10 text-emerald-400" : "bg-slate-600 text-slate-400")}>
                       {m.status === 1 ? "TRADING" : `status ${m.status}`}
                     </span>
                   </div>
-                  <div className="flex gap-2 text-xs text-gray-400">
-                    <span className={(m.asset ?? "crypto").toLowerCase() === "btc" ? "text-orange-400" : "text-sky-300"}>{(m.asset ?? "crypto").toUpperCase()}</span>
+                  <div className="flex gap-2 text-xs text-slate-400">
+                    <span className={(m.asset ?? "crypto").toLowerCase() === "btc" ? "text-brand-400" : "text-brand-300"}>{(m.asset ?? "crypto").toUpperCase()}</span>
                     <span>·</span>
                     <span>Up {fmtPct(m.up?.ask)} / Down {fmtPct(m.down?.ask)}</span>
                     {(m.closes_at || m.closesAt) && <span>· closes {new Date(m.closes_at ?? m.closesAt ?? "").toLocaleTimeString()}</span>}
@@ -267,34 +267,34 @@ export default function DreamDEXPanel() {
       {/* Trade ticket (two-phase: quote → confirm) */}
       {ticket && (
         <div className="border border-brand-500 rounded p-3 bg-slate-900">
-          <p className="text-xs text-white font-mono mb-2">Trade — {ticket.symbol ?? ticket.market_id}</p>
+          <p className="text-xs text-slate-100 font-mono mb-2">Trade — {ticket.symbol ?? ticket.market_id}</p>
           <div className="flex gap-2 items-center flex-wrap">
             {(["up", "down"] as const).map((s) => (
               <button key={s} onClick={() => { setSide(s); setConfirming(false); }}
-                className={clsx("px-2 py-1 rounded text-xs", side === s ? "bg-brand-500 text-white" : "bg-slate-800 text-gray-400")}>
+                className={clsx("px-2 py-1 rounded text-xs", side === s ? "bg-brand-500 text-white" : "bg-slate-800 text-slate-400")}>
                 {s === "up" ? `UP ${fmtPct(ticket.up?.ask)}` : `DOWN ${fmtPct(ticket.down?.ask)}`}
               </button>
             ))}
             <input value={qty} onChange={(e) => { setQty(e.target.value); setConfirming(false); }}
-              className="w-20 bg-slate-800 text-white text-xs rounded px-2 py-1" inputMode="numeric" placeholder="qty" />
-            <span className="text-xs text-gray-400">≈ <span className="text-white">{cost.toFixed(2)}</span> tUSDC</span>
+              className="w-20 bg-slate-800 text-slate-100 text-xs rounded px-2 py-1" inputMode="numeric" placeholder="qty" />
+            <span className="text-xs text-slate-400">≈ <span className="text-slate-100">{cost.toFixed(2)}</span> tUSDC</span>
           </div>
           {!confirming ? (
             <button onClick={place} className="mt-2 text-[11px] px-3 py-1 rounded bg-brand-500 text-white">Place {side.toUpperCase()} order</button>
           ) : (
-            <button onClick={place} className={clsx("mt-2 text-[11px] px-3 py-1 rounded", "bg-yellow-500 text-black")}>
+            <button onClick={place} className={clsx("mt-2 text-[11px] px-3 py-1 rounded", "bg-brand-500 text-black")}>
               <AlertTriangle size={11} className="inline mr-1" />Confirm {side.toUpperCase()} × {qty} at {fmtPct(best)}?
             </button>
           )}
           {placed && (
-            <div className={clsx("text-[11px] mt-1 font-mono", placed.ok ? "text-green-400" : "text-red-400")}>
+            <div className={clsx("text-[11px] mt-1 font-mono", placed.ok ? "text-emerald-400" : "text-red-400")}>
               {placed.ok ? `✓ filled ${placed.state} ${shortTx(placed.txHash)}` : `✗ ${placed.reason}`}
               {placed.txHash && !isStub(placed.txHash) && (
                 <a className="text-brand-400 underline ml-2" href={`${EXPLORER}/tx/${placed.txHash}`} target="_blank" rel="noreferrer">view on explorer</a>
               )}
             </div>
           )}
-          <button onClick={() => setTicket(null)} className="text-[10px] text-gray-500 mt-1 underline float-right">close</button>
+          <button onClick={() => setTicket(null)} className="text-[10px] text-slate-500 mt-1 underline float-right">close</button>
         </div>
       )}
 
@@ -302,27 +302,27 @@ export default function DreamDEXPanel() {
       {tab === "candidates" && (
         <div className="space-y-2">
           {candidates.length === 0 && (
-            <p className="text-xs text-gray-500">No candidates this cycle — no market cleared the multiplicity-corrected edge gate.</p>
+            <p className="text-xs text-slate-500">No candidates this cycle — no market cleared the multiplicity-corrected edge gate.</p>
           )}
           {candidates.map((c, i) => {
             const okay = (c.net_edge_pct ?? 0) > 0;
             return (
-              <div key={i} className={clsx("border rounded p-3 space-y-1", okay ? "border-brand-500/40" : "border-gray-700")}>
+              <div key={i} className={clsx("border rounded p-3 space-y-1", okay ? "border-brand-500/40" : "border-slate-700")}>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-white font-mono">{c.symbol ?? c.market_id ?? "ec"}</span>
-                  <span className={clsx("text-xs font-bold", c.side === "up" ? "text-green-400" : "text-red-400")}>
+                  <span className="text-sm text-slate-100 font-mono">{c.symbol ?? c.market_id ?? "ec"}</span>
+                  <span className={clsx("text-xs font-bold", c.side === "up" ? "text-emerald-400" : "text-red-400")}>
                     BUY {c.side?.toUpperCase()}
                   </span>
                 </div>
-                <div className="flex flex-wrap gap-2 text-xs text-gray-400">
-                  <span>Est <span className="text-white">{fmtPct(c.estimate)}</span></span>
-                  <span>@ ask <span className="text-white">{fmtPct(c.ask)}</span></span>
-                  <span className={okay ? "text-green-400" : "text-yellow-500"}>edge {c.edge_pct}% / net {c.net_edge_pct}%</span>
-                  <span>kelly <span className="text-white">{(c.binary_kelly ?? 0).toFixed(3)}</span></span>
-                  <span>size <span className="text-white">${c.size_usd?.toFixed(0)}</span></span>
-                  <span>qty <span className="text-white">{c.qty_contracts}</span></span>
-                  <span>regime <span className="text-white">{c.regime}</span></span>
-                  <span className="text-gray-600">n={c.n_tested}</span>
+                <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+                  <span>Est <span className="text-slate-100">{fmtPct(c.estimate)}</span></span>
+                  <span>@ ask <span className="text-slate-100">{fmtPct(c.ask)}</span></span>
+                  <span className={okay ? "text-emerald-400" : "text-brand-500"}>edge {c.edge_pct}% / net {c.net_edge_pct}%</span>
+                  <span>kelly <span className="text-slate-100">{(c.binary_kelly ?? 0).toFixed(3)}</span></span>
+                  <span>size <span className="text-slate-100">${c.size_usd?.toFixed(0)}</span></span>
+                  <span>qty <span className="text-slate-100">{c.qty_contracts}</span></span>
+                  <span>regime <span className="text-slate-100">{c.regime}</span></span>
+                  <span className="text-slate-600">n={c.n_tested}</span>
                 </div>
               </div>
             );
@@ -334,10 +334,10 @@ export default function DreamDEXPanel() {
       {tab === "positions" && (
         <div className="space-y-2">
           {(data?.positions?.positions ?? []).length === 0 && (
-            <p className="text-xs text-gray-500">No open positions — connect the relay and place a candidate.</p>
+            <p className="text-xs text-slate-500">No open positions — connect the relay and place a candidate.</p>
           )}
           {(data?.positions?.drift_items ?? []).length > 0 && (
-            <p className="text-xs text-yellow-500">Reconciliation drift: {data?.positions?.drift_items!.length} item(s) — check /dreamdex/positions.</p>
+            <p className="text-xs text-brand-500">Reconciliation drift: {data?.positions?.drift_items!.length} item(s) — check /dreamdex/positions.</p>
           )}
           {/* Human-gated settlement sweep (U6/U21) — claim settled winnings */}
           <div className="flex items-center gap-2">
@@ -350,13 +350,13 @@ export default function DreamDEXPanel() {
               {claiming ? "Claiming…" : "Claim settled winnings (REDEEM)"}
             </button>
             {claimResponse && (
-              <span className="text-[10px] font-mono text-gray-500 truncate flex-1">
+              <span className="text-[10px] font-mono text-slate-500 truncate flex-1">
                 {JSON.stringify(claimResponse).slice(0, 160)}
               </span>
             )}
             {/* Claim action hint — surfaced only when settled winnings exist (claimable) */}
             {!claiming && !claimResponse && (status?.claimable ?? 0) > 0 && (
-              <span className="text-[10px] text-yellow-400 flex-1">
+              <span className="text-[10px] text-brand-400 flex-1">
                 {status!.claimable} settled contract(s) awaiting claim — market resolved, run REDEEM to sweep winnings.
               </span>
             )}
@@ -377,26 +377,26 @@ export default function DreamDEXPanel() {
               {claiming ? "Claiming…" : "Redeem settled (claim sweep)"}
             </button>
             {claimResponse && (
-              <span className="text-[10px] font-mono text-gray-500 truncate flex-1">
+              <span className="text-[10px] font-mono text-slate-500 truncate flex-1">
                 {JSON.stringify(claimResponse).slice(0, 160)}
               </span>
             )}
           </div>
-          {fills.length === 0 && <p className="text-xs text-gray-500">No fills yet.</p>}
+          {fills.length === 0 && <p className="text-xs text-slate-500">No fills yet.</p>}
           {fills.map((f: Fill, i: number) => {
             const h = f.txHash ?? f.tx_hash;
             return (
-              <div key={i} className="border border-gray-700 rounded px-3 py-1 text-xs font-mono text-gray-400">
+              <div key={i} className="border border-slate-700 rounded px-3 py-1 text-xs font-mono text-slate-400">
                 {f.symbol ?? f.marketId ?? f.market_id ?? "ec"} · {f.side} · qty {f.qty} · {f.confirmations ?? 0} conf
                 {f.reorg_detected
                   ? <span className="text-red-400"> ⚠ reorg</span>
-                  : <span className="text-green-400"> ✓</span>}
+                  : <span className="text-emerald-400"> ✓</span>}
                 {h && !isStub(h) && (
                   <a className="text-brand-400 underline ml-2" href={`${EXPLORER}/tx/${h}`} target="_blank" rel="noreferrer">
                     <ExternalLink size={10} className="inline" /> {shortTx(h)}
                   </a>
                 )}
-                {h && isStub(h) && <span className="text-gray-600 ml-2">dry-run</span>}
+                {h && isStub(h) && <span className="text-slate-600 ml-2">dry-run</span>}
               </div>
             );
           })}

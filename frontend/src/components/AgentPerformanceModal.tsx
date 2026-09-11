@@ -76,7 +76,7 @@ export default function AgentPerformanceModal({ open, onClose }: Props) {
                             <span className="text-slate-500 text-[10px]">{a.appearances} runs</span>
                             <span className={clsx("text-[10px] px-1.5 py-0.5 rounded",
                               parseInt(successRate) >= 80 ? "bg-emerald-900/50 text-emerald-300" :
-                              parseInt(successRate) >= 50 ? "bg-amber-900/50 text-amber-300" :
+                              parseInt(successRate) >= 50 ? "bg-brand-900/50 text-brand-300" :
                               "bg-red-900/50 text-red-300"
                             )}>
                               {successRate}% success
