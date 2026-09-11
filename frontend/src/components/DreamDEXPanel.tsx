@@ -264,37 +264,45 @@ export default function DreamDEXPanel() {
         </div>
       )}
 
-      {/* Trade ticket (two-phase: quote → confirm) */}
+      {/* Trade ticket (two-phase: quote → confirm) — fixed modal, above chat drawer (z-100) */}
       {ticket && (
-        <div className="border border-brand-500 rounded p-3 bg-slate-900">
-          <p className="text-xs text-slate-100 font-mono mb-2">Trade — {ticket.symbol ?? ticket.market_id}</p>
-          <div className="flex gap-2 items-center flex-wrap">
-            {(["up", "down"] as const).map((s) => (
-              <button key={s} onClick={() => { setSide(s); setConfirming(false); }}
-                className={clsx("px-2 py-1 rounded text-xs", side === s ? "bg-brand-500 text-white" : "bg-slate-800 text-slate-400")}>
-                {s === "up" ? `UP ${fmtPct(ticket.up?.ask)}` : `DOWN ${fmtPct(ticket.down?.ask)}`}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto">
+          <div className="absolute inset-0 bg-slate-950/75" onClick={() => setTicket(null)} />
+          <div className="relative w-[460px] max-w-[94vw] mx-auto my-6 rounded-lg border border-brand-500 bg-slate-900 shadow-2xl p-3.5 max-h-[86vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-slate-100 font-mono">Trade — {ticket.symbol ?? ticket.market_id}</p>
+              <button onClick={() => setTicket(null)} aria-label="Close trade ticket"
+                className="text-[10px] text-slate-500 hover:text-slate-200 px-1.5 rounded border border-slate-700">
+                ✕ close
               </button>
-            ))}
-            <input value={qty} onChange={(e) => { setQty(e.target.value); setConfirming(false); }}
-              className="w-20 bg-slate-800 text-slate-100 text-xs rounded px-2 py-1" inputMode="numeric" placeholder="qty" />
-            <span className="text-xs text-slate-400">≈ <span className="text-slate-100">{cost.toFixed(2)}</span> tUSDC</span>
-          </div>
-          {!confirming ? (
-            <button onClick={place} className="mt-2 text-[11px] px-3 py-1 rounded bg-brand-500 text-white">Place {side.toUpperCase()} order</button>
-          ) : (
-            <button onClick={place} className={clsx("mt-2 text-[11px] px-3 py-1 rounded", "bg-brand-500 text-black")}>
-              <AlertTriangle size={11} className="inline mr-1" />Confirm {side.toUpperCase()} × {qty} at {fmtPct(best)}?
-            </button>
-          )}
-          {placed && (
-            <div className={clsx("text-[11px] mt-1 font-mono", placed.ok ? "text-emerald-400" : "text-red-400")}>
-              {placed.ok ? `✓ filled ${placed.state} ${shortTx(placed.txHash)}` : `✗ ${placed.reason}`}
-              {placed.txHash && !isStub(placed.txHash) && (
-                <a className="text-brand-400 underline ml-2" href={`${EXPLORER}/tx/${placed.txHash}`} target="_blank" rel="noreferrer">view on explorer</a>
-              )}
             </div>
-          )}
-          <button onClick={() => setTicket(null)} className="text-[10px] text-slate-500 mt-1 underline float-right">close</button>
+            <div className="flex gap-2 items-center flex-wrap">
+              {(["up", "down"] as const).map((s) => (
+                <button key={s} onClick={() => { setSide(s); setConfirming(false); }}
+                  className={clsx("px-2 py-1 rounded text-xs", side === s ? "bg-brand-500 text-white" : "bg-slate-800 text-slate-400")}>
+                  {s === "up" ? `UP ${fmtPct(ticket.up?.ask)}` : `DOWN ${fmtPct(ticket.down?.ask)}`}
+                </button>
+              ))}
+              <input value={qty} onChange={(e) => { setQty(e.target.value); setConfirming(false); }}
+                className="w-20 bg-slate-800 text-slate-100 text-xs rounded px-2 py-1" inputMode="numeric" placeholder="qty" />
+              <span className="text-xs text-slate-400">≈ <span className="text-slate-100">{cost.toFixed(2)}</span> tUSDC</span>
+            </div>
+            {!confirming ? (
+              <button onClick={place} className="mt-2.5 text-[11px] px-3 py-1 rounded bg-brand-500 text-white">Place {side.toUpperCase()} order</button>
+            ) : (
+              <button onClick={place} className={clsx("mt-2.5 text-[11px] px-3 py-1 rounded", "bg-brand-500 text-black")}>
+                <AlertTriangle size={11} className="inline mr-1" />Confirm {side.toUpperCase()} × {qty} at {fmtPct(best)}?
+              </button>
+            )}
+            {placed && (
+              <div className={clsx("text-[11px] mt-1 font-mono", placed.ok ? "text-emerald-400" : "text-red-400")}>
+                {placed.ok ? `✓ filled ${placed.state} ${shortTx(placed.txHash)}` : `✗ ${placed.reason}`}
+                {placed.txHash && !isStub(placed.txHash) && (
+                  <a className="text-brand-400 underline ml-2" href={`${EXPLORER}/tx/${placed.txHash}`} target="_blank" rel="noreferrer">view on explorer</a>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

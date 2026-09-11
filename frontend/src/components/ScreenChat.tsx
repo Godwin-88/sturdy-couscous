@@ -292,7 +292,7 @@ export default function ScreenChat({ screen }: { screen: string }) {
       </button>
 
       {open && (
-        <div className="fixed inset-y-0 right-0 z-[55] flex w-[400px] max-w-[92vw] flex-col border-l border-slate-700 bg-slate-900 shadow-2xl">
+        <div className="fixed inset-y-0 right-0 z-[55] flex w-[340px] max-w-[80vw] flex-col border-l border-slate-700 bg-slate-900 shadow-2xl">
           <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-700 bg-slate-950/50">
             <Brain size={15} className="text-brand-400" />
             <div className="flex-1 min-w-0">
