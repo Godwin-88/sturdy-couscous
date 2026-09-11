@@ -4,13 +4,18 @@ Runs the main agent loop: every AGENT_LOOP_INTERVAL_SECONDS it
 coordinates all sub-agents and enforces hard risk limits.
 
 Signal sources per cycle:
-  1. RegimeAgent    — market regime classification
-  2. SignalAgent    — price/vol-based technical signals
-  3. NewsAgent      — RSS sentiment → ticker & concept scores
-  4. MacroCalendar  — upcoming events → pre-event size modifiers
-  5. KGSignalGen    — KG Formula node evaluation
-  6. RiskAgent      — validates and sizes approved orders
-  7. ExecutionAgent — submits approved orders (paper or live)
+  1. RegimeAgent         — market regime classification
+  2. SignalAgent         — price/vol-based technical signals
+  3. NewsAgent           — RSS sentiment → ticker & concept scores
+  4. MacroCalendarAgent  — upcoming events → pre-event size modifiers
+  5. KGSignalGenerator   — KG Formula node evaluation
+  6. HedgeAgent          — paper-options delta hedge advisor (human-gated)
+  7. RiskAgent           — validates and sizes approved orders (shadow mode)
+  8. ExecutionAgent      — submits approved orders (paper or live)
+  9. DreamDEXAgent       — Somnia/DreamDEX Event-Contract candidates (P9)
+ 10. CreditGraphAgent    — Attestcoin × Creditcoin attested credit intents (P10)
+ 11. DeFiAgent           — EVM/Sepolia + EC DeFi strategies D1-D8 (P11)
+ 12. EvidenceChain       — U25/U26 signed hash-chain ledger (per cycle)
 """
 
 import asyncio
@@ -39,6 +44,7 @@ from kg_signal_generator import KGSignalGenerator
 from hedge_agent import HedgeAgent
 from dreamdex_agent import DreamDEXAgent
 from creditgraph_agent import CreditGraphAgent
+from defi_agent import DeFiAgent
 from common.schema_validator import validate_signal
 from jsonschema import ValidationError as SchemaValidationError
 from common.versioning import validate_schema_version
@@ -92,6 +98,7 @@ class Orchestrator:
         self.hedge_agent     = HedgeAgent()
         self.dreamdex_agent  = DreamDEXAgent()
         self.creditgraph_agent = CreditGraphAgent()
+        self.defi_agent = DeFiAgent()
         self.portfolio_peak  = 0.0
         self.halted          = False
         self._tick           = 0
@@ -224,6 +231,21 @@ class Orchestrator:
                     logger.info(f"CreditGraphAgent: {len(credit_candidates)} credit intents")
             except Exception as e:
                 logger.warning(f"CreditGraphAgent failed: {e}")
+
+            # ── Step 2f: DeFiAgent (self-disabling, per-chain venues) ──
+            defi_candidates: list[dict] = []
+            try:
+                defi_candidates = await self.defi_agent.run(
+                    regime=regime, signals=kg_signals
+                )
+                audit["steps"].append(
+                    {"agent": "DeFiAgent", "status": "ok",
+                     "candidates": len(defi_candidates)}
+                )
+                if defi_candidates:
+                    logger.info(f"DeFiAgent: {len(defi_candidates)} DeFi candidates")
+            except Exception as e:
+                logger.warning(f"DeFiAgent failed: {e}")
 
             # ── Step 3: Price/vol signal generation ───────────────────────────
             cycle_id = str(uuid.uuid4())
@@ -358,6 +380,28 @@ class Orchestrator:
 
         audit["cycle_duration_s"] = round(time.time() - cycle_start, 2)
         LOOP_COUNTER.inc()
+
+        # ── EvidenceChain (P11 U25/U26): signed hash-chain of this cycle ──
+        try:
+            from agent.evidence_chain import EvidenceChain
+            from redis import Redis as _EvidenceRedis
+            _evr = _EvidenceRedis(host=os.getenv("REDIS_HOST", "redis"),
+                                 port=int(os.getenv("REDIS_PORT", 6379)), decode_responses=True)
+            _chain = EvidenceChain(store=_evr)
+            _chain.append(
+                cycle_id or "unassigned",
+                audit.get("regime", "?"),
+                {"agents": [step.get("agent") for step in audit.get("steps", [])],
+                 "signals": len(signals),
+                 "defi_candidates": len(defi_candidates)},
+            )
+            audit["evidence_chain"] = {
+                "root": _chain.root(),
+                "merkle_root": _chain.merkle_root(),
+                "verify_ok": _chain.verify_chain(),
+            }
+        except Exception as e:
+            logger.warning(f"EvidenceChain append failed (non-fatal): {e}")
 
         # Persist to Postgres for research endpoints
         try:
