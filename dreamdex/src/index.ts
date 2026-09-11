@@ -12,11 +12,23 @@ import { FillsLedger } from "./fills.js";
 import { OrderService } from "./order.js";
 import { ClaimService } from "./claim.js";
 
+// ── U3/U17 resilience: a single errant chain call must NEVER kill the relay ──
+// Node exits on unhandled async rejections unless a handler is installed.
+// The relay is a long-running operator of the agent's execution path — it logs
+// and continues, surfacing the failure via /status.systemHealth instead.
+process.on("unhandledRejection", (err: unknown) => {
+  const msg = err instanceof Error ? `${err.message} — ${String(err.stack ?? "").slice(0, 500)}` : String(err);
+  console.error(`[relay] unhandled async rejection (non-fatal): ${msg.slice(0, 800)}`);
+});
+process.on("uncaughtException", (err: Error) => {
+  console.error(`[relay] uncaught exception (non-fatal): ${err.message}`);
+});
+
 const cfg = loadConfig();
 const sdk = new SdkAdapter(cfg);
 const fills = new FillsLedger(sdk, cfg.requiredConfirmations);
 const orders = new OrderService(cfg, sdk, fills);
-const claims = new ClaimService(cfg, sdk, fills, async () => 0); // stub balance
+const claims = new ClaimService(cfg, sdk, fills, () => sdk.collateralBalance());
 
 const app = express();
 app.use(express.json());
@@ -57,7 +69,7 @@ app.get("/status", (_req, res) => {
     mode: cfg.mode,
     network: cfg.network,
     venueId: cfg.venueId,
-    wallet: cfg.wallet.slice(0, 6) + "…",
+    wallet: cfg.wallet, // full address — display truncation happens in the API/frontend
     dryRun: cfg.dryRun,
     lastSnapshotAt: null,
     claimable: fills.all.filter((f) => f.state === "filled").length,
@@ -86,16 +98,39 @@ app.get("/markets", async (_req, res) => {
 // ── POST /order — C-E-I order path (rate-limited) ─────────────────────────
 app.post("/order", async (req, res) => {
   if (!rateLimit(req, res, cfg.rateLimitPerMin)) return;
-  const body = req.body as { marketId?: string; side?: string; qty?: number };
-  const qty = body?.qty;
-  if (!body?.marketId || (body.side !== "up" && body.side !== "down") || !Number.isFinite(qty)) {
-    res.status(400).json({ error: "marketId, side (up|down), qty required" });
-    return;
+  try {
+    const body = req.body as { marketId?: string; side?: string; qty?: number };
+    const qty = body?.qty;
+    if (!body?.marketId || (body.side !== "up" && body.side !== "down") || !Number.isFinite(qty)) {
+      res.status(400).json({ error: "marketId, side (up|down), qty required" });
+      return;
+    }
+    const result = await orders.place({
+      marketId: body.marketId, side: body.side, qty: Math.floor(qty as number),
+    });
+    res.json(result);
+  } catch (e) {
+    // Interpret a chain revert/stall as a clean rejection, never a crash.
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[relay] /order inner error (non-fatal): ${msg.slice(0, 400)}`);
+    res.status(502).json({
+      ok: false, state: "rejected", reason: `execution error: ${msg.slice(0, 200)}`,
+    });
   }
-  const result = await orders.place({
-    marketId: body.marketId, side: body.side, qty: Math.floor(qty as number),
-  });
-  res.json(result);
+});
+
+// ── GET /balances — live SOMI (gas) + tUSDC (collateral) read, read-only ─
+app.get("/balances", async (_req, res) => {
+  try {
+    const b = await sdk.balances();
+    res.json({
+      somi: Number(b.somiWei) / 1e18,
+      tusdc: Number(b.tusdcRaw) / 1e6,
+      raw: { somiWei: b.somiWei, tusdcRaw: b.tusdcRaw },
+    });
+  } catch (e) {
+    res.status(502).json({ error: String(e) });
+  }
 });
 
 // ── GET /positions, /fills — ledger views with U14 confirmations ───────────

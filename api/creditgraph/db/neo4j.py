@@ -38,11 +38,18 @@ class _AsyncResult:
         return self._aiter()
 
     async def _aiter(self) -> AsyncIterator[Any]:
-        while True:
-            try:
-                row = await asyncio.to_thread(next, self._r)
-            except StopIteration:
-                return
+        # neo4j 4.x sync ``Result`` (probed live): has ``data()`` and ``__iter__``
+        # (a generator) but NOT ``records()`` and NOT ``__next__``. So materialise
+        # via ``data()`` when present (returns list[dict]), otherwise fall back to
+        # ``list(result)`` (works for both the real driver and test fakes).
+        r = self._r
+        if hasattr(r, "data") and callable(r.data):
+            rows = await asyncio.to_thread(r.data)
+            for row in rows:
+                yield row
+            return
+        rows = await asyncio.to_thread(list, r)
+        for row in rows:
             yield row
 
 

@@ -35,6 +35,7 @@ SCREEN_HINTS: dict[str, str] = {
     "intelligence":  "market regime forecast news sentiment macro",
     "analytics":     "time series stationarity cointegration regression machine learning",
     "hypothesis":    "hypothesis testing statistical significance backtest evidence",
+    "dreamdex":      "event contract binary prediction market probability edge kelly strike settlement claim resolution alpha",
 }
 
 
@@ -128,6 +129,15 @@ def _live_screen_data(screen: str, params: dict | None = None) -> dict:
 
     if screen == "graph":
         _get("/graph/nodes?node_type=Strategy&limit=30", "strategy_nodes")
+
+    if screen == "dreamdex":
+        # DreamDEX is a first-class screen: bundle live relay state so the
+        # financial engineer can reason over real Event-Contract books.
+        _get("/dreamdex/markets", "dreamdex_markets")
+        _get("/dreamdex/candidates", "dreamdex_candidates")
+        _get("/dreamdex/positions", "dreamdex_positions")
+        _get("/dreamdex/fills", "dreamdex_fills")
+        _get("/dreamdex/status", "dreamdex_status")
 
     # Authoritative screen regime for options/crypto = its OWN tape-derived
     # regime (or user override), NOT the global SPY label. The LLM is

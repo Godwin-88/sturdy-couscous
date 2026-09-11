@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./env.js";
 
 /** RelayConfig — typed view of the relay environment (see .env.example). */
 export interface RelayConfig {
@@ -7,7 +7,10 @@ export interface RelayConfig {
   network: string;
   venueId: string;
   rpcUrl: string;
+  indexerUrl: string;      // Envio/Hasura GraphQL — market discovery (SDK)
+  wsRpcUrl: string;        // chain WebSocket — on-chain reads/writes (SDK)
   wallet: string;
+  privateKey?: string;     // SOMNIA_PRIVATE_KEY (0x-prefixed); relay container only
   hasKey: boolean;
   autoClaim: boolean;
   autoClaimIntervalMs: number;
@@ -30,7 +33,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RelayConfig {
     network: env["DREAMDEX_NETWORK"] ?? "testnet",
     venueId: env["VENUE_ID"] ?? "",
     rpcUrl: env["SOMNIA_RPC_URL"] ?? "https://dream-rpc.somnia.network",
+    indexerUrl: env["SOMNIA_INDEXER_URL"] ?? (env["DREAMDEX_NETWORK"] === "mainnet"
+      ? "https://prd.smk.somnia.host/v1/graphql"
+      : "https://dev.smk.somnia.host/v1/graphql"),
+    wsRpcUrl: env["SOMNIA_WS_RPC_URL"] ?? (env["DREAMDEX_NETWORK"] === "mainnet"
+      ? "wss://api.infra.mainnet.somnia.network/ws"
+      : "wss://api.infra.testnet.somnia.network/ws"),
     wallet: env["SOMNIA_WALLET_ADDRESS"] ?? "",
+    privateKey: env["SOMNIA_PRIVATE_KEY"]?.trim() || undefined,
     hasKey: Boolean(env["SOMNIA_PRIVATE_KEY"]),
     autoClaim: boolOf(env["AUTO_CLAIM"], true),
     autoClaimIntervalMs: parseInt(env["AUTO_CLAIM_INTERVAL_MS"] ?? "600000", 10),

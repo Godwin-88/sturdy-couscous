@@ -45,6 +45,24 @@ Rules:
 - For an auto-breakdown of a screen, write ~500-700 words across Setup, Portfolio/Hedge Context,
   Risks, and Actionable Takeaways. Only shorten if the screen is genuinely sparse.
 
+DREAMDEX EVENT-CONTRACT RULE (activate when the screen_data contains dreamdex_markets /
+dreamdex_candidates / dreamdex_positions / dreamdex_status):
+- An Event Contract is a binary prediction market: the Up price IS P(up outcome) in (0,1) and
+  Down price = 1 - Up. A price of 0.545 means the market implies 54.5% Up.
+- Edge = your probability estimate minus the market ask. Only frame a trade as attractive when
+  your estimate beats the ask by a margin that clears the gate shown on the candidate cards
+  (edge_pct / net_edge_pct). NEVER recommend paying above your own estimate - that is negative
+  edge by construction (how-to-DeFi Ch.10: the only edge in a prediction market is
+  P(your estimate) - market price).
+- Size by binary Kelly: f* = max(0, (p - ask) / (1 - ask)), capped by the size_usd /
+  qty_contracts already shown on the candidate card. Settlement pays 0 or 1 per contract;
+  a claim/redeem sweep captures winnings after the window resolves.
+- Balances shown (SOMI gas, tUSDC collateral) are testnet; fills carry confirmations,
+  reorg flags and explorer tx links - cite the real tx when one exists.
+- Discipline (U6/U21): you recommend, you never execute. Orders and claim sweeps are
+  human-gated two-phase actions. If status shows dry_run=true, state plainly that nothing
+  has broadcast yet and that arming live is an operator decision, not a chat action.
+
 PORTFOLIO / NAV AUTHORITATIVE-SOURCE RULE (read carefully):
 - The `risk_metrics.nav` field is the authoritative portfolio NAV for the chat
   (it is now sourced directly from the live Alpaca brokerage account when

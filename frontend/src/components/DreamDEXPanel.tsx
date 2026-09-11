@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Shield, AlertTriangle, ExternalLink } from "lucide-react";
 import clsx from "clsx";
 import { setScreenContext } from "../lib/screenContext";
 import { usePolling } from "../hooks/usePolling";
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const EXPLORER = "https://shannon-explorer.somnia.network";
 
 interface Market {
   marketId?: string;
@@ -15,6 +16,7 @@ interface Market {
   category?: string;
   status?: number;
   closes_at?: string;
+  closesAt?: string;
   up?: { ask?: number; bid?: number; last?: number };
   down?: { ask?: number; bid?: number; last?: number };
 }
@@ -44,18 +46,38 @@ interface Status {
   relay_reachable?: boolean;
   dry_run?: boolean;
   wallet_short?: string;
+  claimable?: number;
+  balances?: { somi?: number | null; tusdc?: number | null };
   gates?: { freeze?: boolean; audit_chain_ok?: boolean; determinism_ok?: boolean };
 }
 
+interface Fill {
+  marketId?: string;
+  market_id?: string;
+  symbol?: string;
+  side?: string;
+  qty?: number;
+  txHash?: string;
+  tx_hash?: string;
+  confirmations?: number;
+  reorg_detected?: boolean;
+  mode?: string;
+  state?: string;
+  timestamp?: string | number;
+}
+
 interface TypedData {
-  markets?: { markets?: Market[]; cached?: boolean };
+  markets?: { markets?: Market[]; cached?: boolean; live?: boolean };
   candidates?: { candidates?: Candidate[]; cached?: boolean };
   status?: Status;
   positions?: { positions?: unknown[]; drift_items?: unknown[] };
-  fills?: { fills?: unknown[] };
+  fills?: { fills?: Fill[] };
 }
 
-const fmtPct = (x?: number) => x === undefined ? "—" : `${(x * 100).toFixed(1)}%`;
+const fmtPct = (x?: number) => (x === undefined ? "—" : `${(x * 100).toFixed(1)}%`);
+const fmtNum = (x?: number | null) => (x === undefined || x === null ? "—" : x.toLocaleString(undefined, { maximumFractionDigits: 2 }));
+const isStub = (h?: string) => !!h && h.startsWith("stub_");
+const shortTx = (h?: string) => (h && !isStub(h) ? h.slice(0, 10) + "…" : (h ?? ""));
 
 export default function DreamDEXPanel() {
   const { data, error, loading, refresh } = usePolling<TypedData>(async () => {
@@ -73,39 +95,115 @@ export default function DreamDEXPanel() {
   const candidates = data?.candidates?.candidates ?? [];
   const status = data?.status;
   const fills = data?.fills?.fills ?? [];
+  const liveSource = (data?.markets as { live?: boolean } | undefined)?.live === true;
 
-  const [tab, setTab] = useState<"markets" | "candidates" | "positions" | "fills">("candidates");
+  const [tab, setTab] = useState<"markets" | "candidates" | "positions" | "fills">("markets");
+
+  // ── Two-phase trade ticket (human-in-the-loop, U6/U21) ────────────────────
+  const [ticket, setTicket] = useState<Market | null>(null);
+  const [side, setSide] = useState<"up" | "down">("up");
+  const [qty, setQty] = useState("1");
+  const [confirming, setConfirming] = useState(false);
+  const [placed, setPlaced] = useState<{ ok: boolean; reason?: string; txHash?: string; state?: string } | null>(null);
+
+  const openTicket = (m: Market) => {
+    setTicket(m);
+    setSide("up");
+    setQty("1");
+    setConfirming(false);
+    setPlaced(null);
+  };
+  const place = async () => {
+    if (!ticket) return;
+    const n = Number(qty);
+    if (!Number.isFinite(n) || n < 1) return;
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+    try {
+      const r = await fetch(`${API}/dreamdex/order`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          marketId: ticket.marketId ?? ticket.market_id ?? "",
+          side,
+          qty: n,
+        }),
+      });
+      const j = await r.json();
+      setPlaced(j);
+      if (j.ok) {
+        setConfirming(false);
+        setTicket(null);
+        refresh();
+      }
+    } catch (e) {
+      setPlaced({ ok: false, reason: String(e) });
+    }
+  };
+
+  // ── Claim / Redeem (human-gated settlement sweep, U6/U21) ─────────────────
+  const [claiming, setClaiming] = useState(false);
+  const [claimResponse, setClaimResponse] = useState<{ ok?: boolean; results?: unknown[]; error?: string } | null>(null);
+
+  const runClaim = async () => {
+    if (claiming) return;
+    setClaiming(true);
+    setClaimResponse(null);
+    try {
+      const r = await fetch(`${API}/dreamdex/claim`, { method: "POST" });
+      const j = await r.json();
+      setClaimResponse(j);
+      refresh();
+    } catch (e) {
+      setClaimResponse({ ok: false, error: String(e) });
+    } finally {
+      setClaiming(false);
+    }
+  };
 
   useMemo(() => {
     setScreenContext("dreamdex", { screen: "dreamdex", extra: { ...status } });
   }, [status]);
 
+  const best = ticket ? (side === "up" ? ticket.up?.ask : ticket.down?.ask) : undefined;
+  const cost = (best ?? 0) * (Number(qty) || 0);
+
   return (
     <div className="p-4 space-y-4">
-      {/* Status bar */}
-      <div className="flex items-center gap-3 text-xs text-gray-400 border border-gray-700 rounded px-3 py-2">
+      {/* Status bar + live wallet strip */}
+      <div className="flex items-center gap-3 text-xs text-gray-400 border border-gray-700 rounded px-3 py-2 flex-wrap">
         <span className={clsx("w-2 h-2 rounded-full", !status?.enabled ? "bg-gray-500" : status?.relay_reachable ? "bg-green-400" : "bg-yellow-500")} />
         <span>
           {!status?.enabled
             ? "DreamDEX disabled — set DREAMDEX_ENABLED=1"
             : status?.relay_reachable
-              ? (status?.dry_run ? "DreamDEX connected (DRY-RUN)" : "DreamDEX connected (LIVE)")
+              ? (status?.dry_run ? "DreamDEX connected (DRY-RUN — nothing broadcasts)" : "DreamDEX connected (LIVE)")
               : "Relay unreachable — candidates stale"}
         </span>
         {status?.mode && <span className="ml-auto font-mono">{status.mode.toUpperCase()}</span>}
-        {status?.wallet_short && <span className="font-mono">{status.wallet_short}</span>}
+        {status?.wallet_short && (
+          <a className="font-mono text-brand-400 underline decoration-dotted" href={`${EXPLORER}/address/${status.wallet_short}`} target="_blank" rel="noreferrer">
+            {status.wallet_short}
+          </a>
+        )}
+        {/* Live wallet balances (read-only) */}
+        {status?.balances && (
+          <span className="font-mono text-green-400" title="Live Somnia balances">
+            Ⓢ {fmtNum(status.balances.somi)} SOMI · {fmtNum(status.balances.tusdc)} tUSDC
+          </span>
+        )}
+        {!status?.dry_run && <span className="text-yellow-400 text-[10px]">● LIVE ARM</span>}
+        {status?.gates?.freeze && (
+          <span className="text-red-400 text-[10px] font-bold border border-red-500/60 rounded px-1.5 bg-red-500/10" title="U6 kill-switch active — orders/claims rejected with 423">
+            🔒 FROZEN — ALL ORDER & CLAIM ACTIONS BLOCKED
+          </span>
+        )}
         {loading && <RefreshCw size={12} className="animate-spin" />}
       </div>
 
-      {/* Three-lamp safety gates (U24) */}
-      {status?.gates && (
-        <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono">
-          <span className={clsx("w-1.5 h-1.5 rounded-full", status.gates.freeze ? "bg-red-500" : "bg-green-400")} />freeze
-          <span className={clsx("w-1.5 h-1.5 rounded-full", status.gates.audit_chain_ok ? "bg-green-400" : "bg-yellow-500")} />audit
-          <span className={clsx("w-1.5 h-1.5 rounded-full", status.gates.determinism_ok ? "bg-green-400" : "bg-red-500")} />determinism
-          {error && <span className="text-red-400 ml-auto">{error.slice(0, 60)}</span>}
-        </div>
-      )}
+      {error && <div className="text-xs text-red-400">Poll error: {error}</div>}
 
       {/* Tab nav */}
       <div className="flex gap-2 border-b border-gray-700 pb-2">
@@ -113,44 +211,90 @@ export default function DreamDEXPanel() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={clsx(
-              "text-xs px-3 py-1 rounded capitalize transition-colors",
-              tab === t ? "bg-brand-600 text-white" : "text-gray-400 hover:text-white"
-            )}
+            className={`text-xs px-3 py-1 rounded capitalize transition-colors
+              ${tab === t ? "bg-brand-500 text-white" : "text-gray-400 hover:text-white"}`}
           >
             {t}
-            {t === "candidates" && candidates.length > 0 && (
-              <span className="ml-1 bg-yellow-500 text-black text-[10px] rounded-full px-1">{candidates.length}</span>
+            {t === "markets" && markets.length > 0 && (
+              <span className="ml-1 bg-brand-400 text-white text-[10px] rounded-full px-1">{markets.length}</span>
+            )}
+            {t === "fills" && fills.length > 0 && (
+              <span className="ml-1 bg-yellow-500 text-black text-[10px] rounded-full px-1">{fills.length}</span>
             )}
           </button>
         ))}
-        <button onClick={refresh} className="text-xs px-2 py-1 text-gray-400 hover:text-white" title="Refresh">
-          <RefreshCw size={12} />
-        </button>
+        {liveSource && (
+          <span className="text-[10px] text-brand-400 ml-2" title="Agent cache cold — showing the fresh live relay snapshot">● live</span>
+        )}
       </div>
-      {/* Markets tab */}
+
+      {/* Markets tab — live books + trade ticket */}
       {tab === "markets" && (
         <div className="space-y-2">
-          {markets.length === 0 && <p className="text-xs text-gray-500">No markets loaded — is the relay reachable?</p>}
-          {markets.map((m) => {
-            const marketId = m.marketId ?? m.market_id ?? "?";
-            return (
-              <div key={marketId} className="border border-gray-700 rounded p-3 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-white font-mono">{m.symbol ?? marketId}</span>
-                  <span className={clsx("text-[10px]", m.status === 0 ? "text-green-400" : "text-yellow-500")}>
-                    {["Trading", "Locked", "Resolved", "Voided", "Rolled"][m.status ?? 0] ?? `st${m.status}`}
-                  </span>
+          {markets.length === 0 && (
+            <p className="text-xs text-gray-500">No markets loaded — relay offline or venue has no open windows.</p>
+          )}
+          {([...markets].sort((a: Market, b: Market) =>
+            (a.closes_at ?? a.closesAt ?? "").localeCompare(b.closes_at ?? b.closesAt ?? "")))
+            .map((m: Market, i: number) => {
+              const tradable = m.status === 1 && (m.up?.ask ?? 0) > 0;
+              return (
+                <div key={m.marketId ?? m.market_id ?? i} className={clsx("border rounded p-3 space-y-1", tradable ? "border-brand-500/40" : "border-gray-700 opacity-60")}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-white font-mono">{m.symbol ?? m.title ?? m.market_id ?? "ec"}</span>
+                    <span className={clsx("text-[10px] px-1.5 rounded", tradable ? "bg-green-400/10 text-green-400" : "bg-gray-600 text-gray-400")}>
+                      {m.status === 1 ? "TRADING" : `status ${m.status}`}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 text-xs text-gray-400">
+                    <span className={(m.asset ?? "crypto").toLowerCase() === "btc" ? "text-orange-400" : "text-sky-300"}>{(m.asset ?? "crypto").toUpperCase()}</span>
+                    <span>·</span>
+                    <span>Up {fmtPct(m.up?.ask)} / Down {fmtPct(m.down?.ask)}</span>
+                    {(m.closes_at || m.closesAt) && <span>· closes {new Date(m.closes_at ?? m.closesAt ?? "").toLocaleTimeString()}</span>}
+                    {tradable && (
+                      <button onClick={() => openTicket(m)}
+                        className="ml-auto text-[10px] px-2 py-0.5 rounded bg-brand-500/15 text-brand-300 hover:bg-brand-500/30">
+                        <Shield size={10} className="inline mr-1" />Trade
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex gap-2 text-xs text-gray-400">
-                  <span className="capitalize">{m.category ?? m.asset ?? "crypto"}</span>
-                  <span>·</span>
-                  <span>Up {fmtPct(m.up?.ask)} / Down {fmtPct(m.down?.ask)}</span>
-                  {m.closes_at && <span>· closes {new Date(m.closes_at).toLocaleString()}</span>}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+        </div>
+      )}
+
+      {/* Trade ticket (two-phase: quote → confirm) */}
+      {ticket && (
+        <div className="border border-brand-500 rounded p-3 bg-slate-900">
+          <p className="text-xs text-white font-mono mb-2">Trade — {ticket.symbol ?? ticket.market_id}</p>
+          <div className="flex gap-2 items-center flex-wrap">
+            {(["up", "down"] as const).map((s) => (
+              <button key={s} onClick={() => { setSide(s); setConfirming(false); }}
+                className={clsx("px-2 py-1 rounded text-xs", side === s ? "bg-brand-500 text-white" : "bg-slate-800 text-gray-400")}>
+                {s === "up" ? `UP ${fmtPct(ticket.up?.ask)}` : `DOWN ${fmtPct(ticket.down?.ask)}`}
+              </button>
+            ))}
+            <input value={qty} onChange={(e) => { setQty(e.target.value); setConfirming(false); }}
+              className="w-20 bg-slate-800 text-white text-xs rounded px-2 py-1" inputMode="numeric" placeholder="qty" />
+            <span className="text-xs text-gray-400">≈ <span className="text-white">{cost.toFixed(2)}</span> tUSDC</span>
+          </div>
+          {!confirming ? (
+            <button onClick={place} className="mt-2 text-[11px] px-3 py-1 rounded bg-brand-500 text-white">Place {side.toUpperCase()} order</button>
+          ) : (
+            <button onClick={place} className={clsx("mt-2 text-[11px] px-3 py-1 rounded", "bg-yellow-500 text-black")}>
+              <AlertTriangle size={11} className="inline mr-1" />Confirm {side.toUpperCase()} × {qty} at {fmtPct(best)}?
+            </button>
+          )}
+          {placed && (
+            <div className={clsx("text-[11px] mt-1 font-mono", placed.ok ? "text-green-400" : "text-red-400")}>
+              {placed.ok ? `✓ filled ${placed.state} ${shortTx(placed.txHash)}` : `✗ ${placed.reason}`}
+              {placed.txHash && !isStub(placed.txHash) && (
+                <a className="text-brand-400 underline ml-2" href={`${EXPLORER}/tx/${placed.txHash}`} target="_blank" rel="noreferrer">view on explorer</a>
+              )}
+            </div>
+          )}
+          <button onClick={() => setTicket(null)} className="text-[10px] text-gray-500 mt-1 underline float-right">close</button>
         </div>
       )}
 
@@ -158,9 +302,7 @@ export default function DreamDEXPanel() {
       {tab === "candidates" && (
         <div className="space-y-2">
           {candidates.length === 0 && (
-            <p className="text-xs text-gray-500">
-              No candidates this cycle — no market cleared the multiplicity-corrected edge gate.
-            </p>
+            <p className="text-xs text-gray-500">No candidates this cycle — no market cleared the multiplicity-corrected edge gate.</p>
           )}
           {candidates.map((c, i) => {
             const okay = (c.net_edge_pct ?? 0) > 0;
@@ -175,9 +317,7 @@ export default function DreamDEXPanel() {
                 <div className="flex flex-wrap gap-2 text-xs text-gray-400">
                   <span>Est <span className="text-white">{fmtPct(c.estimate)}</span></span>
                   <span>@ ask <span className="text-white">{fmtPct(c.ask)}</span></span>
-                  <span className={okay ? "text-green-400" : "text-yellow-500"}>
-                    edge {c.edge_pct}% / net {c.net_edge_pct}%
-                  </span>
+                  <span className={okay ? "text-green-400" : "text-yellow-500"}>edge {c.edge_pct}% / net {c.net_edge_pct}%</span>
                   <span>kelly <span className="text-white">{(c.binary_kelly ?? 0).toFixed(3)}</span></span>
                   <span>size <span className="text-white">${c.size_usd?.toFixed(0)}</span></span>
                   <span>qty <span className="text-white">{c.qty_contracts}</span></span>
@@ -189,6 +329,7 @@ export default function DreamDEXPanel() {
           })}
         </div>
       )}
+
       {/* Positions tab */}
       {tab === "positions" && (
         <div className="space-y-2">
@@ -198,19 +339,67 @@ export default function DreamDEXPanel() {
           {(data?.positions?.drift_items ?? []).length > 0 && (
             <p className="text-xs text-yellow-500">Reconciliation drift: {data?.positions?.drift_items!.length} item(s) — check /dreamdex/positions.</p>
           )}
+          {/* Human-gated settlement sweep (U6/U21) — claim settled winnings */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={runClaim}
+              disabled={claiming}
+              className="text-[10px] px-2.5 py-1 rounded bg-brand-500/15 text-brand-300 hover:bg-brand-500/30 disabled:opacity-40 flex items-center gap-1"
+            >
+              <Shield size={10} className="inline" />
+              {claiming ? "Claiming…" : "Claim settled winnings (REDEEM)"}
+            </button>
+            {claimResponse && (
+              <span className="text-[10px] font-mono text-gray-500 truncate flex-1">
+                {JSON.stringify(claimResponse).slice(0, 160)}
+              </span>
+            )}
+            {/* Claim action hint — surfaced only when settled winnings exist (claimable) */}
+            {!claiming && !claimResponse && (status?.claimable ?? 0) > 0 && (
+              <span className="text-[10px] text-yellow-400 flex-1">
+                {status!.claimable} settled contract(s) awaiting claim — market resolved, run REDEEM to sweep winnings.
+              </span>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Fills tab (U14: confirmations / reorg) */}
+      {/* Fills tab (U14: confirmations / reorg + explorer links) */}
       {tab === "fills" && (
         <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={runClaim}
+              disabled={claiming}
+              className="text-[10px] px-2.5 py-1 rounded bg-brand-500/15 text-brand-300 hover:bg-brand-500/30 disabled:opacity-40 flex items-center gap-1"
+            >
+              <Shield size={10} className="inline" />
+              {claiming ? "Claiming…" : "Redeem settled (claim sweep)"}
+            </button>
+            {claimResponse && (
+              <span className="text-[10px] font-mono text-gray-500 truncate flex-1">
+                {JSON.stringify(claimResponse).slice(0, 160)}
+              </span>
+            )}
+          </div>
           {fills.length === 0 && <p className="text-xs text-gray-500">No fills yet.</p>}
-          {fills.map((f: any, i: number) => (
-            <div key={i} className="border border-gray-700 rounded px-3 py-1 text-xs font-mono text-gray-400">
-              {f.marketId ?? f.market_id ?? "ec"} · {f.side} · qty {f.qty} · {f.confirmations ?? 0} conf
-              {f.reorg_detected ? <span className="text-red-400"> ⚠ reorg</span> : <span className="text-green-400"> ✓</span>}
-            </div>
-          ))}
+          {fills.map((f: Fill, i: number) => {
+            const h = f.txHash ?? f.tx_hash;
+            return (
+              <div key={i} className="border border-gray-700 rounded px-3 py-1 text-xs font-mono text-gray-400">
+                {f.symbol ?? f.marketId ?? f.market_id ?? "ec"} · {f.side} · qty {f.qty} · {f.confirmations ?? 0} conf
+                {f.reorg_detected
+                  ? <span className="text-red-400"> ⚠ reorg</span>
+                  : <span className="text-green-400"> ✓</span>}
+                {h && !isStub(h) && (
+                  <a className="text-brand-400 underline ml-2" href={`${EXPLORER}/tx/${h}`} target="_blank" rel="noreferrer">
+                    <ExternalLink size={10} className="inline" /> {shortTx(h)}
+                  </a>
+                )}
+                {h && isStub(h) && <span className="text-gray-600 ml-2">dry-run</span>}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

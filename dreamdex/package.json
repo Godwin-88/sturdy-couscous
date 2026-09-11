@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "doctor": "tsx src/doctor.ts",
+    "fund": "tsx src/fund.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "crypto-hygiene": "tsx src/cryptoHygiene.ts",
     "test": "npm run typecheck && npm run crypto-hygiene"

@@ -34,7 +34,12 @@ def relay_status() -> dict[str, Any]:
     try:
         r = httpx.get(f"{RELAY_BASE}/status", headers=_headers(), timeout=TIMEOUT)
         r.raise_for_status()
-        return r.json()
+        j = r.json()
+        # Normalise relay camelCase -> snake_case + success flag so downstream
+        # routes read stable keys (the relay response itself has no `reachable`).
+        j["reachable"] = True
+        j["dry_run"] = j.get("dryRun", j.get("dry_run", True))
+        return j
     except Exception as e:
         logger.warning(f"[DreamDEX] relay /status failed: {e}")
         return {"mode": "paper", "network": "unknown", "reachable": False}
@@ -90,6 +95,17 @@ def get_fills() -> list[dict[str, Any]]:
         return []
 
 
+def get_balances() -> dict[str, Any]:
+    """Live SOMI (gas) + tUSDC (collateral) balances from the relay (read-only)."""
+    try:
+        r = httpx.get(f"{RELAY_BASE}/balances", headers=_headers(), timeout=TIMEOUT)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        logger.warning(f"[DreamDEX] relay /balances failed: {e}")
+        return {"somi": None, "tusdc": None}
+
+
 def claim() -> dict[str, Any]:
     """Trigger the settlement claim sweep on the relay (human-gated at API layer)."""
     try:
@@ -107,5 +123,6 @@ __all__ = [
     "place_order",
     "get_positions",
     "get_fills",
+    "get_balances",
     "claim",
 ]
