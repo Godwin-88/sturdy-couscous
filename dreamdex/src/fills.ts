@@ -8,11 +8,12 @@
 import type { MarketRow } from "./sdkAdapter.js";
 import { SdkAdapter } from "./sdkAdapter.js";
 
-export type FillState = "pending" | "reverted" | "filled" | "credited";
+export type FillState = "pending" | "reverted" | "filled" | "credited" | "rejected";
 
 export interface Fill {
   intentId: string;
   marketId: string;
+  marketSymbol?: string;
   side: "up" | "down";
   qty: number;
   estPrice: number;
@@ -21,6 +22,7 @@ export interface Fill {
   confirmations: number;
   reorgDetected: boolean;
   txHash?: string;
+  reason?: string;
   ts: string;
 }
 
@@ -64,7 +66,26 @@ export class FillsLedger {
     const f = this.find(intentId);
     if (!f || f.state !== "pending") return;
     f.state = "reverted";
-    void reason;
+    f.reason = reason;
+  }
+
+  /**
+   * Record a rejection / revert that never produced a fill. Gives the UI a
+   * visible trail for on-chain verdicts (OrderAlreadyExpired, IOC no-fill, …)
+   * so a failed attempt is never silent (U5: reconcile, show the outcome).
+   */
+  recordRejection(market: MarketRow, side: "up" | "down", qty: number, reason: string, estPrice?: number): void {
+    this.fills.push({
+      intentId: `rej_${Date.now()}_${this.fills.length}`,
+      marketId: market.marketId,
+      marketSymbol: market.symbol,
+      side, qty,
+      estPrice: estPrice ?? (side === "up" ? market.up.ask : market.down.ask),
+      state: "rejected",
+      confirmations: 0, reorgDetected: false,
+      reason,
+      ts: new Date().toISOString(),
+    });
   }
 
   /**

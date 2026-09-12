@@ -54,6 +54,7 @@ interface Status {
 interface Fill {
   marketId?: string;
   market_id?: string;
+  marketSymbol?: string;
   symbol?: string;
   side?: string;
   qty?: number;
@@ -61,9 +62,13 @@ interface Fill {
   tx_hash?: string;
   confirmations?: number;
   reorg_detected?: boolean;
+  reorgDetected?: boolean;
   mode?: string;
   state?: string;
+  reason?: string;
+  fillPrice?: number;
   timestamp?: string | number;
+  ts?: string;
 }
 
 interface TypedData {
@@ -78,6 +83,22 @@ const fmtPct = (x?: number) => (x === undefined ? "—" : `${(x * 100).toFixed(1
 const fmtNum = (x?: number | null) => (x === undefined || x === null ? "—" : x.toLocaleString(undefined, { maximumFractionDigits: 2 }));
 const isStub = (h?: string) => !!h && h.startsWith("stub_");
 const shortTx = (h?: string) => (h && !isStub(h) ? h.slice(0, 10) + "…" : (h ?? ""));
+
+// Common on-chain rejection reasons → human-readable guidance (testnet realities).
+const REJECT_HINT: [RegExp, string][] = [
+  [/order.?already.?expired|already.?expired|expired/i,
+   "The window closed between the quote and broadcast — pick a market with more time remaining (red CLOSING tag = within 90s)."],
+  [/no.?fill|ioc|maker|cross/i,
+   "Immediate-or-cancel found no crossing maker at the ask — retry qty 1 on a market with deeper book depth."],
+  [/insufficient|gas|out of gas|exceeds/i,
+   "Gas too low to broadcast — top up SOMI from the Somnia testnet faucet."],
+  [/allowance|approve|sender|spend/i,
+   "The wallet hasn't approved spend for this venue — run the one-time ERC-20 approval first."],
+];
+const hintFor = (r?: string): string | null => {
+  const hit = REJECT_HINT.find(([re]) => re.test(r ?? ""));
+  return hit ? hit[1] : null;
+};
 
 export default function DreamDEXPanel() {
   const { data, error, loading, refresh } = usePolling<TypedData>(async () => {
@@ -136,6 +157,7 @@ export default function DreamDEXPanel() {
       if (j.ok) {
         setConfirming(false);
         setTicket(null);
+        setTab("fills"); // jump straight to the visible result trail
         refresh();
       }
     } catch (e) {
@@ -237,25 +259,33 @@ export default function DreamDEXPanel() {
           {([...markets].sort((a: Market, b: Market) =>
             (a.closes_at ?? a.closesAt ?? "").localeCompare(b.closes_at ?? b.closesAt ?? "")))
             .map((m: Market, i: number) => {
-              const tradable = m.status === 1 && (m.up?.ask ?? 0) > 0;
+              const closesAt = m.closes_at ?? m.closesAt ?? "";
+              const msLeft = closesAt ? new Date(closesAt).getTime() - Date.now() : Infinity;
+              const expiring = Number.isFinite(msLeft) && msLeft <= 90_000;
+              const tradable = m.status === 1 && (m.up?.ask ?? 0) > 0 && !expiring;
               return (
                 <div key={m.marketId ?? m.market_id ?? i} className={clsx("border rounded p-3 space-y-1", tradable ? "border-brand-500/40" : "border-slate-700 opacity-60")}>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-100 font-mono">{m.symbol ?? m.title ?? m.market_id ?? "ec"}</span>
-                    <span className={clsx("text-[10px] px-1.5 rounded", tradable ? "bg-emerald-400/10 text-emerald-400" : "bg-slate-600 text-slate-400")}>
-                      {m.status === 1 ? "TRADING" : `status ${m.status}`}
+                    <span className={clsx("text-[10px] px-1.5 rounded", tradable ? "bg-emerald-400/10 text-emerald-400" : expiring ? "bg-red-500/10 text-red-400" : "bg-slate-600 text-slate-400")}>
+                      {m.status === 1 ? (expiring ? "CLOSING" : "TRADING") : `status ${m.status}`}
                     </span>
                   </div>
                   <div className="flex gap-2 text-xs text-slate-400">
                     <span className={(m.asset ?? "crypto").toLowerCase() === "btc" ? "text-brand-400" : "text-brand-300"}>{(m.asset ?? "crypto").toUpperCase()}</span>
                     <span>·</span>
                     <span>Up {fmtPct(m.up?.ask)} / Down {fmtPct(m.down?.ask)}</span>
-                    {(m.closes_at || m.closesAt) && <span>· closes {new Date(m.closes_at ?? m.closesAt ?? "").toLocaleTimeString()}</span>}
+                    {closesAt && (
+                      <span>· closes <span className={clsx(expiring ? "text-red-400": "text-slate-300")}>{new Date(closesAt).toLocaleTimeString()}</span></span>
+                    )}
                     {tradable && (
                       <button onClick={() => openTicket(m)}
                         className="ml-auto text-[10px] px-2 py-0.5 rounded bg-brand-500/15 text-brand-300 hover:bg-brand-500/30">
                         <Shield size={10} className="inline mr-1" />Trade
                       </button>
+                    )}
+                    {expiring && (
+                      <span className="text-[10px] text-red-400 ml-auto" title="Windows close fast on testnet — this one is within 90s of close">closing</span>
                     )}
                   </div>
                 </div>
@@ -300,6 +330,7 @@ export default function DreamDEXPanel() {
                 {placed.txHash && !isStub(placed.txHash) && (
                   <a className="text-brand-400 underline ml-2" href={`${EXPLORER}/tx/${placed.txHash}`} target="_blank" rel="noreferrer">view on explorer</a>
                 )}
+                {!placed.ok && (() => { const hi = hintFor(placed.reason); return hi ? <div className="text-[10px] text-slate-300 mt-1">↳ {hi}</div> : null; })()}
               </div>
             )}
           </div>
@@ -390,21 +421,44 @@ export default function DreamDEXPanel() {
               </span>
             )}
           </div>
-          {fills.length === 0 && <p className="text-xs text-slate-500">No fills yet.</p>}
+          {fills.length === 0 && <p className="text-xs text-slate-500">No order attempts yet — place a trade and its verdict (fill or rejection) shows here.</p>}
           {fills.map((f: Fill, i: number) => {
             const h = f.txHash ?? f.tx_hash;
+            const rejected = f.state === "rejected" || f.state === "reverted";
+            const label = f.symbol ?? f.marketSymbol ?? f.marketId ?? f.market_id ?? "ec";
+            const when = f.ts ?? f.timestamp;
             return (
-              <div key={i} className="border border-slate-700 rounded px-3 py-1 text-xs font-mono text-slate-400">
-                {f.symbol ?? f.marketId ?? f.market_id ?? "ec"} · {f.side} · qty {f.qty} · {f.confirmations ?? 0} conf
-                {f.reorg_detected
-                  ? <span className="text-red-400"> ⚠ reorg</span>
-                  : <span className="text-emerald-400"> ✓</span>}
-                {h && !isStub(h) && (
-                  <a className="text-brand-400 underline ml-2" href={`${EXPLORER}/tx/${h}`} target="_blank" rel="noreferrer">
-                    <ExternalLink size={10} className="inline" /> {shortTx(h)}
-                  </a>
+              <div key={i} className={clsx("border rounded px-3 py-1.5 text-xs font-mono", rejected ? "border-red-500/50" : "border-slate-700")}>
+                <div className={`flex items-center gap-2 ${rejected ? "text-red-400" : "text-slate-400"}`}>
+                  <span className="text-slate-100">{label}</span>
+                  <span>· {f.side} · qty {f.qty}</span>
+                  {rejected ? (
+                    <span className="font-bold">✗ rejected</span>
+                  ) : (
+                    <span className="text-emerald-400">✓ {f.state ?? "filled"}</span>
+                  )}
+                  {!rejected && <span>· {f.confirmations ?? 0} conf</span>}
+                  {when && (
+                    <span className="text-slate-600">· {(typeof when === "number" ? new Date(when * 1000) : new Date(when)).toLocaleTimeString()}</span>
+                  )}
+                </div>
+                {rejected ? (
+                  <div className="text-[10px] text-red-400/85 whitespace-pre-wrap break-all mt-0.5">
+                    {f.reason ?? "rejected"}
+                    {(() => { const hi = hintFor(f.reason); return hi ? <div className="text-slate-300 mt-0.5">↳ {hi}</div> : null; })()}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    {f.fillPrice !== undefined && <span>@ {f.fillPrice.toFixed(3)} · </span>}
+                    {h && !isStub(h) && (
+                      <a className="text-brand-400 underline" href={`${EXPLORER}/tx/${h}`} target="_blank" rel="noreferrer">
+                        <ExternalLink size={10} className="inline" /> {shortTx(h)}
+                      </a>
+                    )}
+                    {h && isStub(h) && <span className="text-slate-600">dry-run</span>}
+                    {(f.reorg_detected || f.reorgDetected) && <span className="text-red-400"> ⚠ reorg</span>}
+                  </div>
                 )}
-                {h && isStub(h) && <span className="text-slate-600 ml-2">dry-run</span>}
               </div>
             );
           })}

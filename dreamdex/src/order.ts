@@ -13,7 +13,7 @@
  */
 import { createHash } from "node:crypto";
 import type { RelayConfig } from "./config.js";
-import { SdkAdapter, type MarketRow } from "./sdkAdapter.js";
+import { SdkAdapter, type MarketRow, type BroadcastResult } from "./sdkAdapter.js";
 import { FillsLedger } from "./fills.js";
 
 export interface OrderInput {
@@ -65,18 +65,23 @@ export class OrderService {
                dryRun: this.cfg.dryRun, state: "rejected", reason: "unknown market" };
     }
     if (market.status !== 1) {
+      this.fills.recordRejection(market, input.side, input.qty, `market status ${market.status}`);
       return { ok: false, intentId, side: input.side, qty: input.qty, estPrice: 0,
                dryRun: this.cfg.dryRun, state: "rejected", reason: `market status ${market.status}` };
     }
     if (market.askDepth < 1) {
+      this.fills.recordRejection(market, input.side, input.qty, "ask-depth too shallow (U11)");
       return { ok: false, intentId, side: input.side, qty: input.qty, estPrice: 0,
                dryRun: this.cfg.dryRun, state: "rejected", reason: "ask-depth too shallow (U11)" };
     }
 
     // stale-row guard: prefer a fresh on-chain gate (M4: authoritative state)
     if (!(await this.sdk.acceptsOrders(input.marketId))) {
+      const gate = (await this.sdk.snapshot()).find((r) => r.marketId === input.marketId);
+      const why = gate ? `not Trading on-chain (status ${gate.status})` : "market not found on chain";
+      this.fills.recordRejection(market, input.side, input.qty, why);
       return { ok: false, intentId, side: input.side, qty: input.qty, estPrice: 0,
-               dryRun: this.cfg.dryRun, state: "rejected", reason: "not Trading on-chain" };
+               dryRun: this.cfg.dryRun, state: "rejected", reason: why };
     }
 
     // ── Effect (persist intent before any external call) ───────────────────
@@ -84,10 +89,20 @@ export class OrderService {
     const estPrice = fill.estPrice;
 
     // ── Interact (broadcast; dry-run in paper mode) ────────────────────────
-    const res = await this.sdk.broadcast({
-      marketId: input.marketId, side: input.side, qty: input.qty,
-      gasBumpPct: input.gasBumpPct ?? 0,
-    });
+    let res: BroadcastResult;
+    try {
+      res = await this.sdk.broadcast({
+        marketId: input.marketId, side: input.side, qty: input.qty,
+        gasBumpPct: input.gasBumpPct ?? 0,
+      });
+    } catch (e) {
+      // On-chain revert verdicts (OrderAlreadyExpired, ImmediateOrCancelNoFill, …)
+      // are recorded as visible rejections, never thrown as a silent crash.
+      const msg = e instanceof Error ? e.message : String(e);
+      this.fills.revertFill(intentId, msg);
+      return { ok: false, intentId, symbol: market.symbol, side: input.side, qty: input.qty,
+               estPrice, dryRun: this.cfg.dryRun, state: "rejected", reason: msg };
+    }
 
     // ── Confirm (state ONLY after broadcast returns/reverts) ───────────────
     if (res.txHash.startsWith("stub_") && this.cfg.dryRun) {

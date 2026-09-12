@@ -167,10 +167,22 @@ def test_d3_yield_rejected_when_leverage_exceeds_cap():
 # ── D4: Perp funding carry ─────────────────────────────────────────────────
 
 def test_d4_perp_emits_in_active_regime():
+    # Funding must clear the CONFIGURED gate (MIN_FUNDING_CARRY_PCT may be set
+    # above the code default in .env — e.g. 0.10) — derive the fixture from
+    # the live module constant so the test is immune to env drift.
+    gate = dmod.MIN_FUNDING_CARRY_PCT
     a = DeFiAgent()
-    out = a._strategy_d4_perp([_mk_perp(funding=0.08)], "High Volatility")
+    out = a._strategy_d4_perp([_mk_perp(funding=gate * 2)], "High Volatility")
     assert len(out) == 1
     assert out[0]["sector"] == "D4"
+
+
+def test_d4_perp_rejected_when_below_gate():
+    # U28/D4: funding below the configured threshold → no intent.
+    gate = dmod.MIN_FUNDING_CARRY_PCT
+    a = DeFiAgent()
+    out = a._strategy_d4_perp([_mk_perp(funding=gate * 0.5)], "High Volatility")
+    assert out == []
 
 
 # ── D5: EC cross-hedge ─────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { TrendingDown, TrendingUp, DollarSign, AlertTriangle, ArrowUp, ArrowDown } from "lucide-react";
+import { TrendingDown, DollarSign, ArrowUp, ArrowDown, Scale, Layers, Activity, Gauge } from "lucide-react";
 
 const ASSET_CLASS_ORDER = ["equity", "vol", "rates", "commodity", "crypto", "fx", "other"];
 const ASSET_CLASS_COLOR: Record<string, string> = {
@@ -23,11 +23,6 @@ export default function PnLDashboard({ onNavigate }: { onNavigate?: (tab: string
   const { data: brokerPositions } = usePolling<AlpacaPosition[]>(() => alpacaApi.positions(), 10_000);
   const { data: quotes }    = usePolling<MarketQuote[]>(agentApi.marketQuotes, 60_000);
 
-  // Real broker unrealized P&L: sum every broker position (sign-aware for shorts).
-  const totalPnl = (brokerPositions ?? []).reduce((s, p) => {
-    const side = (p.side === "sell" || (typeof p.qty === "number" && p.qty < 0)) ? -1 : 1;
-    return s + side * (p.current_price - p.avg_entry_price) * Math.abs(p.qty);
-  }, 0);
 
   // Real NAV curve, ending at today's live equity (Alpaca's weekly history can lag a day).
   const navHistory = (portfolio?.nav_history ?? []).map(pt => ({
@@ -44,6 +39,17 @@ export default function PnLDashboard({ onNavigate }: { onNavigate?: (tab: string
     }
   }
   const navSource = portfolio?.source ?? "ledger";
+
+  // ── Exposure metrics (review-table parity) ─────────────────────────────
+  // Gross exposure = sum of |market value| (shorts count); Net = signed sum.
+  const grossExposure = (brokerPositions ?? []).reduce((s, p) => s + Math.abs(p.market_value), 0);
+  const netExposure   = (brokerPositions ?? []).reduce((s, p) => s + p.market_value, 0);
+  const nav = portfolio?.nav ?? portfolio?.equity ?? 0;
+  const grossPct = nav ? grossExposure / nav : 0;
+  const netPct   = nav ? netExposure / nav : 0;
+  const leverageEl = grossExposure !== 0 && nav > 0 ? (grossExposure / nav - 1) : 0;
+  const cash = portfolio?.cash ?? 0;
+  const buyingPower = portfolio?.buying_power;
 
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden transition-all duration-200 hover:border-slate-500 hover:shadow-lg hover:shadow-emerald-500/10 hover:-translate-y-0.5 cursor-pointer">
@@ -84,32 +90,49 @@ export default function PnLDashboard({ onNavigate }: { onNavigate?: (tab: string
         )}
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-700 border-b border-slate-700">
+      {/* Stats row — ALL core risk metrics, always visible above the NAV chart */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x divide-slate-700 border-b border-slate-700">
         <StatCell
           icon={<DollarSign size={14} />}
           label="NAV"
           value={portfolio ? fmt$(portfolio.nav) : "—"}
-          sub={portfolio ? `Cash: ${fmt$(portfolio.cash)}` : undefined}
+          sub={navSource === "alpaca" ? "Alpaca" : "ledger"}
         />
         <StatCell
-          icon={totalPnl >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-          label="Unrealised P&L"
-          value={portfolio ? (totalPnl >= 0 ? "+" : "") + fmt$(totalPnl) : "—"}
-          positive={totalPnl >= 0}
+          icon={<Scale size={14} />}
+          label="Gross Exposure"
+          value={grossExposure > 0 ? fmt$(grossExposure) : "—"}
+          sub={grossExposure > 0 && nav ? `${(grossPct * 100).toFixed(1)}% NAV · ${leverageEl > 0.005 ? `${(leverageEl * 100).toFixed(0)}% lev` : "no lev"}` : undefined}
+          warn={leverageEl > 0.10}
+        />
+        <StatCell
+          icon={<Layers size={14} />}
+          label="Net Exposure"
+          value={Math.abs(netExposure) > 0 ? fmt$(netExposure) : "—"}
+          sub={Math.abs(netExposure) > 0 && nav ? `${(netPct * 100).toFixed(1)}% NAV${Math.abs(netPct - grossPct) > 0.005 ? " · hedged" : ""}` : undefined}
+          positive={Math.abs(netPct - grossPct) > 0.005}
+        />
+        <StatCell
+          icon={<Activity size={14} />}
+          label="Cash"
+          value={portfolio ? fmt$(cash) : "—"}
+          sub={portfolio ? (cash < 0 ? "margin used" : "available") : undefined}
+          positive={cash >= 0}
+        />
+        <StatCell
+          icon={<Gauge size={14} />}
+          label="Buying Power"
+          value={buyingPower != null ? fmt$(buyingPower) : "—"}
+          sub={buyingPower != null && nav ? `${(buyingPower / nav).toFixed(2)}× NAV` : undefined}
+          positive={(buyingPower ?? 0) > 0}
         />
         <StatCell
           icon={<TrendingDown size={14} />}
           label="Drawdown"
           value={portfolio ? fmtPct(portfolio.drawdown_pct) : "—"}
+          sub="limit 10%"
           positive={false}
           warn={(portfolio?.drawdown_pct ?? 0) > 0.05}
-        />
-        <StatCell
-          icon={<AlertTriangle size={14} />}
-          label="Status"
-          value={portfolio?.halted ? "HALTED" : "LIVE"}
-          positive={!portfolio?.halted}
         />
       </div>
 
