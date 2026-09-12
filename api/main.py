@@ -33,6 +33,7 @@ from routes.settings       import router as settings_router
 from routes.dreamdex       import router as dreamdex_router
 from routes.defi           import router as defi_router
 from routes.creditgraph    import router as creditgraph_ui_router
+from routes.fund           import router as fund_router
 
 # ── CreditGraph (P10): Attestcoin × Creditcoin risk surface, mounted at /api/v1 ──
 try:
@@ -109,6 +110,7 @@ app.include_router(settings_router)
 app.include_router(dreamdex_router)
 app.include_router(defi_router)
 app.include_router(creditgraph_ui_router)
+app.include_router(fund_router)
 
 if _CREDITGRAPH_AVAILABLE:
     app.include_router(creditgraph_api_router, prefix="/api/v1")
