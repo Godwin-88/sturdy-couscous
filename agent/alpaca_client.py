@@ -10,7 +10,7 @@ from typing import Any
 
 try:
     from alpaca.trading.client import TradingClient
-    from alpaca.trading.requests import MarketOrderRequest, OrderSide, OrderType, TimeInForce
+    from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, StopOrderRequest, OrderSide, OrderType, TimeInForce
     from alpaca.trading.enums import OrderSide as OrderSideEnum
     from alpaca.common.enums import Sort
     from alpaca.data.historical import StockHistoricalDataClient, CryptoHistoricalDataClient

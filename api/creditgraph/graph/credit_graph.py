@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -724,4 +725,74 @@ async def seed_demo_borrower() -> str:
             for q, params in queries:
                 await tx.run(q, params)
     logger.info("Seeded demo borrower %s", borrower_id)
+    return borrower_id
+
+
+async def seed_fund_borrower(
+    nav_usd: float,
+    digest: str | None = None,
+    requested_amount: float | None = None,
+) -> str:
+    """Idempotently upsert the 'fund_graphalpha' Borrower node whose collateral is
+    the strategy fund's ON-CHAIN attested NAV (RWA claim layer, H3).
+
+    Additive-only, mirrors seed_demo_borrower's quarantine: a single Borrower +
+    Collateral(+) + LENDS relationship so the deterministic risk engine can score
+    "collateral = attested NAV". Every attestation cycle calls this with the fresh
+    digest so the collateral value is mark-to-market.
+    """
+    borrower_id = "fund_graphalpha"
+    driver: AsyncDriver = get_driver()
+    req = requested_amount if requested_amount is not None else max(10000.0, 0.1 * nav_usd)
+    digest = digest or ""
+    queries = [
+        (
+            """MERGE (b:Borrower {borrower_id: $bid})
+               SET b.display_name = 'GraphAlpha Strategy Fund',
+                   b.collateral_type = 'attested_nav',
+                   b.attestation_src = 'sepolia',
+                   b.requested_amount = $requested_amount,
+                   b.fico_score = 780.0,
+                   b.last_nav_usd = $nav_usd,
+                   b.last_nav_digest = $digest,
+                   b.market_regime = 'high_volatility',
+                   b.attestation_refs = CASE
+                     WHEN $digest = '' THEN b.attestation_refs
+                     ELSE [x IN b.attestation_refs WHERE x <> $digest] + [$digest]
+                   END""",
+            {"bid": borrower_id, "requested_amount": req,
+             "nav_usd": nav_usd, "digest": digest},
+        ),
+        (
+            """MERGE (b:Borrower {borrower_id: $bid})
+               WITH b
+               MERGE (col:Collateral {asset_id: 'graphalpha_attested_nav'})
+               SET col.symbol = 'GASF-NAV', col.valuation = $nav_usd,
+                   col.quantity = 1.0, col.haircut = 0.05,
+                   col.correlated_group = 'rwa_attested'
+               MERGE (b)-[:HAS_COLLATERAL]->(col)
+               WITH b, col
+               MERGE (a:Asset {asset_id: 'graphalpha_fund_nav', symbol: 'GASF', chain: 'sepolia'})
+               SET a.price_usd = $nav_usd, a.volatility_annualized = 0.25, a.quantity = 1.0
+               MERGE (col)-[:REFERENCES]->(a)
+               WITH b
+               MERGE (w:Wallet {address: $wallet, chain: 'creditcoin'})
+               SET w.label = 'fund_ctc_borrower'
+               MERGE (b)-[:OWNS]->(w)""",
+            {"bid": borrower_id, "nav_usd": nav_usd,
+             "wallet": os.getenv("CREDITCOIN_FUND_BORROWER_ADDRESS", "")},
+        ),
+        (
+            """MATCH (b:Borrower {borrower_id: $bid})
+               MERGE (l:Liability {protocol: 'Creditcoin', asset_symbol: 'CTC'})
+               SET l.outstanding = 0.0
+               MERGE (b)-[:HAS_LIABILITY]->(l)""",
+            {"bid": borrower_id},
+        ),
+    ]
+    async with driver.session() as session:
+        async with await session.begin_transaction() as tx:
+            for q, params in queries:
+                await tx.run(q, params)
+    logger.info("Upserted fund borrower %s with NAV %.2f", borrower_id, nav_usd)
     return borrower_id

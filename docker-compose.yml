@@ -20,9 +20,13 @@ services:
       NEO4J_PLUGINS: '["apoc"]'
     healthcheck:
       test: ["CMD-SHELL", "cypher-shell --fail-at-end -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD:-graphalpha} 'RETURN 1'"]
+      # start_period gives Neo4j a grace window for cold boot (~70-90s on first run);
+      # without it Docker marks the container unhealthy during startup and blocks
+      # depends_on: service_healthy consumers (graph-loader) even though Neo4j works.
+      start_period: 120s
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 12
     deploy:
       resources:
         limits:
@@ -84,6 +88,9 @@ services:
       dockerfile: Dockerfile
     container_name: graphalpha-api
     env_file: .env
+    environment:
+      # In-container the relay is reachable by compose service name, not localhost.
+      - DREAMDEX_RELAY_URL=http://somnia-relay:8450
     ports:
       - "8000:8000"
     volumes:
@@ -112,6 +119,9 @@ services:
       dockerfile: Dockerfile
     container_name: graphalpha-agent
     env_file: .env
+    environment:
+      # In-container the relay is reachable by compose service name, not localhost.
+      - DREAMDEX_RELAY_URL=http://somnia-relay:8450
     volumes:
       - ./agent:/app
       - ./common:/app/common

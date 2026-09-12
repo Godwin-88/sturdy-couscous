@@ -53,6 +53,49 @@ class _AsyncResult:
             yield row
 
 
+class _AsyncTransaction:
+    """Async wrapper over the sync ``neo4j.Transaction`` (via to_thread)."""
+
+    def __init__(self, tx: Any):
+        self._t = tx
+
+    async def run(self, query: str, parameters: Optional[dict] = None) -> _AsyncResult:
+        params = parameters or {}
+        # Pass params POSITIONALLY: the neo4j 4.x driver signature is
+        # run(query, parameters=None, **kwparameters). Unpacking with ** would
+        # collide when a cypher parameter is itself named "parameters"
+        # (e.g. RiskObservation SET r.parameters = $parameters).
+        result = await asyncio.to_thread(self._t.run, query, params)
+        return _AsyncResult(result)
+
+    async def commit(self) -> None:
+        await asyncio.to_thread(self._t.commit)
+
+    async def rollback(self) -> None:
+        await asyncio.to_thread(self._t.rollback)
+
+    async def close(self) -> None:
+        await asyncio.to_thread(self._t.close)
+
+    async def __aenter__(self) -> "_AsyncTransaction":
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        if exc_type is not None:
+            try:
+                await self.rollback()
+            except Exception:
+                pass
+        else:
+            try:
+                await self.commit()
+            except Exception:
+                try:
+                    await self.rollback()
+                except Exception:
+                    pass
+
+
 class _AsyncSession:
     """Async wrapper over the sync ``neo4j.Session``."""
 
@@ -61,8 +104,14 @@ class _AsyncSession:
 
     async def run(self, query: str, parameters: Optional[dict] = None) -> _AsyncResult:
         params = parameters or {}
-        result = await asyncio.to_thread(self._s.run, query, **params)
+        # Positional params (see _AsyncTransaction.run comment — avoids the
+        # named-parameter collision when a cypher param is called "parameters").
+        result = await asyncio.to_thread(self._s.run, query, params)
         return _AsyncResult(result)
+
+    async def begin_transaction(self) -> _AsyncTransaction:
+        tx = await asyncio.to_thread(self._s.begin_transaction)
+        return _AsyncTransaction(tx)
 
     async def _close(self) -> None:
         await asyncio.to_thread(self._s.close)

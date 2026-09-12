@@ -8,12 +8,14 @@ POST /risk/borrowers/seed                      -> idempotent demo borrower
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from creditgraph.graph.credit_graph import (
     get_borrower_state,
     list_borrowers,
     persist_credit_decision,
     seed_demo_borrower,
+    seed_fund_borrower,
 )
 from creditgraph.models import AssessmentRequest, CreditAssessment, CreditDecision
 from creditgraph.services import credit_risk
@@ -32,6 +34,25 @@ async def seed_borrower() -> dict:
     """Idempotently create the demo borrower graph; return its id."""
     borrower_id = await seed_demo_borrower()
     return {"borrower_id": borrower_id, "status": "seeded"}
+
+
+class FundNavUpdateRequest(BaseModel):
+    """Mark-to-market the fund-as-borrower's NAV collateral (H3 loop)."""
+
+    nav_usd: float = Field(..., gt=0, description="Latest attested strategy-fund NAV (USD)")
+    digest: str | None = Field(None, description="Evidence-chain digest anchoring this NAV")
+
+
+@credit_router.post("/borrowers/fund/mark-to-market", response_model=dict)
+async def mark_fund_nav(req: FundNavUpdateRequest) -> dict:
+    """Upsert fund_graphalpha with collateral = latest attested NAV.
+
+    Called by the NAV-attestation loop each cycle so the Borrower graph node's
+    collateral tracks live book equity (additive RWA narrative: marked-to-market
+    collateral is the 'fully-attested' hedging story).
+    """
+    borrower_id = await seed_fund_borrower(nav_usd=req.nav_usd, digest=req.digest)
+    return {"borrower_id": borrower_id, "status": "marked_to_market", "nav_usd": req.nav_usd}
 
 
 @credit_router.post("/borrowers/{borrower_id}/assessment", response_model=CreditAssessment)

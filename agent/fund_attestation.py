@@ -156,7 +156,7 @@ NAV_ANCHOR_ABI = [
         "inputs": [
             {"name": "navUsd", "type": "uint256"},
             {"name": "navHash", "type": "bytes32"},
-            {"name": "blockRef", "type": "uint256"},
+            {"name": "blockRef", "type": "uint64"},
         ],
         "outputs": [],
     },
@@ -237,9 +237,9 @@ async def attest(
     async with httpx.AsyncClient(timeout=120) as client:
         try:
             resp = await client.post(url, json={
-                "txHash": tx_hash,
-                "chainKey": chain_key,
-                "borrowerId": borrower_id,
+                "tx_hash": tx_hash,
+                "chain_key": chain_key,
+                "borrower_id": borrower_id,
             })
         except httpx.HTTPError as exc:
             return {"status": "error", "reason": f"httpx: {exc}"}
@@ -249,6 +249,38 @@ async def attest(
             except Exception:
                 return {"status": "ok", "raw": resp.text}
         return {"status": "http_error", "reason": f"http_{resp.status_code}"}
+
+
+# ── Step 4b: mark the fund-as-borrower collateral to market (H3 RWA loop) ─────
+async def mark_fund_borrower_to_market(
+    gateway_url: str,
+    nav_usd: float,
+    digest: str,
+    borrower_id: str = FUND_BORROWER_ID,
+) -> dict:
+    """POST the latest NAV into the Borrower node's collateral (additive, gated).
+
+    Gates: the caller must set FUND_MARK_TO_MARKET=1 AND the creditgraph gateway
+    must be reachable. Never raises — this is a KG convenience, not the anchor.
+    """
+    import httpx
+
+    url = f"{gateway_url.rstrip('/')}/api/v1/risk/borrowers/fund/mark-to-market"
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(url, json={
+                "nav_usd": round(float(nav_usd), 4),
+                "digest": digest,
+                "borrower_id": borrower_id,
+            })
+        if resp.status_code < 500:
+            try:
+                return resp.json()
+            except Exception:
+                return {"status": "ok", "raw": resp.text}
+        return {"status": "http_error", "reason": f"http_{resp.status_code}"}
+    except httpx.HTTPError as exc:
+        return {"status": "error", "reason": f"httpx: {exc}"}
 
 
 # ── Step 5: ledger + report ────────────────────────────────────────────────────
@@ -322,6 +354,20 @@ async def run_fund_attestation(
     else:
         report["attestation"] = {"status": "skipped", "reason": "no source-chain tx"}
 
+    # 4b) mark the fund-as-borrower collateral to market (gated: FUND_MARK_TO_MARKET=1)
+    if os.getenv("FUND_MARK_TO_MARKET", "0").strip() == "1" and float(snap.get("equity") or 0.0) > 0:
+        try:
+            gw = gateway_url or os.getenv("GATEWAY_URL", "http://localhost:8000")
+            report["mark_to_market"] = await mark_fund_borrower_to_market(
+                gw, float(snap["equity"]), digest,
+            )
+        except Exception as e:
+            report["mark_to_market"] = {"status": "error", "reason": str(e)}
+            logger.warning(f"[FundAttestation] mark-to-market failed (non-fatal): {e}")
+    else:
+        report["mark_to_market"] = {"status": "skipped",
+                                    "reason": "FUND_MARK_TO_MARKET != 1 or equity <= 0"}
+
     # 5) ledger — persist into the fund EvidenceChain (tamper-evident trail)
     try:
         chain = fund_chain(store=store)
@@ -341,7 +387,23 @@ async def run_fund_attestation(
 
 
 async def main() -> None:
-    report = await run_fund_attestation(regime=os.getenv("CURRENT_REGIME", "?"))
+    # Auto-build a live web3 factory from env so a production run anchors on-chain
+    # when SEPOLIA_RPC_URL + a private key are present (additive; absent -> offline).
+    def _web3_factory():
+        from web3 import Web3
+        from web3.providers.rpc import HTTPProvider
+        rpc = os.getenv("SEPOLIA_RPC_URL", "https://ethereum-sepolia-rpc.publicnode.com").strip()
+        return Web3(HTTPProvider(rpc))
+
+    use_live = bool(
+        os.getenv("NAV_ANCHOR_CONTRACT", "").strip()
+        and (os.getenv("CLAIM_TOKEN_PRIVATE_KEY", "").strip()
+             or os.getenv("WEB3_ORACLE_AUTHORITY_PRIVATE_KEY", "").strip())
+    )
+    report = await run_fund_attestation(
+        regime=os.getenv("CURRENT_REGIME", "?"),
+        web3_factory=_web3_factory if use_live else None,
+    )
 
     try:
         publish_report(_redis(), report)

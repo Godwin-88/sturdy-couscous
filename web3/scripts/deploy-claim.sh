@@ -25,12 +25,18 @@ TOKEN_KEY=${CLAIM_TOKEN_PRIVATE_KEY:-${PRIVATE_KEY:-}}
 ANCHOR_KEY=${NAVANCHOR_PRIVATE_KEY:-${TOKEN_KEY}}
 
 echo "Deploying ClaimToken + NAVAnchor to $CHAIN ..."
-forge build
+# Build ONLY the RWA-claim artifacts (targeted): a full-tree `forge build` fails
+# because the stellcasp-ported contracts (ZKPassport/UltraHonkVerifier) import
+# @openzeppelin/contracts which is not vendored in web3/ (they are inert here:
+# WEB3_PASSPORT_CONTRACT / WEB3_VERIFIER_CONTRACT are hardcoded 0x0). The claim
+# contracts are self-contained (no external imports) so targeted paths compile.
+forge build contracts/ClaimToken.sol contracts/NAVAnchor.sol contracts/test/ClaimNava.t.sol
 
 TOKEN_OUT=$(forge create \
   --rpc-url "$CHAIN" \
   --private-key "$TOKEN_KEY" \
   --etherscan-api-key "${ETHERSCAN_API_KEY:-}" \
+  --broadcast \
   --verify \
   contracts/ClaimToken.sol:ClaimToken \
   --constructor-args "$NAME" "$SYMBOL" 18 2>&1)
@@ -41,6 +47,7 @@ ANCHOR_OUT=$(forge create \
   --rpc-url "$CHAIN" \
   --private-key "$ANCHOR_KEY" \
   --etherscan-api-key "${ETHERSCAN_API_KEY:-}" \
+  --broadcast \
   --verify \
   contracts/NAVAnchor.sol:NAVAnchor 2>&1)
 ANCHOR_ADDR=$(echo "$ANCHOR_OUT" | grep -oE 'Deployed to: 0x[0-9a-fA-F]{40}' | awk '{print $3}')
