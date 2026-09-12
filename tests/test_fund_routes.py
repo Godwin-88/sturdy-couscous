@@ -57,4 +57,24 @@ def test_status_shape(client, monkeypatch):
     body = r.json()
     assert body["borrower_id"] == "fund_alice"
     assert body["offline_ok"] is True
+
+
+def test_status_cc3_down_degrades_gracefully(client, monkeypatch):
+    """If execution-service is unreachable, /fund/status still 200s with
+    cc3_execution.reachable=false (never raises — the dashboard stays up)."""
+    class Boom(Exception):
+        pass
+
+    def boom(*args, **kwargs):
+        raise Boom("execution-service down")
+
+    # The handler imports httpx inside the function; patch the module-level
+    # httpx.get so every mesh call raises.
+    import httpx as _httpx
+    monkeypatch.setattr(_httpx, "get", boom)
+    r = client.get("/fund/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["cc3_execution"]["reachable"] is False
+    assert body["attestation_reachable"] is False
     assert "nav_anchor_contract" in body
