@@ -1,145 +1,64 @@
 /**
  * CreditWorkspace.tsx
  * ───────────────────
- * CreditGraph (P10) as a menu item inside GraphAlpha.
+ * Credit (P10 / BUIDL-CTC) inside GraphAlpha — a cohesive 2-tab console:
  *
- * A faithful port of the /attest frontend App.tsx shell — header with live
- * API/Neo4j/Redis status, 7-tab sidebar (Credit Dashboard, Risk Graph,
- * Quantitative Risk, Evidence, Chat, Portfolio, Governance) — wrapped in a
- * `.credit-workspace` scope so its styles (credit.css) cannot collide with
- * GraphAlpha's design system. Read-only surfaces; execution stays behind the
- * human-approved decision flow of /api/v1/risk/*.
+ *   Fund      → FundConsole: attested-NAV → CC3 executor → credit decision →
+ *               APPROVE → EXECUTE (the human-in-the-loop critical path)
+ *   Evidence  → Attestcoin / NAVAnchor proof trail (verify + history)
+ *
+ * The financial-engineer chat lives in the GLOBAL ScreenChat slide-over
+ * (screen="credit"), so this workspace carries no chat UI. Old demo-toy tabs
+ * (Risk Graph / Quant / Portfolio / Governance / Chat) and the standalone
+ * credit.css chrome are removed for uniformity with GraphAlpha's design system.
  */
-
-import { useEffect, useState } from "react";
-import { api } from "../../lib/creditApi";
-import type { DbStatus, HealthResponse } from "../../types/credit";
-import CreditDashboard from "./CreditDashboard";
-import RiskGraph from "./RiskGraph";
-import QuantTab from "./StressTab";
-import ChatTab from "./ChatTab";
+import { useState } from "react";
+import type { ReactNode } from "react";
+import clsx from "clsx";
+import { Landmark, ShieldCheck } from "lucide-react";
+import FundConsole from "./FundConsole";
 import EvidenceTab from "./EvidenceTab";
-import PortfolioTab from "./PortfolioTab";
-import GovernanceTab from "./GovernanceTab";
-import { ToastContainer } from "./Toast";
-import "./credit.css";
 
-type TabId = "dashboard" | "graph" | "quant" | "evidence" | "chat" | "portfolio" | "governance";
+type TabId = "fund" | "evidence";
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: "dashboard", label: "Credit Dashboard" },
-  { id: "graph", label: "Risk Graph" },
-  { id: "quant", label: "Quantitative Risk" },
-  { id: "evidence", label: "Evidence" },
-  { id: "chat", label: "Chat" },
-  { id: "portfolio", label: "Portfolio" },
-  { id: "governance", label: "Governance" },
+const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
+  { id: "fund", label: "Fund", icon: <Landmark size={13} /> },
+  { id: "evidence", label: "Evidence", icon: <ShieldCheck size={13} /> },
 ];
 
 export default function CreditWorkspace() {
-  const [tab, setTab] = useState<TabId>("dashboard");
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [db, setDb] = useState<DbStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [h, d] = await Promise.all([api.health(), api.db()]);
-        setHealth(h);
-        setDb(d);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Unknown error");
-      }
-    };
-    load();
-  }, []);
+  const [tab, setTab] = useState<TabId>("fund");
 
   return (
-    <div className="credit-workspace">
-      <ToastContainer />
-      <header className="app-header">
-        <div>
-          <h1>CreditGraph</h1>
-          <p className="tagline">
-            Verifiable cross-chain credit intelligence &amp; risk decisioning
-          </p>
-        </div>
-        <div className="status-grid">
-          <span className="status-item">
-            <span className="dot" data-ok={health?.status === "ok"} /> API
-          </span>
-          <span className="status-item">
-            <span className="dot" data-ok={db?.neo4j === "ok"} /> Neo4j
-          </span>
-          <span className="status-item">
-            <span className="dot" data-ok={db?.redis === "ok"} /> Redis
-          </span>
-        </div>
-      </header>
-
-      {error && <p className="error">Backend unreachable: {error}</p>}
-
-      <button
-        className="mobile-menu-btn"
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        aria-label={sidebarOpen ? "Close menu" : "Open menu"}
-        aria-expanded={sidebarOpen}
-      >
-        {sidebarOpen ? "✕" : "☰"}
-      </button>
-
-      {sidebarOpen && (
-        <div
-          className="sidebar-overlay open"
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      <div className="layout">
-        <nav
-          className={`sidebar ${sidebarOpen ? "open" : ""}`}
-          role="tablist"
-          aria-label="CreditGraph navigation"
-        >
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              role="tab"
-              aria-selected={tab === t.id}
-              aria-controls={`credit-panel-${t.id}`}
-              className={`sidebar-tab ${tab === t.id ? "active" : ""}`}
-              onClick={() => {
-                setTab(t.id);
-                setSidebarOpen(false);
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-
-        <main
-          className="tab-body"
-          role="tabpanel"
-          id={`credit-panel-${tab}`}
-          aria-labelledby={`credit-tab-${tab}`}
-        >
-          {tab === "dashboard" && <CreditDashboard />}
-          {tab === "graph" && <RiskGraph />}
-          {tab === "quant" && <QuantTab />}
-          {tab === "evidence" && <EvidenceTab />}
-          {tab === "chat" && <ChatTab />}
-          {tab === "portfolio" && <PortfolioTab />}
-          {tab === "governance" && <GovernanceTab />}
-        </main>
+    <div className="h-full flex flex-col">
+      {/* Tab bar */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-800">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            aria-selected={tab === t.id}
+            className={clsx(
+              "inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-colors",
+              tab === t.id
+                ? "bg-brand-500/15 text-brand-200 border border-brand-500/30"
+                : "text-gray-400 border border-transparent hover:text-white"
+            )}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        ))}
+        <span className="ml-auto text-[10px] text-gray-600 font-mono">
+          credit · attested-nav financing · human-gated execution
+        </span>
       </div>
 
-      <footer>
-        <p>CreditGraph × GraphAlpha • Deterministic risk core + GraphRAG + Attestcoin evidence + Creditcoin execution</p>
-      </footer>
+      {/* Tab body */}
+      <div className="flex-1 overflow-y-auto">
+        {tab === "fund" && <FundConsole />}
+        {tab === "evidence" && <EvidenceTab borrowerId="fund_graphalpha" />}
+      </div>
     </div>
   );
 }

@@ -379,6 +379,72 @@ export interface BayesianPosteriorResponse {
   timestamp: string;
 }
 
+// ── Fund (RWA) domain — attested-NAV financing loop (P11 / BUIDL-CTC) ──────
+// Mirrors /fund/status + /fund/attestation-report payloads.
+
+export interface FundPositionSnapshot {
+  symbol?: string;
+  qty?: number;
+  market_value?: number;
+  asset_class?: string;
+  unrealized_pl?: number;
+  [k: string]: unknown;
+}
+
+export interface FundAttestationReport {
+  nav?: number;
+  equity?: number;
+  cash?: number;
+  buying_power?: number;
+  digest?: string;
+  anchor_tx?: string | null;
+  mode?: string;
+  offline?: boolean;
+  chain_linked?: boolean;
+  verified?: boolean;
+  positions?: FundPositionSnapshot[];
+  currency?: string;
+  generated_at?: string;
+  [k: string]: unknown;
+}
+
+export interface FundCc3Execution {
+  reachable: boolean;
+  account: string | null;
+  free_planck: string | null;
+  free_ctc: number | null;
+  ss58_format?: number;
+}
+
+export interface FundCreditDecision {
+  decision_id: string;
+  recommended_amount?: number | null;
+  collateral_value?: number | null;
+  credit_score?: number | null;
+  probability_of_default?: number | null;
+  decision_status?: string | null;
+  approval_status?: string | null;
+  execution_transaction?: string | null;
+  created_at?: string | null;
+}
+
+export interface FundStatus {
+  borrower_id: string;
+  nav_anchor_contract: string | null;
+  relay_configured: boolean;
+  offline_ok: boolean;
+  cc3_execution: FundCc3Execution | null;
+  attestation_reachable: boolean;
+  latest_report: FundAttestationReport | null;
+  latest_decision: FundCreditDecision | null;
+  [k: string]: unknown;
+}
+
+export interface FundReport {
+  report: FundAttestationReport | null;
+  cached: boolean;
+}
+
 export interface CorrelationMatrixResponse {
   model_id: string;
   model_name: string;

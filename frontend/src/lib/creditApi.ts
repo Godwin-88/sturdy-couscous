@@ -33,6 +33,8 @@ import {
   type WalletResolveResponse,
   type DecisionOverrideRequest,
   type DecisionReconstructResponse,
+  type FundStatus,
+  type FundReport,
 } from "../types/credit";
 
 const API = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000";
@@ -234,4 +236,23 @@ export const api = {
   }) => post<PolicyUpdateResponse>("/risk/governance/policies", policy),
   getAuditLog: (entityType: string, entityId: string) =>
     get<AuditLogEntry[]>(`/risk/governance/audit/${entityType}/${entityId}`),
+};
+
+// ── Fund (RWA) — root-level /fund endpoints (NOT under /api/v1) ────────────
+async function rootRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const detail = (body as { detail?: string }).detail ?? `HTTP ${res.status}`;
+    throw new ApiError(res.status, detail);
+  }
+  return (await res.json()) as T;
+}
+
+export const fundApi = {
+  status: () => rootRequest<FundStatus>("/fund/status"),
+  report: () => rootRequest<FundReport>("/fund/attestation-report"),
 };

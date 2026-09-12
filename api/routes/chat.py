@@ -36,6 +36,8 @@ SCREEN_HINTS: dict[str, str] = {
     "analytics":     "time series stationarity cointegration regression machine learning",
     "hypothesis":    "hypothesis testing statistical significance backtest evidence",
     "dreamdex":      "event contract binary prediction market probability edge kelly strike settlement claim resolution alpha",
+    "credit":        "lending collateral attested nav credit decision loan to value probability of default liquidation cross-chain execution attestation",
+    "defi":          "defi liquidity yield lending AMM impermanent loss oracle value at risk",
 }
 
 
@@ -138,6 +140,19 @@ def _live_screen_data(screen: str, params: dict | None = None) -> dict:
         _get("/dreamdex/positions", "dreamdex_positions")
         _get("/dreamdex/fills", "dreamdex_fills")
         _get("/dreamdex/status", "dreamdex_status")
+
+    if screen == "credit":
+        # Fund financing (RWA) screen: bundle the attested-NAV loop + CC3
+        # executor state + the live Alpaca book so the financial engineer can
+        # reason over the real borrower (collateral = attested strategy NAV).
+        _get("/fund/status", "fund_status")
+        _get("/fund/attestation-report", "fund_attestation_report")
+        _get("/alpaca/portfolio", "alpaca_portfolio")
+
+    if screen == "defi":
+        _get("/defi/status", "defi_status")
+        _get("/defi/candidates", "defi_candidates")
+        _get("/defi/evidence", "defi_evidence")
 
     # Authoritative screen regime for options/crypto = its OWN tape-derived
     # regime (or user override), NOT the global SPY label. The LLM is
