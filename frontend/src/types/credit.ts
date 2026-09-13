@@ -445,6 +445,48 @@ export interface FundReport {
   cached: boolean;
 }
 
+// ── H6-9 Lending pool on the claim (Credit → Lending) ───────────────────────
+export interface LendingPoolEvent {
+  kind: string;
+  at: number;
+  amount?: number;
+  lender?: string;
+  decision_id?: string;
+}
+
+export interface LendingPoolState {
+  pool_id: string;
+  borrower_id: string;
+  status: "open" | "frozen" | "liquidatable";
+  warning: "ltv_warning" | "ltv_breach" | null;
+  total_deposits: number;
+  active_loan: number;
+  utilization: number | null;
+  borrow_rate_pct: number | null;
+  lend_rate_pct: number | null;
+  reserve_factor: number;
+  max_ltv_pct: number;
+  collateral_value: number | null;
+  ltv_pct: number | null;
+  borrowable: number | null;
+  liquidation_warn_pct: number;
+  liquidation_ltv_pct: number;
+  disbursement_tx: string | null;
+  last_borrow_decision: string | null;
+  events: LendingPoolEvent[];
+  updated_at?: number;
+}
+
+export interface LendingLiquidation {
+  health: "healthy" | "warning" | "liquidatable";
+  ltv_pct: number;
+  collateral_value: number | null;
+  active_loan: number;
+  warn_threshold_pct: number;
+  liquidate_threshold_pct: number;
+  closing_liquidation_price: number | null;
+}
+
 export interface CorrelationMatrixResponse {
   model_id: string;
   model_name: string;

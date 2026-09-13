@@ -35,6 +35,8 @@ import {
   type DecisionReconstructResponse,
   type FundStatus,
   type FundReport,
+  type LendingPoolState,
+  type LendingLiquidation,
 } from "../types/credit";
 
 const API = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000";
@@ -67,6 +69,27 @@ function get<T>(path: string): Promise<T> {
 export const api = {
   health: () => get<HealthResponse>("/health"),
   db: () => get<DbStatus>("/db"),
+
+  // ── H6-9 Lending pool on the attested claim ──────────────────────────
+  lendingPool: () => get<LendingPoolState>("/risk/lending/pool"),
+  lendingLiquidation: () => get<LendingLiquidation>("/risk/lending/liquidation-monitor"),
+  lendingDeposit: (amount: number, lenderId = "cc3_lender") =>
+    post<{ ok: boolean; pool: LendingPoolState }>("/risk/lending/deposit", {
+      amount,
+      lender_id: lenderId,
+    }),
+  lendingWithdraw: (amount: number, lenderId = "cc3_lender") =>
+    post<{ ok: boolean; pool: LendingPoolState }>("/risk/lending/withdraw", {
+      amount,
+      lender_id: lenderId,
+    }),
+  lendingBorrow: (amount: number) =>
+    post<{ ok: boolean; disbursement_tx: string | null; pool: LendingPoolState }>(
+      "/risk/lending/borrow",
+      { amount },
+    ),
+  lendingRepay: (amount: number) =>
+    post<{ ok: boolean; pool: LendingPoolState }>("/risk/lending/repay", { amount }),
 
   seedDemoBorrower: () =>
     post<{ borrower_id: string; status: string }>("/risk/borrowers/seed"),

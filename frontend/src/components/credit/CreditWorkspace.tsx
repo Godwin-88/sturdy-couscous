@@ -1,10 +1,12 @@
 /**
  * CreditWorkspace.tsx
  * ───────────────────
- * Credit (P10 / BUIDL-CTC) inside GraphAlpha — a cohesive 2-tab console:
+ * Credit (P10 / BUIDL-CTC) inside GraphAlpha — a cohesive 3-tab console:
  *
  *   Fund      → FundConsole: attested-NAV → CC3 executor → credit decision →
  *               APPROVE → EXECUTE (the human-in-the-loop critical path)
+ *   Lending   → LendingTab: the H6-9 DeFi vertical — lending pool on the claim
+ *               (utilization pricing, LTV/liquidation monitor, human-gated borrow)
  *   Evidence  → Attestcoin / NAVAnchor proof trail (verify + history)
  *
  * The financial-engineer chat lives in the GLOBAL ScreenChat slide-over
@@ -15,14 +17,16 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import clsx from "clsx";
-import { Landmark, ShieldCheck } from "lucide-react";
+import { Landmark, ShieldCheck, Layers } from "lucide-react";
 import FundConsole from "./FundConsole";
+import LendingTab from "./LendingTab";
 import EvidenceTab from "./EvidenceTab";
 
-type TabId = "fund" | "evidence";
+type TabId = "fund" | "lending" | "evidence";
 
 const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
   { id: "fund", label: "Fund", icon: <Landmark size={13} /> },
+  { id: "lending", label: "Lending", icon: <Layers size={13} /> },
   { id: "evidence", label: "Evidence", icon: <ShieldCheck size={13} /> },
 ];
 
@@ -57,6 +61,7 @@ export default function CreditWorkspace() {
       {/* Tab body */}
       <div className="flex-1 overflow-y-auto">
         {tab === "fund" && <FundConsole />}
+        {tab === "lending" && <LendingTab />}
         {tab === "evidence" && <EvidenceTab borrowerId="fund_graphalpha" />}
       </div>
     </div>

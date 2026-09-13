@@ -148,6 +148,10 @@ def _live_screen_data(screen: str, params: dict | None = None) -> dict:
         _get("/fund/status", "fund_status")
         _get("/fund/attestation-report", "fund_attestation_report")
         _get("/alpaca/portfolio", "alpaca_portfolio")
+        # H6-9 DeFi vertical: lending pool on the claim (utilization, rates,
+        # LTV, liquidation health, borrowable capacity, last events).
+        _get("/api/v1/risk/lending/pool", "lending_pool")
+        _get("/api/v1/risk/lending/liquidation-monitor", "lending_liquidation")
 
     if screen == "defi":
         _get("/defi/status", "defi_status")

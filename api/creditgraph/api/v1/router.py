@@ -92,6 +92,7 @@ from .wallet_endpoints import wallet_router
 from .bayesian_endpoints import bayesian_router
 from .governance_endpoints import governance_router
 from .portfolio_endpoints import portfolio_router
+from .lending_endpoints import lending_router
 
 api_router.include_router(scenario_router)
 api_router.include_router(quant_router)
@@ -104,6 +105,7 @@ api_router.include_router(wallet_router)
 api_router.include_router(bayesian_router)
 api_router.include_router(governance_router)
 api_router.include_router(portfolio_router)
+api_router.include_router(lending_router)
 
 # Re-export for main.py
 __all__ = ["api_router"]
