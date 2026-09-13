@@ -13,8 +13,7 @@ GraphAlpha is a production-grade agentic trading system that grounds every tradi
 | Submission item | Where |
 |---|---|
 | **Whitepaper (rationale + Mermaid diagrams)** | [`docs/BUIDL_CTC_2026_WHITEPAPER.md`](docs/BUIDL_CTC_2026_WHITEPAPER.md) |
-| **SDK/docs feedback report** | [`docs/BUIDL_CTC_2026_FEEDBACK_REPORT.md`](docs/BUIDL_CTC_2026_FEEDBACK_REPORT.md) |
-| P9 DreamDEX integration | [`docs/p9_dreamdex_integration.md`](docs/p9_dreamdex_integration.md) |
+| **SDK/docs feedback report (Attestcoin/CC3)** | [`docs/BUIDL_CTC_2026_FEEDBACK_REPORT.md`](docs/BUIDL_CTC_2026_FEEDBACK_REPORT.md) |
 | P10 CreditGraph merge | [`docs/p10_creditgraph_merge.md`](docs/p10_creditgraph_merge.md) |
 | P11 Web3 × DeFi expansion | [`docs/p11_web3_defi_expansion.md`](docs/p11_web3_defi_expansion.md) |
 | Tenet ledger (U1–U33) | [`docs/p9_tenets_financial_engineering.md`](docs/p9_tenets_financial_engineering.md) |
@@ -36,8 +35,7 @@ GraphAlpha is a production-grade agentic trading system that grounds every tradi
    liquidation monitor (warn 70% / liq 80%), and **never originates a loan
    without a human-approved CreditDecision** (U6/U21).
 
-**Testnet footprint:** Ethereum Sepolia (source, chainKey 1) · Creditcoin CC3
-(attestation + settlement) · Somnia 50312 (DreamDEX Event Contracts, P9).
+**Testnet footprint (BUIDL CTC submission):** Ethereum Sepolia (source, chainKey 1) · Creditcoin CC3 (attestation + settlement). Other chains in the repository (e.g. Somnia/DreamDEX) are separate experiments and are not part of this submission.
 
 ---
 
