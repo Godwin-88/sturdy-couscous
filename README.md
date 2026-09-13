@@ -6,6 +6,41 @@ GraphAlpha is a production-grade agentic trading system that grounds every tradi
 
 ---
 
+## 🏆 BUIDL CTC 2026 Fall — Attestcoin Protocol Integration
+
+**Tracks: DeFi · RWA · AI — "One knowledge graph. Every decision attested or on-chain."**
+
+| Submission item | Where |
+|---|---|
+| **Whitepaper (rationale + Mermaid diagrams)** | [`docs/BUIDL_CTC_2026_WHITEPAPER.md`](docs/BUIDL_CTC_2026_WHITEPAPER.md) |
+| **SDK/docs feedback report** | [`docs/BUIDL_CTC_2026_FEEDBACK_REPORT.md`](docs/BUIDL_CTC_2026_FEEDBACK_REPORT.md) |
+| P9 DreamDEX integration | [`docs/p9_dreamdex_integration.md`](docs/p9_dreamdex_integration.md) |
+| P10 CreditGraph merge | [`docs/p10_creditgraph_merge.md`](docs/p10_creditgraph_merge.md) |
+| P11 Web3 × DeFi expansion | [`docs/p11_web3_defi_expansion.md`](docs/p11_web3_defi_expansion.md) |
+| Tenet ledger (U1–U33) | [`docs/p9_tenets_financial_engineering.md`](docs/p9_tenets_financial_engineering.md) |
+
+**What the integration actually does (all on testnet, verified):**
+
+1. **Attestcoin (AI track — no centralized oracle).** Every cycle, `fund_attestation.py`
+   snapshots the live Alpaca paper book → canonical digest → anchors NAV on a
+   Sepolia `NAVAnchor` contract → **proves it via the Attestcoin Protocol**
+   (Merkle inclusion + continuity, verified on-chain by CC3's precompile). Live
+   proof: `Evidence ev_d60df323bf25 · status=verified · verifier=attestcoin-usc-sdk ·
+   CC3 header 11689519`.
+2. **RWA.** The systematic strategy is a real-world-asset claim: tokenized
+   (`ClaimToken.sol` ERC-20 fund share) and financed on Creditcoin — the
+   `fund_graphalpha` borrower collateralizes its *attested NAV*, with real CC3
+   testnet CTC `transferKeepAlive` disbursements (executor funded, 10,000 CTC).
+3. **DeFi.** A deterministic lending pool prices utilization (How-to-DeFi Ch.5
+   quadratic curve), caps borrows by attested-NAV LTV + liquidity, runs a
+   liquidation monitor (warn 70% / liq 80%), and **never originates a loan
+   without a human-approved CreditDecision** (U6/U21).
+
+**Testnet footprint:** Ethereum Sepolia (source, chainKey 1) · Creditcoin CC3
+(attestation + settlement) · Somnia 50312 (DreamDEX Event Contracts, P9).
+
+---
+
 ## File Tree
 
 ```
